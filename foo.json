@@ -1,0 +1,123 @@
+[
+  "YARVInstructionSequence/SimpleDataFormat",
+  3,
+  1,
+  1,
+  {
+    "arg_size": 0,
+    "local_size": 0,
+    "stack_max": 1,
+    "node_id": 10,
+    "code_location": [
+      1,
+      0,
+      5,
+      3
+    ],
+    "node_ids": [
+      1,
+      7,
+      7,
+      -1
+    ]
+  },
+  "<compiled>",
+  "<compiled>",
+  "<compiled>",
+  1,
+  "top",
+  [
+
+  ],
+  {
+  },
+  [
+
+  ],
+  [
+    1,
+    "RUBY_EVENT_LINE",
+    [
+      "definemethod",
+      "foo",
+      [
+        "YARVInstructionSequence/SimpleDataFormat",
+        3,
+        1,
+        1,
+        {
+          "arg_size": 0,
+          "local_size": 0,
+          "stack_max": 2,
+          "node_id": 6,
+          "code_location": [
+            1,
+            0,
+            3,
+            3
+          ],
+          "node_ids": [
+            3,
+            4,
+            3,
+            -1
+          ]
+        },
+        "foo",
+        "<compiled>",
+        "<compiled>",
+        1,
+        "method",
+        [
+
+        ],
+        {
+        },
+        [
+
+        ],
+        [
+          2,
+          "RUBY_EVENT_LINE",
+          "RUBY_EVENT_CALL",
+          [
+            "putself"
+          ],
+          [
+            "putstring",
+            "bar"
+          ],
+          [
+            "opt_send_without_block",
+            {
+              "mid": "puts",
+              "flag": 20,
+              "orig_argc": 1
+            }
+          ],
+          3,
+          "RUBY_EVENT_RETURN",
+          [
+            "leave"
+          ]
+        ]
+      ]
+    ],
+    5,
+    "RUBY_EVENT_LINE",
+    [
+      "putself"
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "foo",
+        "flag": 28,
+        "orig_argc": 0
+      }
+    ],
+    [
+      "leave"
+    ]
+  ]
+]
