@@ -4,20 +4,19 @@ import Frame from "./frame";
 import Leave from "./insns/leave";
 import { InstructionSequence } from "./instruction_sequence";
 import { Array } from "./runtime/array";
-import { RValue } from "./runtime";
+import { Object, RValue, String } from "./runtime";
 
 // This is the object that gets passed around all of the instructions as they
 // are being executed.
 export default class ExecutionContext {
+    static current: ExecutionContext;
+
     // The system stack that tracks values through the execution of the program.
     public stack: RValue[];
 
     // The global variables accessible to the program. These mirror the runtime
     // global variables if they have not been overridden.
     public globals: {[key: string]: RValue};
-
-    // The set of methods defined at runtime.
-    public methods: {[key: string]: InstructionSequence};
 
     // This is a stack of frames as they are being executed.
     public frames: Frame[];
@@ -28,7 +27,6 @@ export default class ExecutionContext {
 
     constructor() {
         this.stack = [];
-        this.methods = {};
         this.frames = [];
         this.program_counter = 0;
 
@@ -37,29 +35,12 @@ export default class ExecutionContext {
             '$:': Array.new(),
             '$"': Array.new()
         };
+
+        ExecutionContext.current = this;
     }
 
     call_method(call_data: CallData, receiver: RValue, args: RValue[], block?: RValue): RValue {
-        let method_name = `${receiver.klass}-${call_data.mid}`;
-        const method = this.methods[method_name];
-
-        if (!method) {
-            throw new NameError(`Couldn't find method named \`${method_name}'`);
-        }
-
-        this.evaluate(method, () => {
-            const current_frame = this.current_frame();
-
-            args.forEach( (arg: RValue, index: number) => {
-                current_frame.set_local(index, arg);
-            });
-
-            if (block) {
-                current_frame.set_block(block);
-            }
-        });
-
-        return this.stack[this.stack.length - 1];
+        return Object.send(receiver, String.new(call_data.mid), ...args);
     }
 
     // This returns the current execution frame.
@@ -75,7 +56,7 @@ export default class ExecutionContext {
     }
 
     define_method(object: RValue, name: string, iseq: InstructionSequence) {
-        this.methods[`${object.klass}-${name}`] = iseq;
+        object.klass.define_method(name, iseq);
     }
 
     // This executes the given instruction sequence within a new execution frame.

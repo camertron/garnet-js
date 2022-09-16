@@ -3,6 +3,15 @@ import typescript from "@rollup/plugin-typescript"
 import { terser } from "rollup-plugin-terser"
 import pkg from "./package.json"
 
+let plugins = [
+  resolve(),
+  typescript()
+];
+
+if (process.env.RELEASE != null) {
+  plugins.push(terser());
+}
+
 export default [
   {
     input: "src/yarv.ts",
@@ -11,11 +20,7 @@ export default [
       format: "es",
       sourcemap: true
     },
-    plugins: [
-      resolve(),
-      typescript(),
-      terser()
-    ],
+    plugins: plugins,
     onwarn: (warning, warn) => {
       if (warning.code === "THIS_IS_UNDEFINED") return
       warn(warning)

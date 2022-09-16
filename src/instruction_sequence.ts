@@ -1,6 +1,7 @@
 import CallData from "./call_data";
 import { NotImplementedError } from "./errors";
 import ExecutionContext from "./execution_context";
+import DefineClass from "./insns/defineclass";
 import DefineMethod from "./insns/definemethod";
 import Leave from "./insns/leave";
 import OptSendWithoutBlock from "./insns/opt_send_without_block";
@@ -93,6 +94,11 @@ export class InstructionSequence {
                 case "definemethod": {
                     const [, name, iseq] = insn;
                     compiled.push(new DefineMethod(name, this.compile(selfo, iseq, compiled)));
+                    break;
+                }
+                case "defineclass": {
+                    const [, name, iseq, flags] = insn;
+                    compiled.push(new DefineClass(name, this.compile(selfo, iseq, compiled), flags));
                     break;
                 }
                 case "opt_send_without_block": {

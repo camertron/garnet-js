@@ -23,6 +23,7 @@
   "scripts": {
       "clean": "rimraf build dist",
       "build": "npx tsc && rollup -c",
+      "build:release": "npx tsc && RELEASE=1 rollup -c",
       "clean-build": "yarn run clean && yarn run build",
       "test": "npx jasmine-node test"
   },

@@ -1,14 +1,11 @@
 import { InstructionSequence } from "./instruction_sequence";
 import { NoMethodError } from "./errors";
+import ExecutionContext from "./execution_context";
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
 
 export type NativeMethod = (self: RValue, ...args: RValue[]) => RValue;
-
-export interface Callable {
-    call()
-}
 
 // Runtime is abstract so it can't be instantiated
 export abstract class Runtime {
@@ -42,8 +39,7 @@ export abstract class Runtime {
 
     static define_class(name: string, superclass: RValue, cb?: ClassDefinitionCallback): RValue {
         if (!this.constants[name]) {
-            const klass_val = Object.send(ClassClass.klass.get_singleton_class(), String.new("new"), superclass);
-            klass_val.klass.name = name;
+            const klass_val = new RValue(ClassClass.klass, new Class(name, superclass.klass));
             this.constants[name] = klass_val;
         }
 
@@ -54,26 +50,65 @@ export abstract class Runtime {
         return this.constants[name];
     }
 
-    static define_class_under(parent: Module, name: string, superclass: RValue, cb?: ClassDefinitionCallback): RValue {
-        if (!parent.constants[name]) {
-            const klass_val = Object.send(ClassClass.klass.get_singleton_class(), String.new("new"), superclass);
+    static define_class_under(parent: RValue, name: string, superclass: RValue, cb?: ClassDefinitionCallback): RValue {
+        if (!parent.klass.constants[name]) {
+            const klass_val = new RValue(ClassClass.klass, new Class(name, superclass.klass));
             klass_val.klass.name = name;
-            parent.constants[name] = klass_val;
+            parent.klass.constants[name] = klass_val;
         }
 
         if (cb) {
-            cb(parent.constants[name].klass);
+            cb(parent.klass.constants[name].klass);
         }
 
-        return parent.constants[name];
+        return parent.klass.constants[name];
+    }
+}
+
+export interface Callable {
+    call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue): RValue;
+}
+
+export class InterpretedCallable implements Callable {
+    private iseq: InstructionSequence;
+
+    constructor(iseq: InstructionSequence) {
+        this.iseq = iseq;
+    }
+
+    call(context: ExecutionContext, _receiver: RValue, args: RValue[], block?: RValue): RValue {
+        context.evaluate(this.iseq, () => {
+            const current_frame = context.current_frame();
+
+            args.forEach( (arg: RValue, index: number) => {
+                current_frame.set_local(index, arg);
+            });
+
+            if (block) {
+                current_frame.set_block(block);
+            }
+        });
+
+        return context.stack[context.stack.length - 1];
+    }
+}
+
+export class NativeCallable implements Callable {
+    private method: NativeMethod;
+
+    constructor(method: NativeMethod) {
+        this.method = method;
+    }
+
+    call(_context: ExecutionContext, receiver: RValue, args: RValue[], _block?: RValue): RValue {
+        return this.method(receiver, ...args);
     }
 }
 
 export class Module {
     public name: string | null;
     public constants: {[key: string]: RValue};
-    public methods: {[key: string]: InstructionSequence};
-    public native_methods: {[key: string]: NativeMethod};
+    public methods: {[key: string]: Callable};
     public includes: Module[];
     public prepends: Module[];
     public singleton_class?: RValue;
@@ -82,17 +117,36 @@ export class Module {
         this.name = name;
         this.constants = {};
         this.methods = {};
-        this.native_methods = {};
         this.includes = [];
         this.prepends = [];
     }
 
-    define_method(name: string, body: NativeMethod) {
-        this.native_methods[name] = body;
+    define_method(name: string, body: InstructionSequence) {
+        this.methods[name] = new InterpretedCallable(body);
     }
 
-    define_singleton_method(name: string, body: NativeMethod) {
+    define_native_method(name: string, body: NativeMethod) {
+        this.methods[name] = new NativeCallable(body);
+    }
+
+    define_singleton_method(name: string, body: InstructionSequence) {
         this.get_singleton_class().klass.define_method(name, body);
+    }
+
+    define_native_singleton_method(name: string, body: NativeMethod) {
+        this.get_singleton_class().klass.define_native_method(name, body);
+    }
+
+    include(mod: Module) {
+        this.includes.push(mod);
+    }
+
+    extend(mod: Module) {
+        this.get_singleton_class().klass.include(mod);
+    }
+
+    prepend(mod: Module) {
+        this.prepends.push(mod);
     }
 
     get_singleton_class(): RValue {
@@ -199,7 +253,25 @@ export const ModuleClass      = new RValue(new Class("Module", ObjectClass.klass
 export const NilClass         = new RValue(new Class("NilClass", ObjectClass.klass));
 export const StringClass      = new RValue(new Class("String", ObjectClass.klass));
 
-ModuleClass.klass.define_singleton_method("inspect", (self: RValue): RValue => {
+// @TODO: figure out how to wrap this in an RValue, which only accept classes
+export const KernelModule     = new RValue(ModuleClass.klass, new Module("Kernel"));
+
+let kernel_puts = (_self: RValue, ...args: RValue[]): RValue => {
+    for (let arg of args) {
+        // @TODO: call to_s instead of checking for string values
+        arg.assert_type(StringClass)
+        console.log(arg.data);
+    }
+
+    return Qnil;
+};
+
+KernelModule.klass.define_native_method("puts", kernel_puts);
+KernelModule.klass.define_native_singleton_method("puts", kernel_puts);
+
+ObjectClass.klass.include(KernelModule.data as Module);
+
+ModuleClass.klass.define_native_singleton_method("inspect", (self: RValue): RValue => {
     const mod = self.data as Module;
 
     if (mod.name) {
@@ -224,19 +296,19 @@ export abstract class Object {
         const method = Object.find_method_under(self.klass, method_name.data as string);
 
         if (method) {
-            return method(self, ...args);
+            return method.call(ExecutionContext.current, self, args);
         } else {
             const inspect_str = Object.send(self, String.new("inspect")).data as string;
             throw new NoMethodError(`undefined method \`${method_name.data as string}' for ${inspect_str}`)
         }
     }
 
-    private static find_method_under(mod: Module, method_name: string): NativeMethod | null {
+    private static find_method_under(mod: Module, method_name: string): Callable | null {
         // @TODO figure out a way to dispatch iseq methods too
         let found_method = null;
 
         mod.each_ancestor( (ancestor: Module): boolean => {
-            const method = ancestor.native_methods[method_name];
+            const method = ancestor.methods[method_name];
 
             if (method) {
                 found_method = method;
@@ -255,30 +327,30 @@ export abstract class Object {
     }
 }
 
-ClassClass.klass.define_singleton_method("allocate", (self: RValue): RValue => {
+ClassClass.klass.define_native_singleton_method("allocate", (self: RValue): RValue => {
     return new RValue(self.klass);
 });
 
-ClassClass.klass.define_singleton_method("new", (self: RValue): RValue => {
+ClassClass.klass.define_native_singleton_method("new", (self: RValue): RValue => {
     const obj = Object.send(self.klass.get_singleton_class(), String.new("allocate"));
     Object.send(obj, String.new("initialize"));
     return obj;
 });
 
-ClassClass.klass.define_method("initialize", (_self: RValue): RValue => {
+ClassClass.klass.define_native_method("initialize", (_self: RValue): RValue => {
     return Qnil;
 });
 
 // NOTE: send should actually be defined by the Kernel module
-ObjectClass.klass.define_singleton_method("send", (self: RValue, method_name: RValue, ...args: RValue[]): RValue => {
+ObjectClass.klass.define_native_singleton_method("send", (self: RValue, method_name: RValue, ...args: RValue[]): RValue => {
     return Object.send(self.klass.get_singleton_class(), method_name, ...args);
 });
 
-ObjectClass.klass.define_method("send", (self: RValue, method_name: RValue, ...args: RValue[]) => {
+ObjectClass.klass.define_native_method("send", (self: RValue, method_name: RValue, ...args: RValue[]) => {
     return Object.send(self, method_name, ...args);
 });
 
-ObjectClass.klass.define_method("inspect", (self: RValue): RValue => {
+ObjectClass.klass.define_native_method("inspect", (self: RValue): RValue => {
     const name = self.klass.name ? self.klass.name : "Class";
     let parts = [`${name}:${Object.object_id_to_str(self.object_id)}`];
 
@@ -291,7 +363,7 @@ ObjectClass.klass.define_method("inspect", (self: RValue): RValue => {
     return String.new(`#<${parts.join(" ")}>`)
 });
 
-StringClass.klass.define_method("initialize", (self: RValue, str?: RValue): RValue => {
+StringClass.klass.define_native_method("initialize", (self: RValue, str?: RValue): RValue => {
     if (str) {
         self.data = str.data;
     }
