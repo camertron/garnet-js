@@ -3,15 +3,8 @@ import Instruction from "../instruction";
 import { RValue } from "../runtime";
 
 export default class PutSelf extends Instruction {
-    public object: RValue;
-
-    constructor(object: RValue) {
-        super();
-        this.object = object;
-    }
-
     call(context: ExecutionContext) {
-        context.stack.push(this.object);
+        context.stack.push(context.current_frame().selfo);
     }
 
     reads(): number {

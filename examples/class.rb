@@ -1,4 +1,4 @@
-class Foo
+class Foo < Object
   def bar
     "bar"
   end

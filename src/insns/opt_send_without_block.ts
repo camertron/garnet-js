@@ -13,9 +13,7 @@ export default class OptSendWithoutBlock extends Instruction {
     call(context: ExecutionContext) {
         const argc = this.call_data.argc + 1;
         const [receiver, ...args] = context.stack.splice(context.stack.length - argc, argc);
-        const result = context.call_method(this.call_data, receiver, args);
-
-        context.stack.push(result);
+        context.call_method(this.call_data, receiver, args);
     }
 
     reads(): number {

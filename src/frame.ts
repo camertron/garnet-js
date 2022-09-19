@@ -3,11 +3,13 @@ import { InstructionSequence } from "./instruction_sequence";
 import { RValue, Qnil } from "./runtime";
 
 export default class Frame {
+    public selfo: RValue;
     public iseq: InstructionSequence;
     public locals: RValue[];
     public block?: RValue;
 
-    constructor(iseq: InstructionSequence) {
+    constructor(selfo: RValue, iseq: InstructionSequence) {
+        this.selfo = selfo;
         this.iseq = iseq;
         this.locals = Array(iseq.locals().length).fill(Qnil);
     }
@@ -16,7 +18,7 @@ export default class Frame {
         const local = this.locals[index];
 
         if (local == Qnil) {
-            throw new NameError(`undefined local variable or method \`${this.iseq.locals()[index]} for ${this.iseq.selfo}`);
+            throw new NameError(`undefined local variable or method \`${this.iseq.locals()[index]} for ${this.selfo}`);
         }
 
         return local;

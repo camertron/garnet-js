@@ -13,7 +13,7 @@ export default class DefineMethod extends Instruction {
     }
 
     call(context: ExecutionContext) {
-        context.define_method(context.current_iseq().selfo, this.name, this.iseq);
+        context.define_method(context.current_frame().selfo, this.name, this.iseq);
     }
 
     reads(): number {

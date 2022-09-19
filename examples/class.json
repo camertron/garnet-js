@@ -7,7 +7,7 @@
     "arg_size": 0,
     "local_size": 0,
     "stack_max": 3,
-    "node_id": 18,
+    "node_id": 16,
     "code_location": [
       1,
       0,
@@ -16,17 +16,20 @@
     ],
     "node_ids": [
       0,
-      -1,
+      1,
+      1,
+      1,
+      1,
+      8,
+      8,
+      9,
+      10,
+      10,
       10,
       10,
       11,
       12,
-      12,
-      12,
-      12,
-      13,
-      14,
-      11,
+      9,
       -1
     ]
   },
@@ -51,8 +54,23 @@
       3
     ],
     [
-      "putnil"
+      "opt_getinlinecache",
+      "label_11",
+      0
     ],
+    [
+      "putobject",
+      true
+    ],
+    [
+      "getconstant",
+      "Object"
+    ],
+    [
+      "opt_setinlinecache",
+      0
+    ],
+    "label_11",
     [
       "defineclass",
       "Foo",
@@ -65,7 +83,7 @@
           "arg_size": 0,
           "local_size": 0,
           "stack_max": 1,
-          "node_id": 9,
+          "node_id": 7,
           "code_location": [
             1,
             0,
@@ -159,7 +177,7 @@
           ]
         ]
       ],
-      0
+      16
     ],
     [
       "pop"
@@ -171,8 +189,8 @@
     ],
     [
       "opt_getinlinecache",
-      "label_18",
-      0
+      "label_26",
+      1
     ],
     [
       "putobject",
@@ -184,9 +202,9 @@
     ],
     [
       "opt_setinlinecache",
-      0
+      1
     ],
-    "label_18",
+    "label_26",
     [
       "opt_send_without_block",
       {

@@ -17,11 +17,14 @@ export default class DefineClass extends Instruction {
     }
 
     call(context: ExecutionContext) {
-        const klass = Runtime.define_class_under(context.current_iseq().selfo, this.name, ObjectClass);
+        const _super = context.stack.pop();
+        const _cbase = context.stack.pop();  // I have no idea what this is
+        const klass = Runtime.define_class_under(context.current_frame().selfo, this.name, ObjectClass);
+        context.evaluate(klass, this.iseq);
     }
 
     reads(): number {
-        return 0;
+        return 2;
     }
 
     writes(): number {

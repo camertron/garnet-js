@@ -4,7 +4,7 @@ import Frame from "./frame";
 import Leave from "./insns/leave";
 import { InstructionSequence } from "./instruction_sequence";
 import { Array } from "./runtime/array";
-import { Object, RValue, String } from "./runtime";
+import { Class, Object, RValue, String } from "./runtime";
 
 // This is the object that gets passed around all of the instructions as they
 // are being executed.
@@ -56,15 +56,15 @@ export default class ExecutionContext {
     }
 
     define_method(object: RValue, name: string, iseq: InstructionSequence) {
-        object.klass.define_method(name, iseq);
+        object.get_data<Class>().define_method(name, iseq);
     }
 
     // This executes the given instruction sequence within a new execution frame.
-    with_frame(iseq: InstructionSequence, cb: (iseq: InstructionSequence) => void) {
+    with_frame(selfo: RValue, iseq: InstructionSequence, cb: (iseq: InstructionSequence) => void) {
         const current_program_counter = this.program_counter;
         const current_stack_length = this.stack.length;
 
-        this.frames.push(new Frame(iseq));
+        this.frames.push(new Frame(selfo, iseq));
         this.program_counter = 0;
 
         try {
@@ -72,14 +72,15 @@ export default class ExecutionContext {
         } finally {
             this.frames.pop();
             this.program_counter = current_program_counter;
-            this.stack = this.stack.slice(0, current_stack_length);
+            // kddnewton does this but I think it's wrong
+            // this.stack = this.stack.slice(0, current_stack_length);
         }
     }
 
     // Pushes a new frame onto the stack, executes the instructions contained
     // within this instruction sequence, then pops the frame off the stack.
-    evaluate(iseq: InstructionSequence, cb?: () => void) {
-        this.with_frame(iseq, () => {
+    evaluate(selfo: RValue, iseq: InstructionSequence, cb?: () => void) {
+        this.with_frame(selfo, iseq, () => {
             if (cb) {
                 cb();
             }

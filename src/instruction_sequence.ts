@@ -3,10 +3,15 @@ import { NotImplementedError } from "./errors";
 import ExecutionContext from "./execution_context";
 import DefineClass from "./insns/defineclass";
 import DefineMethod from "./insns/definemethod";
+import GetConstant from "./insns/getconstant";
 import Leave from "./insns/leave";
+import OptGetInlineCache from "./insns/opt_getinlinecache";
 import OptSendWithoutBlock from "./insns/opt_send_without_block";
+import OptSetInlineCache from "./insns/opt_setinlinecache";
+import Pop from "./insns/pop";
 import PutObject from "./insns/putobject";
 import PutSelf from "./insns/putself";
+import PutSpecialObject from "./insns/putspecialobject";
 import PutString from "./insns/putstring";
 import Instruction from "./instruction";
 import { RValue, String } from "./runtime";
@@ -41,7 +46,6 @@ type ArgData = {
 
 // This object represents a set of instructions that will be executed.
 export class InstructionSequence {
-    public selfo: RValue;
     public iseq: YarvJson;
     public parent?: InstructionSequence;
     public insns: Instruction[];
@@ -53,8 +57,7 @@ export class InstructionSequence {
 
     // attr_reader :throw_handlers
 
-    constructor(selfo: RValue, iseq: YarvJson, parent?: InstructionSequence) {
-      this.selfo = selfo;
+    constructor(iseq: YarvJson, parent?: InstructionSequence) {
       this.iseq = iseq;
       this.parent = parent;
 
@@ -71,8 +74,8 @@ export class InstructionSequence {
     //     end
     }
 
-    static compile(selfo: RValue, iseq: YarvJson, parent?: InstructionSequence): InstructionSequence {
-        let compiled = new InstructionSequence(selfo, iseq, parent);
+    static compile(iseq: YarvJson, parent?: InstructionSequence): InstructionSequence {
+        let compiled = new InstructionSequence(iseq, parent);
         let insns = iseq[iseq.length - 1];
 
         insns.forEach( (insn: any) => {
@@ -83,7 +86,7 @@ export class InstructionSequence {
                     break;
                 }
                 case "putself": {
-                    compiled.push(new PutSelf(selfo));
+                    compiled.push(new PutSelf());
                     break;
                 }
                 case "putstring": {
@@ -91,14 +94,38 @@ export class InstructionSequence {
                     compiled.push(new PutString(String.new(str)));
                     break;
                 }
+                case "putspecialobject": {
+                    const [, val] = insn;
+                    compiled.push(new PutSpecialObject(val));
+                    break;
+                }
+                case "pop": {
+                    compiled.push(new Pop());
+                    break;
+                }
+                case "getconstant": {
+                    const [, name] = insn;
+                    compiled.push(new GetConstant(name));
+                    break;
+                }
+                case "opt_setinlinecache": {
+                    const [, cache] = insn;
+                    compiled.push(new OptSetInlineCache(cache));
+                    break;
+                }
+                case "opt_getinlinecache": {
+                    const [, label, cache] = insn;
+                    compiled.push(new OptGetInlineCache(label, cache));
+                    break;
+                }
                 case "definemethod": {
                     const [, name, iseq] = insn;
-                    compiled.push(new DefineMethod(name, this.compile(selfo, iseq, compiled)));
+                    compiled.push(new DefineMethod(name, this.compile(iseq, compiled)));
                     break;
                 }
                 case "defineclass": {
                     const [, name, iseq, flags] = insn;
-                    compiled.push(new DefineClass(name, this.compile(selfo, iseq, compiled), flags));
+                    compiled.push(new DefineClass(name, this.compile(iseq, compiled), flags));
                     break;
                 }
                 case "opt_send_without_block": {
@@ -114,6 +141,11 @@ export class InstructionSequence {
                 case "leave": {
                     compiled.push(new Leave());
                     break;
+                }
+                default: {
+                    if (insn instanceof Array) {
+                        console.log(`Encountered unhandled instruction '${insn[0]}'`);
+                    }
                 }
             }
         });
@@ -226,12 +258,12 @@ export class InstructionSequence {
 //       iseq[12]
 //     end
 
-    evaluate(context?: ExecutionContext) {
+    evaluate(selfo: RValue, context?: ExecutionContext) {
         if (!context) {
             context = new ExecutionContext();
         }
 
-        context.evaluate(this);
+        context.evaluate(selfo, this);
     }
 //   end
 }
