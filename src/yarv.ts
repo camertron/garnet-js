@@ -18,5 +18,9 @@ export {
     String,
     StringClass,
     NilClass,
-    Qnil
+    Qnil,
+    TrueClass,
+    FalseClass,
+    Qtrue,
+    Qfalse
 } from "./runtime";

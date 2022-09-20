@@ -9,6 +9,7 @@ import OptGetInlineCache from "./insns/opt_getinlinecache";
 import OptSendWithoutBlock from "./insns/opt_send_without_block";
 import OptSetInlineCache from "./insns/opt_setinlinecache";
 import Pop from "./insns/pop";
+import PutNil from "./insns/putnil";
 import PutObject from "./insns/putobject";
 import PutSelf from "./insns/putself";
 import PutSpecialObject from "./insns/putspecialobject";
@@ -92,6 +93,10 @@ export class InstructionSequence {
                 case "putstring": {
                     const [, str] = insn;
                     compiled.push(new PutString(String.new(str)));
+                    break;
+                }
+                case "putnil": {
+                    compiled.push(new PutNil());
                     break;
                 }
                 case "putspecialobject": {

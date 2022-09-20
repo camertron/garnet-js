@@ -1,7 +1,7 @@
 import ExecutionContext from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { ObjectClass, Runtime } from "../runtime";
+import { Runtime } from "../runtime";
 
 export default class DefineClass extends Instruction {
     public name: string;
@@ -17,9 +17,9 @@ export default class DefineClass extends Instruction {
     }
 
     call(context: ExecutionContext) {
-        const _super = context.stack.pop();
-        const _cbase = context.stack.pop();  // I have no idea what this is
-        const klass = Runtime.define_class_under(context.current_frame().selfo, this.name, ObjectClass);
+        const superclass = context.stack.pop()!;
+        const cbase = context.stack.pop()!;
+        const klass = Runtime.define_class_under(cbase, this.name, superclass);
         context.evaluate(klass, this.iseq);
     }
 

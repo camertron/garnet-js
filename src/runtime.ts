@@ -13,7 +13,7 @@ export abstract class Runtime {
 
     static define_module(name: string, cb?: ModuleDefinitionCallback): RValue {
         if (!this.constants[name]) {
-            const module = Object.send((ModuleClass.get_data<Module>()).get_singleton_class(), String.new("new"));
+            const module = new RValue(ModuleClass.get_data<Class>(), new Module(name));
             this.constants[name] = module;
         }
 
@@ -26,7 +26,7 @@ export abstract class Runtime {
 
     static define_module_under(parent: Module, name: string, cb?: ModuleDefinitionCallback): RValue {
         if (!parent.constants[name]) {
-            const module = Object.send((ModuleClass.get_data<Module>()).get_singleton_class(), String.new("new"));
+            const module = new RValue(ModuleClass.get_data<Class>(), new Module(name, parent));
             parent.constants[name] = module;
         }
 
@@ -54,7 +54,7 @@ export abstract class Runtime {
         const parent_mod = parent.get_data<Module>();
 
         if (!parent_mod.constants[name]) {
-            const klass_val = new RValue(ClassClass.get_data<Class>(), new Class(name, superclass.get_data<Class>()));
+            const klass_val = new RValue(ClassClass.get_data<Class>(), new Class(name, superclass.get_data<Class>(), parent_mod));
             parent_mod.constants[name] = klass_val;
         }
 
@@ -113,9 +113,11 @@ export class Module {
     public includes: Module[];
     public prepends: Module[];
     public singleton_class?: RValue;
+    public nesting_parent?: Module;
 
-    constructor(name: string | null) {
+    constructor(name: string | null, nesting_parent?: Module) {
         this.name = name;
+        this.nesting_parent = nesting_parent;
         this.constants = {};
         this.methods = {};
         this.includes = [];
@@ -136,6 +138,22 @@ export class Module {
 
     define_native_singleton_method(name: string, body: NativeMethod) {
         (this.get_singleton_class().get_data<Class>()).define_native_method(name, body);
+    }
+
+    find_constant(name: string): RValue | null {
+        let current_mod: Module | undefined = this;
+
+        while (current_mod) {
+            const constant = current_mod.constants[name];
+
+            if (constant) {
+                return constant;
+            }
+
+            current_mod = current_mod.nesting_parent;
+        }
+
+        return Runtime.constants[name];
     }
 
     include(mod: Module) {
@@ -228,8 +246,8 @@ export class Class extends Module {
 
     // name: can be null in the case of an anonymous class.
     // superclass: can be null in the case of BasicObject. Should always be provided otherwise.
-    constructor(name: string | null, superclass: Class | null) {
-        super(name);
+    constructor(name: string | null, superclass: Class | null, nesting_parent?: Module) {
+        super(name, nesting_parent);
 
         this.superclass = superclass;
     }

@@ -1,7 +1,7 @@
 import { NameError } from "../errors";
 import ExecutionContext from "../execution_context";
 import Instruction from "../instruction";
-import { Module, Qnil, Runtime } from "../runtime";
+import { Module, Qnil } from "../runtime";
 
 export default class GetConstant extends Instruction {
     public name: string;
@@ -11,27 +11,26 @@ export default class GetConstant extends Instruction {
         this.name = name;
     }
 
+    // From insns.def (slightly modified):
+    //
+    // "Get constant variable <name>. If klass (second stack value) is Qnil
+    // and allow_nil (first stack value) is Qtrue, constants are searched in
+    // the current scope. Otherwise, get constant under klass class or module."
     call(context: ExecutionContext) {
-        const allow_nil = context.stack.pop();
+        const allow_nil = context.stack.pop()!.get_data<boolean>();
         let parent = context.stack.pop();
 
-        if (parent == Qnil && !allow_nil?.get_data<boolean>()) {
+        if (parent == Qnil && !allow_nil) {
             throw new NameError(`uninitialized constant ${this.name}`);
         }
 
-        // parent can be Qnil (and nils allowed) if, for example, opt_getinlinecache
-        // resulted in a nil being pushed onto the stack (i.e. cache lookup failed)
-        if (parent == Qnil) {
-            parent = context.stack.pop();
-        }
-
-        const parent_data = parent!.get_data<Module | null>();
-
         const constant = ( () => {
-            if (parent_data) {
-                return parent_data.constants[this.name];
+            // a parent of Qnil (and nils allowed) means look up the constant in the
+            // current scope, i.e. selfo
+            if (parent == Qnil) {
+                return context.current_frame().selfo.get_data<Module>().find_constant(this.name);
             } else {
-                return Runtime.constants[this.name];
+                return parent!.get_data<Module>().find_constant(this.name);
             }
         })();
 
