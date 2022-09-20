@@ -102,9 +102,7 @@ export class NativeCallable implements Callable {
     }
 
     call(context: ExecutionContext, receiver: RValue, args: RValue[], _block?: RValue): RValue {
-        const result = this.method(receiver, ...args);
-        context.stack.push(result);
-        return result;
+        return this.method(receiver, ...args);
     }
 }
 

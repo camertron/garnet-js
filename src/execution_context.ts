@@ -72,8 +72,7 @@ export default class ExecutionContext {
         } finally {
             this.frames.pop();
             this.program_counter = current_program_counter;
-            // kddnewton does this but I think it's wrong
-            // this.stack = this.stack.slice(0, current_stack_length);
+            this.stack = this.stack.slice(0, current_stack_length + 1);
         }
     }
 
