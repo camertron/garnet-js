@@ -3,17 +3,24 @@ import { NotImplementedError } from "./errors";
 import ExecutionContext from "./execution_context";
 import DefineClass from "./insns/defineclass";
 import DefineMethod from "./insns/definemethod";
+import DupArray from "./insns/duparray";
 import GetConstant from "./insns/getconstant";
+import GetLocalWC0 from "./insns/getlocal_wc_0";
 import Leave from "./insns/leave";
+import NewHash from "./insns/newhash";
+import NewArray from "./insns/new_array";
 import OptGetInlineCache from "./insns/opt_getinlinecache";
 import OptSendWithoutBlock from "./insns/opt_send_without_block";
 import OptSetInlineCache from "./insns/opt_setinlinecache";
 import Pop from "./insns/pop";
 import PutNil from "./insns/putnil";
 import PutObject from "./insns/putobject";
+import PutObjectInt2Fix0 from "./insns/putobject_int2fix_0";
+import PutObjectInt2Fix1 from "./insns/putobject_int2fix_1";
 import PutSelf from "./insns/putself";
 import PutSpecialObject from "./insns/putspecialobject";
 import PutString from "./insns/putstring";
+import SetLocalWC0 from "./insns/setlocal_wc_0";
 import Instruction from "./instruction";
 import { RValue, String } from "./runtime";
 
@@ -104,13 +111,48 @@ export class InstructionSequence {
                     compiled.push(new PutSpecialObject(val));
                     break;
                 }
+                case "putobject_INT2FIX_0_": {
+                    compiled.push(new PutObjectInt2Fix0());
+                    break;
+                }
+                case "putobject_INT2FIX_1_": {
+                    compiled.push(new PutObjectInt2Fix1());
+                    break;
+                }
+                case "newarray": {
+                    const [, size] = insn;
+                    compiled.push(new NewArray(size));
+                    break;
+                }
+                case "newhash": {
+                    const [, size] = insn;
+                    compiled.push(new NewHash(size));
+                    break;
+                }
+                case "duparray": {
+                    const [, values] = insn;
+                    compiled.push(new DupArray(values));
+                    break;
+                }
                 case "pop": {
                     compiled.push(new Pop());
+                    break;
+                }
+                case "setlocal_WC_0": {
+                    const [, offset] = insn;
+                    const index = compiled.local_index(offset);
+                    compiled.push(new SetLocalWC0(compiled.locals()[index], index));
                     break;
                 }
                 case "getconstant": {
                     const [, name] = insn;
                     compiled.push(new GetConstant(name));
+                    break;
+                }
+                case "getlocal_WC_0": {
+                    const [, offset] = insn;
+                    const index = compiled.local_index(offset);
+                    compiled.push(new GetLocalWC0(compiled.locals()[index], index));
                     break;
                 }
                 case "opt_setinlinecache": {
@@ -244,12 +286,12 @@ export class InstructionSequence {
         return this.iseq[10];
     }
 
-//     # Indices that are given for getlocal and setlocal instructions are actually
-//     # how far back they are from the top of the stack. So here we do a little
-//     # math to make them a little easier to work with.
-//     def local_index(offset)
-//       (locals.length - (offset - 3)) - 1
-//     end
+    // Indices that are given for getlocal and setlocal instructions are actually
+    // how far back they are from the top of the stack. So here we do a little
+    // math to make them a little easier to work with.
+    local_index(offset: number): number {
+        return (this.locals().length - (offset - 3)) - 1;
+    }
 
     // This is the information about the arguments that should be passed into
     // this instruction sequence.

@@ -28,6 +28,7 @@
       "test": "npx jasmine-node test"
   },
   "dependencies": {
+    "utfstring": "^2.1.0"
   },
   "devDependencies": {
       "@rollup/plugin-node-resolve": "^14.0.1",

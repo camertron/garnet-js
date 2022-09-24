@@ -40,7 +40,7 @@ export default class ExecutionContext {
     }
 
     call_method(call_data: CallData, receiver: RValue, args: RValue[], block?: RValue): RValue {
-        return Object.send(receiver, String.new(call_data.mid), ...args);
+        return Object.send(receiver, call_data.mid, ...args);
     }
 
     // This returns the current execution frame.

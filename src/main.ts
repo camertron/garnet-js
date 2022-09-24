@@ -1,4 +1,4 @@
-import { Class, Module, ModuleClass, RValue } from "./runtime";
+import { Class, Module, ObjectClass, RValue } from "./runtime";
 
-const Main = new RValue(ModuleClass.get_data<Class>(), new Module("main"));
+const Main = new RValue(ObjectClass.get_data<Class>());
 export default Main;

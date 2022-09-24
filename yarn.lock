@@ -516,6 +516,11 @@ underscore@~1.9.1:
   resolved "https://registry.yarnpkg.com/underscore/-/underscore-1.9.2.tgz#0c8d6f536d6f378a5af264a72f7bec50feb7cf2f"
   integrity sha512-D39qtimx0c1fI3ya1Lnhk3E9nONswSKhnffBI0gME9C99fYOkNi04xs8K6pePLhvl1frbDemkaBQ5ikWllR2HQ==
 
+utfstring@^2.1.0:
+  version "2.1.0"
+  resolved "https://registry.yarnpkg.com/utfstring/-/utfstring-2.1.0.tgz#291f7f33db5ebc465bad909626dd626cb62c49fe"
+  integrity sha512-gahZL0xnLnv40pvqqCBxCw//ZXJ+HrMJBjVgqZsVyhOWPr25O/J5K/fq58XQQrIsFcG3ioNoePJPHnfpG3EB3Q==
+
 walkdir@~0.0.12:
   version "0.0.12"
   resolved "https://registry.yarnpkg.com/walkdir/-/walkdir-0.0.12.tgz#2f24f1ade64aab1e458591d4442c8868356e9281"
@@ -528,3 +533,5 @@ wrappy@1:
 
 yarv@./:
   version "0.1.0"
+  dependencies:
+    utfstring "^2.1.0"

@@ -7,9 +7,14 @@ type ClassDefinitionCallback = (klass: Class) => void;
 
 export type NativeMethod = (self: RValue, ...args: RValue[]) => RValue;
 
+type SymbolType = {
+    name: string
+}
+
 // Runtime is abstract so it can't be instantiated
 export abstract class Runtime {
     static constants: {[key: string]: RValue} = {};
+    static symbols: WeakMap<SymbolType, RValue> = new WeakMap();
 
     static define_module(name: string, cb?: ModuleDefinitionCallback): RValue {
         if (!this.constants[name]) {
@@ -18,7 +23,7 @@ export abstract class Runtime {
         }
 
         if (cb) {
-            cb(this.constants[name].klass);
+            cb(this.constants[name].get_data<Module>());
         }
 
         return this.constants[name];
@@ -31,7 +36,7 @@ export abstract class Runtime {
         }
 
         if (cb) {
-            cb(parent.constants[name].klass);
+            cb(parent.constants[name].get_data<Module>());
         }
 
         return parent.constants[name];
@@ -44,7 +49,7 @@ export abstract class Runtime {
         }
 
         if (cb) {
-            cb(this.constants[name].klass);
+            cb(this.constants[name].get_data<Class>());
         }
 
         return this.constants[name];
@@ -59,10 +64,29 @@ export abstract class Runtime {
         }
 
         if (cb) {
-            cb(parent_mod.constants[name].klass);
+            cb(parent_mod.constants[name].get_data<Class>());
         }
 
         return parent_mod.constants[name];
+    }
+
+    // This function works a little differently than MRI's rb_intern(). Since we don't use
+    // symbols to define methods in yarv-js, there's no need to distinguish between so-called
+    // "immortal" symbols created by the runtime and symbols created in user space - all
+    // symbols can be garbage collected. So, whereas MRI's rb_intern() creates immortal symbols,
+    // this function creates regular 'ol mortal symbols just as one might do in Ruby code. To
+    // the runtime, it essentially exists as a convenient way to memoize strings so we don't
+    // have to incur the overhead of making a bunch of new RValue strings all over the place.
+    static intern(value: string): RValue {
+        const key = {name: value};
+        let symbol = this.symbols.get(key);
+
+        if (!symbol) {
+            symbol = new RValue(SymbolClass.get_data<Class>(), value);
+            this.symbols.set(key, symbol);
+        }
+
+        return symbol;
     }
 }
 
@@ -303,6 +327,8 @@ export const ClassClass       = Runtime.constants["Class"]       = new RValue(cl
 export const BasicObjectClass = Runtime.constants["BasicObject"] = new RValue(class_class, new Class("BasicObject", ClassClass.get_data<Class>()));
 export const ObjectClass      = Runtime.constants["Object"]      = new RValue(class_class, new Class("Object", BasicObjectClass.get_data<Class>()));
 export const StringClass      = Runtime.constants["String"]      = new RValue(class_class, new Class("String", ObjectClass.get_data<Class>()));
+export const IntegerClass     = Runtime.constants["Integer"]     = new RValue(class_class, new Class("Integer", ObjectClass.get_data<Class>()));
+export const SymbolClass      = Runtime.constants["Symbol"]      = new RValue(class_class, new Class("Symbol", ObjectClass.get_data<Class>()));
 export const NilClass         = Runtime.constants["NilClass"]    = new RValue(class_class, new Class("NilClass", ObjectClass.get_data<Class>()));
 export const TrueClass        = Runtime.constants["TrueClass"]   = new RValue(class_class, new Class("TrueClass", ObjectClass.get_data<Class>()));
 export const FalseClass       = Runtime.constants["FalseClass"]  = new RValue(class_class, new Class("FalseClass", ObjectClass.get_data<Class>()));
@@ -346,22 +372,20 @@ export abstract class String {
 }
 
 export abstract class Object {
-    static send(self: RValue, method_name: RValue, ...args: RValue[]): RValue {
-        method_name.assert_type(StringClass);
-
+    static send(self: RValue, method_name: string, ...args: RValue[]): RValue {
         let method = null;
 
         if (self.klass == ClassClass.get_data<Class>()) {
-            method = Object.find_method_under((self.get_data<Class>()).get_singleton_class().get_data<Class>(), method_name.get_data<string>());
+            method = Object.find_method_under(self.get_data<Class>().get_singleton_class().get_data<Class>(), method_name);
         } else {
-            method = Object.find_method_under(self.klass, method_name.get_data<string>());
+            method = Object.find_method_under(self.klass, method_name);
         }
 
         if (method) {
             return method.call(ExecutionContext.current, self, args);
         } else {
-            const inspect_str = Object.send(self, String.new("inspect")).get_data<string>();
-            throw new NoMethodError(`undefined method \`${method_name.get_data<string>()}' for ${inspect_str}`)
+            const inspect_str = Object.send(self, "inspect").get_data<string>();
+            throw new NoMethodError(`undefined method \`${method_name}' for ${inspect_str}`)
         }
     }
 
@@ -394,8 +418,8 @@ export abstract class Object {
     });
 
     klass.define_native_singleton_method("new", (self: RValue): RValue => {
-        const obj = Object.send(self, String.new("allocate"));
-        Object.send(obj, String.new("initialize"));
+        const obj = Object.send(self, "allocate");
+        Object.send(obj, "initialize");
         return obj;
     });
 
@@ -409,11 +433,13 @@ export abstract class Object {
 
     // NOTE: send should actually be defined by the Kernel module
     klass.define_native_singleton_method("send", (self: RValue, method_name: RValue, ...args: RValue[]): RValue => {
-        return Object.send(self.klass.get_singleton_class(), method_name, ...args);
+        method_name.assert_type(StringClass);
+        return Object.send(self.klass.get_singleton_class(), method_name.get_data<string>(), ...args);
     });
 
     klass.define_native_method("send", (self: RValue, method_name: RValue, ...args: RValue[]) => {
-        return Object.send(self, method_name, ...args);
+        method_name.assert_type(StringClass);
+        return Object.send(self, method_name.get_data<string>(), ...args);
     });
 
     klass.define_native_method("inspect", (self: RValue): RValue => {
@@ -422,7 +448,7 @@ export abstract class Object {
 
         for (let ivar_name in self.ivars) {
             const ivar = self.ivars[ivar_name];
-            const inspect_str = Object.send(ivar, String.new("inspect")).get_data<string>();
+            const inspect_str = Object.send(ivar, "inspect").get_data<string>();
             parts.push(`${ivar_name}=${inspect_str}`)
         }
 
@@ -430,12 +456,82 @@ export abstract class Object {
     });
 });
 
+const each_codepoint = function*(str: string) {
+    for (let byteIndex = 0; byteIndex < str.length; byteIndex ++) {
+        const code = str.charCodeAt(byteIndex);
+
+        if (0xd800 <= code && code <= 0xdbff) {
+            const hi = code;
+            byteIndex ++;
+            const low = str.charCodeAt(byteIndex);
+            yield (hi - 0xd800) * 0x400 + (low - 0xdc00) + 0x10000;
+        } else {
+            yield code;
+        }
+    }
+};
+
+const hash_string = (str: string): number => {
+    let h = 0;
+
+    for(let cp of each_codepoint(str)) {
+        h = Math.imul(31, h) + cp | 0;
+    }
+
+    return h;
+}
+
 (StringClass.get_data<Class>()).tap( (klass: Class) => {
+
     klass.define_native_method("initialize", (self: RValue, str?: RValue): RValue => {
         if (str) {
             self.data = str.data;
         }
 
         return Qnil;
+    });
+
+    klass.define_native_method("hash", (self: RValue): RValue => {
+        return Integer.new(hash_string(self.get_data<string>()));
+    });
+
+    klass.define_native_method("inspect", (self: RValue): RValue => {
+        const str = self.get_data<string>();
+        return String.new(`"${str.replace(/\"/g, "\\\"")}"`);
+    });
+});
+
+export abstract class Integer {
+    static new(value: number): RValue {
+        return new RValue(IntegerClass.get_data<Class>(), value);
+    }
+}
+
+(IntegerClass.get_data<Class>()).tap( (klass: Class) => {
+    klass.define_native_method("inspect", (self: RValue): RValue => {
+        return String.new(self.get_data<number>().toString());
+    });
+
+    klass.define_native_method("hash", (self: RValue): RValue => {
+        // Ruby hashes the object ID for fixnums. We should eventually do the same.
+        // https://github.com/ruby/ruby/blob/6e46bf1e54e7fe83dc80e49394d980b71321b6f0/hash.c#L171
+        return self;
+    });
+});
+
+export const INT2FIX0 = new RValue(IntegerClass.get_data<Class>(), 0);
+export const INT2FIX1 = new RValue(IntegerClass.get_data<Class>(), 1);
+
+(SymbolClass.get_data<Class>()).tap( (klass: Class) => {
+    klass.define_native_method("inspect", (self: RValue): RValue => {
+        const str = self.get_data<string>();
+        const quote = !/^\w+$/.test(str);
+        const escaped_str = str.replace(/\"/g, "\\\"");
+
+        return String.new(quote ? `:"${escaped_str}"` : `:${escaped_str}`);
+    });
+
+    klass.define_native_method("hash", (self: RValue): RValue => {
+        return Integer.new(hash_string(self.get_data<string>()));
     });
 });

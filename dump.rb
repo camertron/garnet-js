@@ -54,4 +54,30 @@ options = {
 }
 
 insns = RubyVM::InstructionSequence.compile(ruby_code, **options)
-out_file.puts(JSON.pretty_generate(insns.to_a))
+iseq = insns.to_a
+
+def object_meta(object)
+  value = case object
+  in String, Integer, TrueClass, FalseClass, NilClass
+    object
+  in Symbol
+    object.to_s
+  else
+    object
+  end
+
+  { value: value, type: object.class.name }
+end
+
+iseq.last.map! do |insn|
+  case insn
+  in :putobject, object
+    [:putobject, object_meta(object)]
+  in :duparray, array
+    [:duparray, array.map { |element| object_meta(element) }]
+  else
+    insn
+  end
+end
+
+out_file.puts(JSON.pretty_generate(iseq))
