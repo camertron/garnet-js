@@ -1,5 +1,5 @@
 import { Array } from "../runtime/array";
-import ExecutionContext from "../execution_context";
+import { ExecutionContext } from "../execution_context";
 import Instruction, { ValueType } from "../instruction";
 import { RValue } from "../runtime";
 

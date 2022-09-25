@@ -1,4 +1,4 @@
-import ExecutionContext from "../execution_context";
+import { ExecutionContext } from "../execution_context";
 import Instruction, { ValueType } from "../instruction";
 
 export default class PutObject extends Instruction {

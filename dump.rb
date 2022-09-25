@@ -1,3 +1,10 @@
+require "bundler/inline"
+
+gemfile do
+  source "https://rubygems.org"
+  gem "pry-byebug"
+end
+
 require "json"
 
 if ARGV[0] == "-h"
@@ -69,15 +76,23 @@ def object_meta(object)
   { value: value, type: object.class.name }
 end
 
-iseq.last.map! do |insn|
-  case insn
-  in :putobject, object
-    [:putobject, object_meta(object)]
-  in :duparray, array
-    [:duparray, array.map { |element| object_meta(element) }]
-  else
-    insn
+def process_iseq(iseq)
+  insns = iseq.last.map do |insn|
+    case insn
+    in :putobject, object
+      [:putobject, object_meta(object)]
+    in :duparray, array
+      [:duparray, array.map { |element| object_meta(element) }]
+    in :definemethod, name, iseq
+      [:definemethod, name, process_iseq(iseq)]
+    in :defineclass, name, iseq, flags
+      [:defineclass, name, process_iseq(iseq), flags]
+    else
+      insn
+    end
   end
+
+  [*iseq[0..-2], insns]
 end
 
-out_file.puts(JSON.pretty_generate(iseq))
+out_file.puts(JSON.pretty_generate(process_iseq(iseq)))

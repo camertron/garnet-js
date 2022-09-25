@@ -1,5 +1,5 @@
 import CallData from "../call_data";
-import ExecutionContext from "../execution_context";
+import { ExecutionContext } from "../execution_context";
 import Instruction from "../instruction";
 
 export default class OptSendWithoutBlock extends Instruction {

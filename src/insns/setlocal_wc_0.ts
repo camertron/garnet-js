@@ -1,4 +1,4 @@
-import ExecutionContext from "../execution_context";
+import { ExecutionContext } from "../execution_context";
 import Instruction from "../instruction";
 
 export default class SetLocalWC0 extends Instruction {

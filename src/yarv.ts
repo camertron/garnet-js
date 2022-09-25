@@ -1,5 +1,6 @@
 import { InstructionSequence, YarvJson } from "./instruction_sequence";
-import Main from "./main";
+import { Main } from "./main";
+import { ExecutionContext } from "./execution_context";
 
 export function evaluate(iseq_json: YarvJson) {
     let insns = InstructionSequence.compile(iseq_json);
@@ -22,5 +23,10 @@ export {
     TrueClass,
     FalseClass,
     Qtrue,
-    Qfalse
+    Qfalse,
+    IO,
+    STDOUT,
+    STDERR
 } from "./runtime";
+
+export { Main, ExecutionContext }

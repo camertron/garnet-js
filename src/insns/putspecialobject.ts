@@ -1,4 +1,4 @@
-import ExecutionContext from "../execution_context";
+import { ExecutionContext } from "../execution_context";
 import Instruction from "../instruction";
 import { ConstBase, Qnil } from "../runtime";
 

@@ -1,0 +1,306 @@
+[
+  "YARVInstructionSequence/SimpleDataFormat",
+  3,
+  1,
+  1,
+  {
+    "arg_size": 0,
+    "local_size": 0,
+    "stack_max": 2,
+    "node_id": 20,
+    "code_location": [
+      7,
+      0,
+      9,
+      3
+    ],
+    "node_ids": [
+      17,
+      17,
+      17,
+      17,
+      18,
+      19,
+      -1
+    ]
+  },
+  "run",
+  "<compiled>",
+  "<compiled>",
+  7,
+  "method",
+  [
+
+  ],
+  {
+  },
+  [
+
+  ],
+  [
+    1,
+    "RUBY_EVENT_LINE",
+    [
+      "putspecialobject",
+      3
+    ],
+    [
+      "putnil"
+    ],
+    [
+      "defineclass",
+      "Foo",
+      [
+        "YARVInstructionSequence/SimpleDataFormat",
+        3,
+        1,
+        1,
+        {
+          "arg_size": 0,
+          "local_size": 0,
+          "stack_max": 2,
+          "node_id": 9,
+          "code_location": [
+            2,
+            2,
+            4,
+            5
+          ],
+          "node_ids": [
+            5,
+            5,
+            5,
+            5,
+            6,
+            8,
+            -1
+          ]
+        },
+        "bar",
+        "<compiled>",
+        "<compiled>",
+        2,
+        "method",
+        [
+
+        ],
+        {
+        },
+        [
+
+        ],
+        [
+          2,
+          "RUBY_EVENT_LINE",
+          "RUBY_EVENT_CLASS",
+          [
+            "definemethod",
+            "bar",
+            [
+              "YARVInstructionSequence/SimpleDataFormat",
+              3,
+              1,
+              1,
+              {
+                "arg_size": 0,
+                "local_size": 0,
+                "stack_max": 2,
+                "node_id": 9,
+                "code_location": [
+                  2,
+                  2,
+                  4,
+                  5
+                ],
+                "node_ids": [
+                  5,
+                  5,
+                  5,
+                  5,
+                  6,
+                  8,
+                  -1
+                ]
+              },
+              "bar",
+              "<compiled>",
+              "<compiled>",
+              2,
+              "method",
+              [
+
+              ],
+              {
+              },
+              [
+
+              ],
+              [
+                3,
+                "RUBY_EVENT_LINE",
+                "RUBY_EVENT_CALL",
+                [
+                  "opt_getinlinecache",
+                  "label_9",
+                  0
+                ],
+                [
+                  "putobject",
+                  {
+                    "value": true,
+                    "type": "TrueClass"
+                  }
+                ],
+                [
+                  "getconstant",
+                  "STDERR"
+                ],
+                [
+                  "opt_setinlinecache",
+                  0
+                ],
+                "label_9",
+                [
+                  "putstring",
+                  "bar"
+                ],
+                [
+                  "opt_send_without_block",
+                  {
+                    "mid": "puts",
+                    "flag": 16,
+                    "orig_argc": 1
+                  }
+                ],
+                4,
+                "RUBY_EVENT_RETURN",
+                [
+                  "leave"
+                ]
+              ]
+            ]
+          ],
+          [
+            "putobject",
+            {
+              "value": "bar",
+              "type": "Symbol"
+            }
+          ],
+          5,
+          "RUBY_EVENT_END",
+          [
+            "leave"
+          ]
+        ]
+      ],
+      0
+    ],
+    [
+      "pop"
+    ],
+    7,
+    "RUBY_EVENT_LINE",
+    [
+      "definemethod",
+      "run",
+      [
+        "YARVInstructionSequence/SimpleDataFormat",
+        3,
+        1,
+        1,
+        {
+          "arg_size": 0,
+          "local_size": 0,
+          "stack_max": 2,
+          "node_id": 20,
+          "code_location": [
+            7,
+            0,
+            9,
+            3
+          ],
+          "node_ids": [
+            17,
+            17,
+            17,
+            17,
+            18,
+            19,
+            -1
+          ]
+        },
+        "run",
+        "<compiled>",
+        "<compiled>",
+        7,
+        "method",
+        [
+
+        ],
+        {
+        },
+        [
+
+        ],
+        [
+          8,
+          "RUBY_EVENT_LINE",
+          "RUBY_EVENT_CALL",
+          [
+            "opt_getinlinecache",
+            "label_9",
+            0
+          ],
+          [
+            "putobject",
+            {
+              "value": true,
+              "type": "TrueClass"
+            }
+          ],
+          [
+            "getconstant",
+            "Foo"
+          ],
+          [
+            "opt_setinlinecache",
+            0
+          ],
+          "label_9",
+          [
+            "opt_send_without_block",
+            {
+              "mid": "new",
+              "flag": 16,
+              "orig_argc": 0
+            }
+          ],
+          [
+            "opt_send_without_block",
+            {
+              "mid": "bar",
+              "flag": 16,
+              "orig_argc": 0
+            }
+          ],
+          9,
+          "RUBY_EVENT_RETURN",
+          [
+            "leave"
+          ]
+        ]
+      ]
+    ],
+    [
+      "putobject",
+      {
+        "value": "run",
+        "type": "Symbol"
+      }
+    ],
+    [
+      "leave"
+    ]
+  ]
+]

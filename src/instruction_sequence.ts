@@ -1,6 +1,6 @@
 import CallData from "./call_data";
 import { NotImplementedError } from "./errors";
-import ExecutionContext from "./execution_context";
+import { ExecutionContext } from "./execution_context";
 import DefineClass from "./insns/defineclass";
 import DefineMethod from "./insns/definemethod";
 import DupArray from "./insns/duparray";

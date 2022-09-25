@@ -1,4 +1,4 @@
-import ExecutionContext from "./execution_context";
+import { ExecutionContext } from "./execution_context";
 import { Qfalse, Qnil, Qtrue, Runtime, RValue, String } from "./runtime";
 import { Integer } from "./runtime";
 

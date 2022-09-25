@@ -4,11 +4,11 @@ import Frame from "./frame";
 import Leave from "./insns/leave";
 import { InstructionSequence } from "./instruction_sequence";
 import { Array } from "./runtime/array";
-import { Class, Object, RValue, String } from "./runtime";
+import { Class, ClassClass, Object, RValue, String } from "./runtime";
 
 // This is the object that gets passed around all of the instructions as they
 // are being executed.
-export default class ExecutionContext {
+export class ExecutionContext {
     static current: ExecutionContext;
 
     // The system stack that tracks values through the execution of the program.
@@ -56,7 +56,11 @@ export default class ExecutionContext {
     }
 
     define_method(object: RValue, name: string, iseq: InstructionSequence) {
-        object.get_data<Class>().define_method(name, iseq);
+        if (object.klass === ClassClass.get_data<Class>()) {
+            object.get_data<Class>().define_method(name, iseq);
+        } else {
+            object.klass.define_method(name, iseq);
+        }
     }
 
     // This executes the given instruction sequence within a new execution frame.

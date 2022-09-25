@@ -1,12 +1,13 @@
 import { InstructionSequence } from "./instruction_sequence";
 import { NoMethodError } from "./errors";
-import ExecutionContext from "./execution_context";
+import { ExecutionContext } from "./execution_context";
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
 
 export type NativeMethod = (self: RValue, ...args: RValue[]) => RValue;
 
+// used as the type for keys of the symbols weak map
 type SymbolType = {
     name: string
 }
@@ -44,6 +45,10 @@ export abstract class Runtime {
 
     static define_class(name: string, superclass: RValue, cb?: ClassDefinitionCallback): RValue {
         if (!this.constants[name]) {
+            if (superclass == Qnil) {
+                superclass = ObjectClass;
+            }
+
             const klass_val = new RValue(ClassClass.get_data<Class>(), new Class(name, superclass.get_data<Class>()));
             this.constants[name] = klass_val;
         }
@@ -59,6 +64,10 @@ export abstract class Runtime {
         const parent_mod = parent.get_data<Module>();
 
         if (!parent_mod.constants[name]) {
+            if (superclass == Qnil) {
+                superclass = ObjectClass;
+            }
+
             const klass_val = new RValue(ClassClass.get_data<Class>(), new Class(name, superclass.get_data<Class>(), parent_mod));
             parent_mod.constants[name] = klass_val;
         }
@@ -162,6 +171,10 @@ export class Module {
 
     define_native_singleton_method(name: string, body: NativeMethod) {
         (this.get_singleton_class().get_data<Class>()).define_native_method(name, body);
+    }
+
+    alias_method(new_name: string, existing_name: string) {
+        this.methods[new_name] = this.methods[existing_name];
     }
 
     find_constant(name: string): RValue | null {
@@ -302,6 +315,10 @@ export class Class extends Module {
 
             if (this.superclass) {
                 superclass_singleton = this.superclass.get_singleton_class().get_data<Class>();
+            } else if (this != ObjectClass.get_data<Class>() && this != ModuleClass.get_data<Class>()) {
+                // Make sure this class isn't Object so we avoid an infinite loop
+                // Also make sure this class isn't Module, which has no superclass
+                superclass_singleton = ObjectClass.get_data<Class>().get_singleton_class().get_data<Class>();
             }
 
             const singleton_klass = new Class(`Class:${this.name}`, superclass_singleton);
@@ -454,6 +471,8 @@ export abstract class Object {
 
         return String.new(`#<${parts.join(" ")}>`)
     });
+
+    klass.alias_method("to_s", "inspect");
 });
 
 const each_codepoint = function*(str: string) {
@@ -482,7 +501,6 @@ const hash_string = (str: string): number => {
 }
 
 (StringClass.get_data<Class>()).tap( (klass: Class) => {
-
     klass.define_native_method("initialize", (self: RValue, str?: RValue): RValue => {
         if (str) {
             self.data = str.data;
@@ -493,6 +511,10 @@ const hash_string = (str: string): number => {
 
     klass.define_native_method("hash", (self: RValue): RValue => {
         return Integer.new(hash_string(self.get_data<string>()));
+    });
+
+    klass.define_native_method("to_s", (self: RValue): RValue => {
+        return self;
     });
 
     klass.define_native_method("inspect", (self: RValue): RValue => {
@@ -535,3 +557,33 @@ export const INT2FIX1 = new RValue(IntegerClass.get_data<Class>(), 1);
         return Integer.new(hash_string(self.get_data<string>()));
     });
 });
+
+type ConsoleFn = (...data: any[]) => void;
+
+export class IO {
+    // this is all kinds of wrong but it's fine for now
+    static new(console_fn: ConsoleFn): RValue {
+        return new RValue(IOClass.get_data<Class>(), new IO(console_fn));
+    }
+
+    private console_fn: ConsoleFn;
+
+    constructor(console_fn: ConsoleFn) {
+        this.console_fn = console_fn;
+    }
+
+    puts(val: any) {
+        this.console_fn(val);
+    }
+}
+
+export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) => {
+    klass.define_native_method("puts", (self: RValue, val: RValue): RValue => {
+        const io = self.get_data<IO>();
+        io.puts(Object.send(val, "to_s").get_data<string>());
+        return Qnil;
+    })
+});
+
+export const STDOUT = Runtime.constants["STDOUT"] = IO.new(console.log);
+export const STDERR = Runtime.constants["STDERR"] = IO.new(console.error);
