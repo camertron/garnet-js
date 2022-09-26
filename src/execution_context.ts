@@ -1,9 +1,8 @@
 import CallData from "./call_data";
-import { NameError } from "./errors";
 import Frame from "./frame";
 import Leave from "./insns/leave";
 import { InstructionSequence } from "./instruction_sequence";
-import { Array } from "./runtime/array";
+import { Array } from "./runtime";
 import { Class, ClassClass, Object, RValue, String } from "./runtime";
 
 // This is the object that gets passed around all of the instructions as they

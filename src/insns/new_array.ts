@@ -1,6 +1,6 @@
 import { ExecutionContext } from "../execution_context";
 import Instruction from "../instruction";
-import { Array } from "../runtime/array";
+import { Array } from "../runtime";
 
 export default class NewArray extends Instruction {
     public size: number;

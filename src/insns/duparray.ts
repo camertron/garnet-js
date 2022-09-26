@@ -1,4 +1,4 @@
-import { Array } from "../runtime/array";
+import { Array } from "../runtime";
 import { ExecutionContext } from "../execution_context";
 import Instruction, { ValueType } from "../instruction";
 import { RValue } from "../runtime";

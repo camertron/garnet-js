@@ -97,6 +97,19 @@ export abstract class Runtime {
 
         return symbol;
     }
+
+    static each_unique_ancestor(mod: Module, cb: (ancestor: Module) => boolean) {
+        const seen: Set<Module> = new Set();
+
+        mod.each_ancestor( (ancestor: Module): boolean => {
+            if (!seen.has(ancestor)) {
+                seen.add(ancestor);
+                return cb(ancestor);
+            }
+
+            return true;
+        });
+    }
 }
 
 export interface Callable {
@@ -315,7 +328,7 @@ export class Class extends Module {
 
             if (this.superclass) {
                 superclass_singleton = this.superclass.get_singleton_class().get_data<Class>();
-            } else if (this != ObjectClass.get_data<Class>() && this != ModuleClass.get_data<Class>()) {
+            } else if (this != BasicObjectClass.get_data<Class>()) {
                 // Make sure this class isn't Object so we avoid an infinite loop
                 // Also make sure this class isn't Module, which has no superclass
                 superclass_singleton = ObjectClass.get_data<Class>().get_singleton_class().get_data<Class>();
@@ -337,18 +350,22 @@ export class Class extends Module {
 const ConstBase = new RValue(new Class("ConstBase", null), Runtime);
 export { ConstBase };
 
-const class_class = new Class("Class", null);
+const basic_object_class = new Class("BasicObject", null);
+const object_class = new Class("Object", basic_object_class);
+const module_class = new Class("Module", object_class);
+const class_class = new Class("Class", module_class);
 
-export const ModuleClass      = Runtime.constants["Module"]      = new RValue(class_class, new Class("Module", null));
-export const ClassClass       = Runtime.constants["Class"]       = new RValue(class_class, new Class("Class", ModuleClass.get_data<Class>()));
-export const BasicObjectClass = Runtime.constants["BasicObject"] = new RValue(class_class, new Class("BasicObject", ClassClass.get_data<Class>()));
-export const ObjectClass      = Runtime.constants["Object"]      = new RValue(class_class, new Class("Object", BasicObjectClass.get_data<Class>()));
-export const StringClass      = Runtime.constants["String"]      = new RValue(class_class, new Class("String", ObjectClass.get_data<Class>()));
-export const IntegerClass     = Runtime.constants["Integer"]     = new RValue(class_class, new Class("Integer", ObjectClass.get_data<Class>()));
-export const SymbolClass      = Runtime.constants["Symbol"]      = new RValue(class_class, new Class("Symbol", ObjectClass.get_data<Class>()));
-export const NilClass         = Runtime.constants["NilClass"]    = new RValue(class_class, new Class("NilClass", ObjectClass.get_data<Class>()));
-export const TrueClass        = Runtime.constants["TrueClass"]   = new RValue(class_class, new Class("TrueClass", ObjectClass.get_data<Class>()));
-export const FalseClass       = Runtime.constants["FalseClass"]  = new RValue(class_class, new Class("FalseClass", ObjectClass.get_data<Class>()));
+export const ModuleClass      = Runtime.constants["Module"]      = new RValue(class_class, module_class);
+export const ClassClass       = Runtime.constants["Class"]       = new RValue(class_class, class_class);
+export const BasicObjectClass = Runtime.constants["BasicObject"] = new RValue(class_class, basic_object_class);
+export const ObjectClass      = Runtime.constants["Object"]      = new RValue(class_class, object_class);
+export const StringClass      = Runtime.constants["String"]      = new RValue(class_class, new Class("String", object_class));
+export const ArrayClass       = Runtime.constants["Array"]       = new RValue(class_class, new Class("Array", object_class));
+export const IntegerClass     = Runtime.constants["Integer"]     = new RValue(class_class, new Class("Integer", object_class));
+export const SymbolClass      = Runtime.constants["Symbol"]      = new RValue(class_class, new Class("Symbol", object_class));
+export const NilClass         = Runtime.constants["NilClass"]    = new RValue(class_class, new Class("NilClass", object_class));
+export const TrueClass        = Runtime.constants["TrueClass"]   = new RValue(class_class, new Class("TrueClass", object_class));
+export const FalseClass       = Runtime.constants["FalseClass"]  = new RValue(class_class, new Class("FalseClass", object_class));
 export const KernelModule     = Runtime.constants["Kernel"]      = new RValue(ModuleClass.get_data<Class>(), new Module("Kernel"));
 
 let kernel_puts = (_self: RValue, ...args: RValue[]): RValue => {
@@ -367,7 +384,7 @@ let kernel_puts = (_self: RValue, ...args: RValue[]): RValue => {
 });
 
 (ModuleClass.get_data<Module>()).tap( (mod: Module) => {
-    mod.define_native_singleton_method("inspect", (self: RValue): RValue => {
+    mod.define_native_method("inspect", (self: RValue): RValue => {
         const mod = self.get_data<Module>();
 
         if (mod.name) {
@@ -375,6 +392,18 @@ let kernel_puts = (_self: RValue, ...args: RValue[]): RValue => {
         } else {
             return String.new(`#<Module:${Object.object_id_to_str(self.object_id)}>`);
         }
+    });
+
+    mod.define_native_method("ancestors", (self: RValue): RValue => {
+        const mod = self.get_data<Module>();
+        const result: RValue[] = [];
+
+        Runtime.each_unique_ancestor(self.get_data<Module>(), (ancestor: Module): boolean => {
+            result.push(mod.find_constant(ancestor.name!)!);
+            return true;
+        });
+
+        return Array.new(result);
     });
 });
 
@@ -393,7 +422,7 @@ export abstract class Object {
         let method = null;
 
         if (self.klass == ClassClass.get_data<Class>()) {
-            method = Object.find_method_under(self.get_data<Class>().get_singleton_class().get_data<Class>(), method_name);
+            method = Object.find_method_under(self.get_data<Class>().get_singleton_class().klass, method_name);
         } else {
             method = Object.find_method_under(self.klass, method_name);
         }
@@ -409,12 +438,12 @@ export abstract class Object {
     private static find_method_under(mod: Module, method_name: string): Callable | null {
         let found_method = null;
 
-        mod.each_ancestor( (ancestor: Module): boolean => {
+        Runtime.each_unique_ancestor(mod, (ancestor: Module): boolean => {
             const method = ancestor.methods[method_name];
 
             if (method) {
                 found_method = method;
-                return false; // exit early from each_ancestor()
+                return false; // exit early from each_unique_ancestor()
             }
 
             return true;
@@ -587,3 +616,21 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
 
 export const STDOUT = Runtime.constants["STDOUT"] = IO.new(console.log);
 export const STDERR = Runtime.constants["STDERR"] = IO.new(console.error);
+
+export abstract class Array {
+    static new(arr?: RValue[]): RValue {
+        return new RValue(ArrayClass.get_data<Class>(), arr || []);
+    }
+}
+
+(ArrayClass.get_data<Class>()).tap( (klass: Class) => {
+    klass.define_native_method("inspect", (self: RValue): RValue => {
+        const elements = self.get_data<RValue[]>();
+
+        const strings = elements.map( (element: RValue): string => {
+            return Object.send(element, "inspect").get_data<string>();
+        });
+
+        return String.new(`[${strings.join(", ")}]`);
+    })
+});
