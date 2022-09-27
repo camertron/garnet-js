@@ -30,17 +30,19 @@ export abstract class Runtime {
         return this.constants[name];
     }
 
-    static define_module_under(parent: Module, name: string, cb?: ModuleDefinitionCallback): RValue {
-        if (!parent.constants[name]) {
+    static define_module_under(parent: RValue, name: string, cb?: ModuleDefinitionCallback): RValue {
+        const parent_mod = parent.get_data<Module>();
+
+        if (!parent_mod.constants[name]) {
             const module = new RValue(ModuleClass.get_data<Class>(), new Module(name, parent));
-            parent.constants[name] = module;
+            parent_mod.constants[name] = module;
         }
 
         if (cb) {
-            cb(parent.constants[name].get_data<Module>());
+            cb(parent_mod.constants[name].get_data<Module>());
         }
 
-        return parent.constants[name];
+        return parent_mod.constants[name];
     }
 
     static define_class(name: string, superclass: RValue, cb?: ClassDefinitionCallback): RValue {
@@ -49,7 +51,7 @@ export abstract class Runtime {
                 superclass = ObjectClass;
             }
 
-            const klass_val = new RValue(ClassClass.get_data<Class>(), new Class(name, superclass.get_data<Class>()));
+            const klass_val = new RValue(ClassClass.get_data<Class>(), new Class(name, superclass));
             this.constants[name] = klass_val;
         }
 
@@ -68,7 +70,7 @@ export abstract class Runtime {
                 superclass = ObjectClass;
             }
 
-            const klass_val = new RValue(ClassClass.get_data<Class>(), new Class(name, superclass.get_data<Class>(), parent_mod));
+            const klass_val = new RValue(ClassClass.get_data<Class>(), new Class(name, superclass, parent));
             parent_mod.constants[name] = klass_val;
         }
 
@@ -98,10 +100,10 @@ export abstract class Runtime {
         return symbol;
     }
 
-    static each_unique_ancestor(mod: Module, cb: (ancestor: Module) => boolean) {
-        const seen: Set<Module> = new Set();
+    static each_unique_ancestor(mod: RValue, cb: (ancestor: RValue) => boolean) {
+        const seen: Set<RValue> = new Set();
 
-        mod.each_ancestor( (ancestor: Module): boolean => {
+        this.each_ancestor(mod, (ancestor: RValue): boolean => {
             if (!seen.has(ancestor)) {
                 seen.add(ancestor);
                 return cb(ancestor);
@@ -109,6 +111,42 @@ export abstract class Runtime {
 
             return true;
         });
+    }
+
+    // Return false from cb() to exit early. Returning false from cb() will cause
+    // each_ancestor to return false as well; otherwise it will return true.
+    private static each_ancestor(mod: RValue, cb: (ancestor: RValue) => boolean): boolean {
+        const module = mod.get_data<Module>();
+
+        for (let prepended_module of module.prepends) {
+            if (!cb(prepended_module)) {
+                return false;
+            }
+        }
+
+        if (!cb(mod)) {
+            return false;
+        }
+
+        for (let included_module of module.includes) {
+            if (!cb(included_module)) {
+                return false;
+            }
+        }
+
+        if (module instanceof Class) {
+            if (module.superclass) {
+                if (!cb(module.superclass)) {
+                    return false;
+                }
+
+                if (!this.each_ancestor(module.superclass, cb)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 }
 
@@ -156,12 +194,12 @@ export class Module {
     public name: string | null;
     public constants: {[key: string]: RValue};
     public methods: {[key: string]: Callable};
-    public includes: Module[];
-    public prepends: Module[];
+    public includes: RValue[];
+    public prepends: RValue[];
     public singleton_class?: RValue;
-    public nesting_parent?: Module;
+    public nesting_parent?: RValue;
 
-    constructor(name: string | null, nesting_parent?: Module) {
+    constructor(name: string | null, nesting_parent?: RValue) {
         this.name = name;
         this.nesting_parent = nesting_parent;
         this.constants = {};
@@ -200,53 +238,31 @@ export class Module {
                 return constant;
             }
 
-            current_mod = current_mod.nesting_parent;
+            current_mod = current_mod.nesting_parent!.get_data<Module>();
         }
 
         return Runtime.constants[name];
     }
 
-    include(mod: Module) {
+    include(mod: RValue) {
         this.includes.push(mod);
     }
 
-    extend(mod: Module) {
+    extend(mod: RValue) {
         (this.get_singleton_class().get_data<Class>()).include(mod);
     }
 
-    prepend(mod: Module) {
+    prepend(mod: RValue) {
         this.prepends.push(mod);
     }
 
     get_singleton_class(): RValue {
-        if (!this.singleton_class) {
-            const singleton_klass = new Class(`Class:${this.name}`, ObjectClass.get_data<Class>());
+ear        if (!this.singleton_class) {
+            const singleton_klass = new Class(`Class:${this.name}`, ObjectClass);
             this.singleton_class = new RValue(ClassClass.klass, singleton_klass);
         }
 
         return this.singleton_class;
-    }
-
-    // Return false from cb() to exit early. Returning false from cb() will cause
-    // each_ancestor to return false as well; otherwise it will return true.
-    each_ancestor(cb: (ancestor: Module) => boolean): boolean {
-        for (let prepended_module of this.prepends) {
-            if (!cb(prepended_module)) {
-                return false;
-            }
-        }
-
-        if (!cb(this)) {
-            return false;
-        }
-
-        for (let included_module of this.includes) {
-            if (!cb(included_module)) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     tap(cb: (mod: Module) => void) {
@@ -292,34 +308,14 @@ export class RValue {
 }
 
 export class Class extends Module {
-    public superclass: Class | null;
+    public superclass: RValue | null;
 
     // name: can be null in the case of an anonymous class.
     // superclass: can be null in the case of BasicObject. Should always be provided otherwise.
-    constructor(name: string | null, superclass: Class | null, nesting_parent?: Module) {
+    constructor(name: string | null, superclass: RValue | null, nesting_parent?: RValue) {
         super(name, nesting_parent);
 
         this.superclass = superclass;
-    }
-
-    // Return false from cb() to exit early. Returning false from cb() will cause
-    // each_ancestor to return false as well.
-    override each_ancestor(cb: (ancestor: Module) => boolean): boolean {
-        if (!super.each_ancestor(cb)) {
-            return false;
-        }
-
-        if (this.superclass) {
-            if (!cb(this.superclass)) {
-                return false;
-            }
-
-            if (!this.superclass?.each_ancestor(cb)) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     get_singleton_class(): RValue {
@@ -327,11 +323,11 @@ export class Class extends Module {
             let superclass_singleton = null;
 
             if (this.superclass) {
-                superclass_singleton = this.superclass.get_singleton_class().get_data<Class>();
+                superclass_singleton = this.superclass.get_data<Class>().get_singleton_class();
             } else if (this != BasicObjectClass.get_data<Class>()) {
                 // Make sure this class isn't Object so we avoid an infinite loop
                 // Also make sure this class isn't Module, which has no superclass
-                superclass_singleton = ObjectClass.get_data<Class>().get_singleton_class().get_data<Class>();
+                superclass_singleton = ObjectClass.get_data<Class>().get_singleton_class();
             }
 
             const singleton_klass = new Class(`Class:${this.name}`, superclass_singleton);
@@ -351,22 +347,26 @@ const ConstBase = new RValue(new Class("ConstBase", null), Runtime);
 export { ConstBase };
 
 const basic_object_class = new Class("BasicObject", null);
-const object_class = new Class("Object", basic_object_class);
-const module_class = new Class("Module", object_class);
-const class_class = new Class("Class", module_class);
+const object_class = new Class("Object", null);
+const module_class = new Class("Module", null);
+const class_class = new Class("Class", null);
 
 export const ModuleClass      = Runtime.constants["Module"]      = new RValue(class_class, module_class);
 export const ClassClass       = Runtime.constants["Class"]       = new RValue(class_class, class_class);
 export const BasicObjectClass = Runtime.constants["BasicObject"] = new RValue(class_class, basic_object_class);
 export const ObjectClass      = Runtime.constants["Object"]      = new RValue(class_class, object_class);
-export const StringClass      = Runtime.constants["String"]      = new RValue(class_class, new Class("String", object_class));
-export const ArrayClass       = Runtime.constants["Array"]       = new RValue(class_class, new Class("Array", object_class));
-export const IntegerClass     = Runtime.constants["Integer"]     = new RValue(class_class, new Class("Integer", object_class));
-export const SymbolClass      = Runtime.constants["Symbol"]      = new RValue(class_class, new Class("Symbol", object_class));
-export const NilClass         = Runtime.constants["NilClass"]    = new RValue(class_class, new Class("NilClass", object_class));
-export const TrueClass        = Runtime.constants["TrueClass"]   = new RValue(class_class, new Class("TrueClass", object_class));
-export const FalseClass       = Runtime.constants["FalseClass"]  = new RValue(class_class, new Class("FalseClass", object_class));
+export const StringClass      = Runtime.constants["String"]      = new RValue(class_class, new Class("String", ObjectClass));
+export const ArrayClass       = Runtime.constants["Array"]       = new RValue(class_class, new Class("Array", ObjectClass));
+export const IntegerClass     = Runtime.constants["Integer"]     = new RValue(class_class, new Class("Integer", ObjectClass));
+export const SymbolClass      = Runtime.constants["Symbol"]      = new RValue(class_class, new Class("Symbol", ObjectClass));
+export const NilClass         = Runtime.constants["NilClass"]    = new RValue(class_class, new Class("NilClass", ObjectClass));
+export const TrueClass        = Runtime.constants["TrueClass"]   = new RValue(class_class, new Class("TrueClass", ObjectClass));
+export const FalseClass       = Runtime.constants["FalseClass"]  = new RValue(class_class, new Class("FalseClass", ObjectClass));
 export const KernelModule     = Runtime.constants["Kernel"]      = new RValue(ModuleClass.get_data<Class>(), new Module("Kernel"));
+
+object_class.superclass = BasicObjectClass;
+module_class.superclass = ObjectClass;
+class_class.superclass = ModuleClass;
 
 let kernel_puts = (_self: RValue, ...args: RValue[]): RValue => {
     for (let arg of args) {
@@ -398,8 +398,8 @@ let kernel_puts = (_self: RValue, ...args: RValue[]): RValue => {
         const mod = self.get_data<Module>();
         const result: RValue[] = [];
 
-        Runtime.each_unique_ancestor(self.get_data<Module>(), (ancestor: Module): boolean => {
-            result.push(mod.find_constant(ancestor.name!)!);
+        Runtime.each_unique_ancestor(self, (ancestor: RValue): boolean => {
+            result.push(ancestor);
             return true;
         });
 
@@ -421,11 +421,11 @@ export abstract class Object {
     static send(self: RValue, method_name: string, ...args: RValue[]): RValue {
         let method = null;
 
-        if (self.klass == ClassClass.get_data<Class>()) {
-            method = Object.find_method_under(self.get_data<Class>().get_singleton_class().klass, method_name);
-        } else {
-            method = Object.find_method_under(self.klass, method_name);
-        }
+        // if (self.klass == ClassClass.get_data<Class>()) {
+        //     method = Object.find_method_under(self.get_data<Class>().get_singleton_class(), method_name);
+        // } else {
+            method = Object.find_method_under(self, method_name);
+        // }
 
         if (method) {
             return method.call(ExecutionContext.current, self, args);
@@ -435,11 +435,11 @@ export abstract class Object {
         }
     }
 
-    private static find_method_under(mod: Module, method_name: string): Callable | null {
+    private static find_method_under(mod: RValue, method_name: string): Callable | null {
         let found_method = null;
 
-        Runtime.each_unique_ancestor(mod, (ancestor: Module): boolean => {
-            const method = ancestor.methods[method_name];
+        Runtime.each_unique_ancestor(mod, (ancestor: RValue): boolean => {
+            const method = ancestor.klass.methods[method_name];
 
             if (method) {
                 found_method = method;
@@ -475,7 +475,7 @@ export abstract class Object {
 });
 
 (ObjectClass.get_data<Class>()).tap( (klass: Class) => {
-    klass.include(KernelModule.get_data<Module>());
+    klass.include(KernelModule);
 
     // NOTE: send should actually be defined by the Kernel module
     klass.define_native_singleton_method("send", (self: RValue, method_name: RValue, ...args: RValue[]): RValue => {
