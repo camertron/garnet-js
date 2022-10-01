@@ -55,10 +55,10 @@ export class ExecutionContext {
     }
 
     define_method(object: RValue, name: string, iseq: InstructionSequence) {
-        if (object.klass === ClassClass.get_data<Class>()) {
+        if (object.klass === ClassClass) {
             object.get_data<Class>().define_method(name, iseq);
         } else {
-            object.klass.define_method(name, iseq);
+            object.klass.get_data<Class>().define_method(name, iseq);
         }
     }
 

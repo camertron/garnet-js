@@ -1,6 +1,7 @@
 import { InstructionSequence } from "./instruction_sequence";
 import { NoMethodError } from "./errors";
 import { ExecutionContext } from "./execution_context";
+import { setFips } from "crypto";
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
@@ -12,14 +13,13 @@ type SymbolType = {
     name: string
 }
 
-// Runtime is abstract so it can't be instantiated
-export abstract class Runtime {
+export class Runtime {
     static constants: {[key: string]: RValue} = {};
     static symbols: WeakMap<SymbolType, RValue> = new WeakMap();
 
     static define_module(name: string, cb?: ModuleDefinitionCallback): RValue {
         if (!this.constants[name]) {
-            const module = new RValue(ModuleClass.get_data<Class>(), new Module(name));
+            const module = new RValue(ModuleClass, new Module(name));
             this.constants[name] = module;
         }
 
@@ -34,7 +34,7 @@ export abstract class Runtime {
         const parent_mod = parent.get_data<Module>();
 
         if (!parent_mod.constants[name]) {
-            const module = new RValue(ModuleClass.get_data<Class>(), new Module(name, parent));
+            const module = new RValue(ModuleClass, new Module(name, parent));
             parent_mod.constants[name] = module;
         }
 
@@ -51,7 +51,7 @@ export abstract class Runtime {
                 superclass = ObjectClass;
             }
 
-            const klass_val = new RValue(ClassClass.get_data<Class>(), new Class(name, superclass));
+            const klass_val = new RValue(ClassClass, new Class(name, superclass));
             this.constants[name] = klass_val;
         }
 
@@ -70,7 +70,7 @@ export abstract class Runtime {
                 superclass = ObjectClass;
             }
 
-            const klass_val = new RValue(ClassClass.get_data<Class>(), new Class(name, superclass, parent));
+            const klass_val = new RValue(ClassClass, new Class(name, superclass, false, parent));
             parent_mod.constants[name] = klass_val;
         }
 
@@ -93,7 +93,7 @@ export abstract class Runtime {
         let symbol = this.symbols.get(key);
 
         if (!symbol) {
-            symbol = new RValue(SymbolClass.get_data<Class>(), value);
+            symbol = new RValue(SymbolClass, value);
             this.symbols.set(key, symbol);
         }
 
@@ -117,6 +117,10 @@ export abstract class Runtime {
     // each_ancestor to return false as well; otherwise it will return true.
     private static each_ancestor(mod: RValue, cb: (ancestor: RValue) => boolean): boolean {
         const module = mod.get_data<Module>();
+
+        if (module.prepends === undefined) {
+            debugger;
+        }
 
         for (let prepended_module of module.prepends) {
             if (!cb(prepended_module)) {
@@ -238,7 +242,11 @@ export class Module {
                 return constant;
             }
 
-            current_mod = current_mod.nesting_parent!.get_data<Module>();
+            if (!current_mod.nesting_parent) {
+                break;
+            }
+
+            current_mod = current_mod.nesting_parent.get_data<Module>();
         }
 
         return Runtime.constants[name];
@@ -257,7 +265,7 @@ export class Module {
     }
 
     get_singleton_class(): RValue {
-ear        if (!this.singleton_class) {
+        if (!this.singleton_class) {
             const singleton_klass = new Class(`Class:${this.name}`, ObjectClass);
             this.singleton_class = new RValue(ClassClass.klass, singleton_klass);
         }
@@ -268,17 +276,21 @@ ear        if (!this.singleton_class) {
     tap(cb: (mod: Module) => void) {
         cb(this);
     }
+
+    inspect(): string {
+        return `module ${this.name}`;
+    }
 }
 
 let next_object_id = 0;
 
 export class RValue {
-    public klass: Class;
+    public klass: RValue;
     public ivars: {[key: string]: RValue};
     public data: any;
     public object_id: number;
 
-    constructor(klass: Class, data?: any) {
+    constructor(klass: RValue, data?: any) {
         this.klass = klass;
         this.ivars = {};
         this.data = data;
@@ -297,8 +309,8 @@ export class RValue {
             }
         })();
 
-        if (this.klass != module) {
-            throw new TypeError(`no implicit conversion of ${module.name} into ${this.klass.name}`);
+        if (this.klass.get_data<Module>() != module) {
+            throw new TypeError(`no implicit conversion of ${module.name} into ${this.klass.get_data<Module>().name}`);
         }
     }
 
@@ -309,29 +321,32 @@ export class RValue {
 
 export class Class extends Module {
     public superclass: RValue | null;
+    public is_singleton_class: boolean;
 
     // name: can be null in the case of an anonymous class.
-    // superclass: can be null in the case of BasicObject. Should always be provided otherwise.
-    constructor(name: string | null, superclass: RValue | null, nesting_parent?: RValue) {
+    // superclass: can be null in the case of BasicObject. Certain fundamental classes like Class and Object that are defined
+    // in terms of each other also have superclass set to null very briefly before the VM is fully initialized.
+    constructor(name: string | null, superclass: RValue | null, is_singleton_class: boolean = false, nesting_parent?: RValue) {
         super(name, nesting_parent);
 
         this.superclass = superclass;
+        this.is_singleton_class = is_singleton_class;
     }
 
     get_singleton_class(): RValue {
         if (!this.singleton_class) {
-            let superclass_singleton = null;
+            let superclass_singleton: RValue;
 
             if (this.superclass) {
                 superclass_singleton = this.superclass.get_data<Class>().get_singleton_class();
-            } else if (this != BasicObjectClass.get_data<Class>()) {
+            } else {
                 // Make sure this class isn't Object so we avoid an infinite loop
                 // Also make sure this class isn't Module, which has no superclass
-                superclass_singleton = ObjectClass.get_data<Class>().get_singleton_class();
+                superclass_singleton = ClassClass;
             }
 
-            const singleton_klass = new Class(`Class:${this.name}`, superclass_singleton);
-            this.singleton_class = new RValue(ClassClass.get_data<Class>(), singleton_klass);
+            const singleton_klass = new Class(`Class:${this.name}`, superclass_singleton, true);
+            this.singleton_class = new RValue(ClassClass, singleton_klass);
         }
 
         return this.singleton_class;
@@ -342,31 +357,34 @@ export class Class extends Module {
     }
 }
 
-// an RValue that wraps Runtime
-const ConstBase = new RValue(new Class("ConstBase", null), Runtime);
-export { ConstBase };
-
 const basic_object_class = new Class("BasicObject", null);
 const object_class = new Class("Object", null);
 const module_class = new Class("Module", null);
 const class_class = new Class("Class", null);
 
-export const ModuleClass      = Runtime.constants["Module"]      = new RValue(class_class, module_class);
-export const ClassClass       = Runtime.constants["Class"]       = new RValue(class_class, class_class);
-export const BasicObjectClass = Runtime.constants["BasicObject"] = new RValue(class_class, basic_object_class);
-export const ObjectClass      = Runtime.constants["Object"]      = new RValue(class_class, object_class);
-export const StringClass      = Runtime.constants["String"]      = new RValue(class_class, new Class("String", ObjectClass));
-export const ArrayClass       = Runtime.constants["Array"]       = new RValue(class_class, new Class("Array", ObjectClass));
-export const IntegerClass     = Runtime.constants["Integer"]     = new RValue(class_class, new Class("Integer", ObjectClass));
-export const SymbolClass      = Runtime.constants["Symbol"]      = new RValue(class_class, new Class("Symbol", ObjectClass));
-export const NilClass         = Runtime.constants["NilClass"]    = new RValue(class_class, new Class("NilClass", ObjectClass));
-export const TrueClass        = Runtime.constants["TrueClass"]   = new RValue(class_class, new Class("TrueClass", ObjectClass));
-export const FalseClass       = Runtime.constants["FalseClass"]  = new RValue(class_class, new Class("FalseClass", ObjectClass));
-export const KernelModule     = Runtime.constants["Kernel"]      = new RValue(ModuleClass.get_data<Class>(), new Module("Kernel"));
+// This is some nasty hackery to be able to set Class's class to Class.
+export const ClassClass       = Runtime.constants["Class"]       = new RValue(null as unknown as RValue, class_class);
+ClassClass.klass = ClassClass;
+
+export const ModuleClass      = Runtime.constants["Module"]      = new RValue(ClassClass, module_class);
+export const BasicObjectClass = Runtime.constants["BasicObject"] = new RValue(ClassClass, basic_object_class);
+export const ObjectClass      = Runtime.constants["Object"]      = new RValue(ClassClass, object_class);
+export const StringClass      = Runtime.constants["String"]      = new RValue(ClassClass, new Class("String", ObjectClass));
+export const ArrayClass       = Runtime.constants["Array"]       = new RValue(ClassClass, new Class("Array", ObjectClass));
+export const IntegerClass     = Runtime.constants["Integer"]     = new RValue(ClassClass, new Class("Integer", ObjectClass));
+export const SymbolClass      = Runtime.constants["Symbol"]      = new RValue(ClassClass, new Class("Symbol", ObjectClass));
+export const NilClass         = Runtime.constants["NilClass"]    = new RValue(ClassClass, new Class("NilClass", ObjectClass));
+export const TrueClass        = Runtime.constants["TrueClass"]   = new RValue(ClassClass, new Class("TrueClass", ObjectClass));
+export const FalseClass       = Runtime.constants["FalseClass"]  = new RValue(ClassClass, new Class("FalseClass", ObjectClass));
+export const KernelModule     = Runtime.constants["Kernel"]      = new RValue(ModuleClass, new Module("Kernel"));
 
 object_class.superclass = BasicObjectClass;
 module_class.superclass = ObjectClass;
 class_class.superclass = ModuleClass;
+
+// an RValue that wraps Runtime
+const ConstBase = new RValue(new RValue(ClassClass, new Class("ConstBase", null)), Runtime);
+export { ConstBase };
 
 let kernel_puts = (_self: RValue, ...args: RValue[]): RValue => {
     for (let arg of args) {
@@ -395,7 +413,6 @@ let kernel_puts = (_self: RValue, ...args: RValue[]): RValue => {
     });
 
     mod.define_native_method("ancestors", (self: RValue): RValue => {
-        const mod = self.get_data<Module>();
         const result: RValue[] = [];
 
         Runtime.each_unique_ancestor(self, (ancestor: RValue): boolean => {
@@ -407,13 +424,13 @@ let kernel_puts = (_self: RValue, ...args: RValue[]): RValue => {
     });
 });
 
-export const Qnil = new RValue(NilClass.get_data<Class>(), null);
-export const Qtrue = new RValue(TrueClass.get_data<Class>(), true);
-export const Qfalse = new RValue(FalseClass.get_data<Class>(), false);
+export const Qnil = new RValue(NilClass, null);
+export const Qtrue = new RValue(TrueClass, true);
+export const Qfalse = new RValue(FalseClass, false);
 
 export abstract class String {
     static new(str: string): RValue {
-        return new RValue(StringClass.get_data<Class>(), str);
+        return new RValue(StringClass, str);
     }
 }
 
@@ -421,11 +438,11 @@ export abstract class Object {
     static send(self: RValue, method_name: string, ...args: RValue[]): RValue {
         let method = null;
 
-        // if (self.klass == ClassClass.get_data<Class>()) {
-        //     method = Object.find_method_under(self.get_data<Class>().get_singleton_class(), method_name);
-        // } else {
-            method = Object.find_method_under(self, method_name);
-        // }
+        if (self.klass == ClassClass) {
+            method = Object.find_method_under(self.get_data<Class>().get_singleton_class(), method_name);
+        } else {
+            method = Object.find_method_under(self.klass, method_name);
+        }
 
         if (method) {
             return method.call(ExecutionContext.current, self, args);
@@ -439,7 +456,7 @@ export abstract class Object {
         let found_method = null;
 
         Runtime.each_unique_ancestor(mod, (ancestor: RValue): boolean => {
-            const method = ancestor.klass.methods[method_name];
+            const method = ancestor.get_data<Class>().methods[method_name];
 
             if (method) {
                 found_method = method;
@@ -459,18 +476,29 @@ export abstract class Object {
 }
 
 (ClassClass.get_data<Class>()).tap( (klass: Class) => {
-    klass.define_native_singleton_method("allocate", (self: RValue): RValue => {
-        return new RValue(self.get_data<Class>());
+    // Apparently `allocate' and `new' are... instance methods? Go figure.
+    klass.define_native_method("allocate", (self: RValue): RValue => {
+        return new RValue(self);
     });
 
-    klass.define_native_singleton_method("new", (self: RValue): RValue => {
+    klass.define_native_method("new", (self: RValue): RValue => {
         const obj = Object.send(self, "allocate");
         Object.send(obj, "initialize");
         return obj;
     });
 
-    klass.define_native_method("initialize", (_self: RValue): RValue => {
-        return Qnil;
+    klass.define_native_method("inspect", (self: RValue): RValue => {
+        const klass = self.get_data<Class>();
+        if (klass.is_singleton_class) {
+            return String.new(`#<${klass.name}>`);
+        } else {
+            if (klass.name) {
+                return String.new(klass.name);
+            } else {
+                // once we figure out how to call super(), replace this hackery
+                return ObjectClass.get_data<Class>().methods["inspect"].call(ExecutionContext.current, self, []);
+            }
+        }
     });
 });
 
@@ -480,7 +508,7 @@ export abstract class Object {
     // NOTE: send should actually be defined by the Kernel module
     klass.define_native_singleton_method("send", (self: RValue, method_name: RValue, ...args: RValue[]): RValue => {
         method_name.assert_type(StringClass);
-        return Object.send(self.klass.get_singleton_class(), method_name.get_data<string>(), ...args);
+        return Object.send(self.klass.get_data<Class>().get_singleton_class(), method_name.get_data<string>(), ...args);
     });
 
     klass.define_native_method("send", (self: RValue, method_name: RValue, ...args: RValue[]) => {
@@ -489,7 +517,7 @@ export abstract class Object {
     });
 
     klass.define_native_method("inspect", (self: RValue): RValue => {
-        const name = self.klass.name ? self.klass.name : "Class";
+        const name = self.klass.get_data<Class>().name ? self.klass.get_data<Class>().name : "Class";
         let parts = [`${name}:${Object.object_id_to_str(self.object_id)}`];
 
         for (let ivar_name in self.ivars) {
@@ -502,6 +530,12 @@ export abstract class Object {
     });
 
     klass.alias_method("to_s", "inspect");
+});
+
+(BasicObjectClass.get_data<Class>()).tap( (klass: Class) => {
+    klass.define_native_method("initialize", (_self: RValue): RValue => {
+        return Qnil;
+    });
 });
 
 const each_codepoint = function*(str: string) {
@@ -554,7 +588,7 @@ const hash_string = (str: string): number => {
 
 export abstract class Integer {
     static new(value: number): RValue {
-        return new RValue(IntegerClass.get_data<Class>(), value);
+        return new RValue(IntegerClass, value);
     }
 }
 
@@ -570,8 +604,8 @@ export abstract class Integer {
     });
 });
 
-export const INT2FIX0 = new RValue(IntegerClass.get_data<Class>(), 0);
-export const INT2FIX1 = new RValue(IntegerClass.get_data<Class>(), 1);
+export const INT2FIX0 = new RValue(IntegerClass, 0);
+export const INT2FIX1 = new RValue(IntegerClass, 1);
 
 (SymbolClass.get_data<Class>()).tap( (klass: Class) => {
     klass.define_native_method("inspect", (self: RValue): RValue => {
@@ -592,7 +626,7 @@ type ConsoleFn = (...data: any[]) => void;
 export class IO {
     // this is all kinds of wrong but it's fine for now
     static new(console_fn: ConsoleFn): RValue {
-        return new RValue(IOClass.get_data<Class>(), new IO(console_fn));
+        return new RValue(IOClass, new IO(console_fn));
     }
 
     private console_fn: ConsoleFn;
@@ -619,7 +653,7 @@ export const STDERR = Runtime.constants["STDERR"] = IO.new(console.error);
 
 export abstract class Array {
     static new(arr?: RValue[]): RValue {
-        return new RValue(ArrayClass.get_data<Class>(), arr || []);
+        return new RValue(ArrayClass, arr || []);
     }
 }
 

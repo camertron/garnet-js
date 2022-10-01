@@ -6,26 +6,26 @@
   {
     "arg_size": 0,
     "local_size": 0,
-    "stack_max": 1,
-    "node_id": 10,
+    "stack_max": 2,
+    "node_id": 6,
     "code_location": [
       1,
       0,
-      5,
+      3,
       3
     ],
     "node_ids": [
-      1,
-      7,
-      7,
+      3,
+      4,
+      3,
       -1
     ]
   },
-  "<compiled>",
+  "foo",
   "<compiled>",
   "<compiled>",
   1,
-  "top",
+  "method",
   [
 
   ],

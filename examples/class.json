@@ -6,54 +6,25 @@
   {
     "arg_size": 0,
     "local_size": 0,
-    "stack_max": 3,
-    "node_id": 32,
+    "stack_max": 1,
+    "node_id": 16,
     "code_location": [
-      1,
+      7,
       0,
-      14,
-      16
+      11,
+      3
     ],
     "node_ids": [
-      0,
-      1,
-      1,
-      1,
-      1,
-      8,
-      8,
-      9,
-      10,
-      10,
-      10,
-      10,
-      17,
-      17,
-      20,
-      21,
-      21,
-      21,
-      21,
-      22,
-      23,
-      20,
-      20,
-      26,
-      27,
-      27,
-      27,
-      27,
-      28,
-      29,
-      26,
+      12,
+      12,
       -1
     ]
   },
+  "<class:Bar>",
   "<compiled>",
   "<compiled>",
-  "<compiled>",
-  1,
-  "top",
+  7,
+  "class",
   [
 
   ],
@@ -76,7 +47,10 @@
     ],
     [
       "putobject",
-      true
+      {
+        "value": true,
+        "type": "TrueClass"
+      }
     ],
     [
       "getconstant",
@@ -99,24 +73,23 @@
           "arg_size": 0,
           "local_size": 0,
           "stack_max": 1,
-          "node_id": 7,
+          "node_id": 6,
           "code_location": [
-            1,
-            0,
-            5,
-            3
+            2,
+            2,
+            4,
+            5
           ],
           "node_ids": [
-            3,
-            3,
+            5,
             -1
           ]
         },
-        "<class:Foo>",
+        "bar",
         "<compiled>",
         "<compiled>",
-        1,
-        "class",
+        2,
+        "method",
         [
 
         ],
@@ -184,7 +157,10 @@
           ],
           [
             "putobject",
-            "bar"
+            {
+              "value": "bar",
+              "type": "Symbol"
+            }
           ],
           5,
           "RUBY_EVENT_END",
@@ -211,7 +187,10 @@
     ],
     [
       "putobject",
-      true
+      {
+        "value": true,
+        "type": "TrueClass"
+      }
     ],
     [
       "getconstant",
@@ -234,24 +213,23 @@
           "arg_size": 0,
           "local_size": 0,
           "stack_max": 1,
-          "node_id": 16,
+          "node_id": 15,
           "code_location": [
-            7,
-            0,
-            11,
-            3
+            8,
+            2,
+            10,
+            5
           ],
           "node_ids": [
-            12,
-            12,
+            14,
             -1
           ]
         },
-        "<class:Bar>",
+        "bar",
         "<compiled>",
         "<compiled>",
-        7,
-        "class",
+        8,
+        "method",
         [
 
         ],
@@ -319,7 +297,10 @@
           ],
           [
             "putobject",
-            "bar"
+            {
+              "value": "bar",
+              "type": "Symbol"
+            }
           ],
           11,
           "RUBY_EVENT_END",
@@ -345,7 +326,10 @@
     ],
     [
       "putobject",
-      true
+      {
+        "value": true,
+        "type": "TrueClass"
+      }
     ],
     [
       "getconstant",
@@ -395,7 +379,10 @@
     ],
     [
       "putobject",
-      true
+      {
+        "value": true,
+        "type": "TrueClass"
+      }
     ],
     [
       "getconstant",

@@ -1,9 +1,19 @@
 import * as fs from "fs"
-import { Object, ModuleClass, ObjectClass, ClassClass, evaluate } from "./dist/yarv.js";
+import { Object, ModuleClass, BasicObjectClass, ObjectClass, ClassClass, evaluate } from "./dist/yarv.js";
+import { Runtime } from "./dist/yarv.js";
 
-// let yarv_json = fs.readFileSync("examples/hash.json", {encoding: "utf-8"});
-// evaluate(JSON.parse(yarv_json));
+// EVALUATE YARV INSTRUCTIONS IN FILE
+let yarv_json = fs.readFileSync("examples/class.json", {encoding: "utf-8"});
+evaluate(JSON.parse(yarv_json));
 
-const result = Object.send(ObjectClass.get_data().get_singleton_class(), "ancestors");
-const str = Object.send(result, "inspect");
-console.log(str.get_data());
+// TEST CLASS HIERARCHY OF OBJECT
+// const result = Object.send(ObjectClass, "ancestors");
+// const str = Object.send(result, "inspect");
+// console.log(str.get_data());
+
+// TEST CLASS HAS CORRECT SINGLETON CLASS INHERITANCE HIERARCHY
+// const foo_class = Runtime.define_class("Foo", ObjectClass);
+
+// const ancestors = Object.send(foo_class.get_data().get_singleton_class(), "ancestors");
+// const str = Object.send(ancestors, "inspect");
+// console.log(str.get_data());

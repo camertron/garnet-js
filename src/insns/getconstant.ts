@@ -28,10 +28,10 @@ export default class GetConstant extends Instruction {
             // a parent of Qnil (and nils allowed) means look up the constant in the
             // current scope, i.e. selfo
             if (parent == Qnil) {
-                if (context.current_frame().selfo.klass === ClassClass.get_data<Class>()) {
+                if (context.current_frame().selfo.klass === ClassClass) {
                     return context.current_frame().selfo.get_data<Class>().find_constant(this.name);
                 } else {
-                    return context.current_frame().selfo.klass.find_constant(this.name);
+                    return context.current_frame().selfo.klass.get_data<Class>().find_constant(this.name);
                 }
             } else {
                 return parent!.get_data<Module>().find_constant(this.name);

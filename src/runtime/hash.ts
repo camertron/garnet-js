@@ -2,7 +2,7 @@ import { String, Runtime, RValue, Object, ObjectClass, Class, Qnil, Qtrue, Qfals
 
 export class Hash {
     static new(): RValue {
-        return new RValue(HashClass.get_data<Class>(), new Hash());
+        return new RValue(HashClass, new Hash());
     }
 
     // maps hash codes to key objects
