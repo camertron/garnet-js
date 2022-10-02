@@ -19,8 +19,32 @@ export default class DefineClass extends Instruction {
     call(context: ExecutionContext) {
         const superclass = context.stack.pop()!;
         const cbase = context.stack.pop()!;
-        const klass = Runtime.define_class_under(cbase, this.name, superclass);
-        context.evaluate(klass, this.iseq);
+
+        switch (this.flags) {
+            // VM_DEFINECLASS_TYPE_CLASS
+            case 0: {
+                const klass = Runtime.define_class_under(cbase, this.name, superclass);
+                context.evaluate(klass, this.iseq);
+                break;
+            }
+
+            // VM_DEFINECLASS_TYPE_SINGLETON_CLASS, @TODO
+            case 1: {
+                break;
+            }
+
+            // VM_DEFINECLASS_TYPE_MODULE
+            case 2: {
+                const module = Runtime.define_module_under(cbase, this.name);
+                context.evaluate(module, this.iseq);
+                break;
+            }
+
+            // VM_DEFINECLASS_TYPE_MASK, @TODO, what even is this
+            case 7: {
+                break;
+            }
+        }
     }
 
     reads(): number {

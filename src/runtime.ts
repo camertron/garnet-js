@@ -1,12 +1,11 @@
 import { InstructionSequence } from "./instruction_sequence";
 import { NoMethodError } from "./errors";
 import { ExecutionContext } from "./execution_context";
-import { setFips } from "crypto";
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
 
-export type NativeMethod = (self: RValue, ...args: RValue[]) => RValue;
+export type NativeMethod = (self: RValue, args: RValue[], block?: RValue) => RValue;
 
 // used as the type for keys of the symbols weak map
 type SymbolType = {
@@ -189,8 +188,20 @@ export class NativeCallable implements Callable {
         this.method = method;
     }
 
-    call(context: ExecutionContext, receiver: RValue, args: RValue[], _block?: RValue): RValue {
-        return this.method(receiver, ...args);
+    call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue): RValue {
+        return this.method(receiver, args, block);
+    }
+}
+
+export class CallableAlias implements Callable {
+    private alias: string;
+
+    constructor(alias: string) {
+        this.alias = alias;
+    }
+
+    call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue): RValue {
+        return Object.send(receiver, this.alias, args, block);
     }
 }
 
@@ -229,7 +240,7 @@ export class Module {
     }
 
     alias_method(new_name: string, existing_name: string) {
-        this.methods[new_name] = this.methods[existing_name];
+        this.methods[new_name] = new CallableAlias(existing_name);
     }
 
     find_constant(name: string): RValue | null {
@@ -386,11 +397,9 @@ class_class.superclass = ModuleClass;
 const ConstBase = new RValue(new RValue(ClassClass, new Class("ConstBase", null)), Runtime);
 export { ConstBase };
 
-let kernel_puts = (_self: RValue, ...args: RValue[]): RValue => {
+let kernel_puts = (_self: RValue, args: RValue[]): RValue => {
     for (let arg of args) {
-        // @TODO: call to_s instead of checking for string values
-        arg.assert_type(StringClass)
-        console.log(arg.data);
+        console.log(Object.send(arg, "to_s").get_data<string>());
     }
 
     return Qnil;
@@ -422,6 +431,13 @@ let kernel_puts = (_self: RValue, ...args: RValue[]): RValue => {
 
         return Array.new(result);
     });
+
+    mod.define_native_method("include", (self: RValue, args: RValue[]): RValue => {
+        const mod_to_include = args[0];
+        mod_to_include.assert_type(ModuleClass);
+        self.get_data<Module>().include(mod_to_include);
+        return self;
+    });
 });
 
 export const Qnil = new RValue(NilClass, null);
@@ -435,7 +451,7 @@ export abstract class String {
 }
 
 export abstract class Object {
-    static send(self: RValue, method_name: string, ...args: RValue[]): RValue {
+    static send(self: RValue, method_name: string, args: RValue[] = [], block?: RValue): RValue {
         let method = null;
 
         if (self.klass == ClassClass) {
@@ -445,7 +461,7 @@ export abstract class Object {
         }
 
         if (method) {
-            return method.call(ExecutionContext.current, self, args);
+            return method.call(ExecutionContext.current, self, args, block);
         } else {
             const inspect_str = Object.send(self, "inspect").get_data<string>();
             throw new NoMethodError(`undefined method \`${method_name}' for ${inspect_str}`)
@@ -506,14 +522,16 @@ export abstract class Object {
     klass.include(KernelModule);
 
     // NOTE: send should actually be defined by the Kernel module
-    klass.define_native_singleton_method("send", (self: RValue, method_name: RValue, ...args: RValue[]): RValue => {
+    klass.define_native_singleton_method("send", (self: RValue, args: RValue[]): RValue => {
+        const method_name = args[0];
         method_name.assert_type(StringClass);
-        return Object.send(self.klass.get_data<Class>().get_singleton_class(), method_name.get_data<string>(), ...args);
+        return Object.send(self.klass.get_data<Class>().get_singleton_class(), method_name.get_data<string>(), args);
     });
 
-    klass.define_native_method("send", (self: RValue, method_name: RValue, ...args: RValue[]) => {
+    klass.define_native_method("send", (self: RValue, args: RValue[]) => {
+        const method_name = args[0];
         method_name.assert_type(StringClass);
-        return Object.send(self, method_name.get_data<string>(), ...args);
+        return Object.send(self, method_name.get_data<string>(), args);
     });
 
     klass.define_native_method("inspect", (self: RValue): RValue => {
@@ -564,8 +582,11 @@ const hash_string = (str: string): number => {
 }
 
 (StringClass.get_data<Class>()).tap( (klass: Class) => {
-    klass.define_native_method("initialize", (self: RValue, str?: RValue): RValue => {
+    klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
+        const str = args[0];
+
         if (str) {
+            str.assert_type(StringClass);
             self.data = str.data;
         }
 
@@ -584,6 +605,12 @@ const hash_string = (str: string): number => {
         const str = self.get_data<string>();
         return String.new(`"${str.replace(/\"/g, "\\\"")}"`);
     });
+
+    klass.define_native_method("*", (self: RValue, args: RValue[]): RValue => {
+        const multiplier = args[0];
+        multiplier.assert_type(IntegerClass);  // @TODO: handle floats (yes, you can multiply strings by floats, oh ruby)
+        return String.new(self.get_data<string>().repeat(multiplier.get_data<number>()));
+    });
 });
 
 export abstract class Integer {
@@ -601,6 +628,15 @@ export abstract class Integer {
         // Ruby hashes the object ID for fixnums. We should eventually do the same.
         // https://github.com/ruby/ruby/blob/6e46bf1e54e7fe83dc80e49394d980b71321b6f0/hash.c#L171
         return self;
+    });
+
+    // Normally multiplication of two ints/floats is handled by the opt_mult instruction. This
+    // definition is here for the sake of completeness.
+    klass.define_native_method("*", (self: RValue, args: RValue[]): RValue => {
+        const multiplier = args[0];
+        multiplier.assert_type(IntegerClass)  // @TODO: handle floats, maybe Numeric?
+
+        return Integer.new(self.get_data<number>() * multiplier.get_data<number>());
     });
 });
 
@@ -641,7 +677,8 @@ export class IO {
 }
 
 export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) => {
-    klass.define_native_method("puts", (self: RValue, val: RValue): RValue => {
+    klass.define_native_method("puts", (self: RValue, args: RValue[]): RValue => {
+        const val = args[0];
         const io = self.get_data<IO>();
         io.puts(Object.send(val, "to_s").get_data<string>());
         return Qnil;
@@ -666,5 +703,36 @@ export abstract class Array {
         });
 
         return String.new(`[${strings.join(", ")}]`);
-    })
+    });
+
+    klass.define_native_method("each", (self: RValue, args: RValue[], block?: RValue): RValue => {
+        if (block) {
+            const elements = self.get_data<RValue[]>();
+
+            for (let element of elements) {
+                Object.send(block, "call", [element]);
+            }
+        } else {
+            // @TODO: return an Enumerator
+        }
+
+        return self;
+    });
+
+    klass.define_native_method("map", (self: RValue, args: RValue[], block?: RValue): RValue => {
+        if (block) {
+            const elements = self.get_data<RValue[]>();
+            const result = [];
+
+            for (let element of elements) {
+                result.push(Object.send(block, "call", [element]));
+            }
+
+            return Array.new(result);
+        } else {
+            // @TODO: return an enumerator
+        }
+
+        return Qnil;
+    });
 });

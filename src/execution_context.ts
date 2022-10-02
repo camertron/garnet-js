@@ -2,8 +2,8 @@ import CallData from "./call_data";
 import Frame from "./frame";
 import Leave from "./insns/leave";
 import { InstructionSequence } from "./instruction_sequence";
-import { Array } from "./runtime";
-import { Class, ClassClass, Object, RValue, String } from "./runtime";
+import { Array, ModuleClass } from "./runtime";
+import { Class, ClassClass, Object, RValue } from "./runtime";
 
 // This is the object that gets passed around all of the instructions as they
 // are being executed.
@@ -39,7 +39,7 @@ export class ExecutionContext {
     }
 
     call_method(call_data: CallData, receiver: RValue, args: RValue[], block?: RValue): RValue {
-        return Object.send(receiver, call_data.mid, ...args);
+        return Object.send(receiver, call_data.mid, args, block);
     }
 
     // This returns the current execution frame.
@@ -55,7 +55,7 @@ export class ExecutionContext {
     }
 
     define_method(object: RValue, name: string, iseq: InstructionSequence) {
-        if (object.klass === ClassClass) {
+        if (object.klass === ClassClass || object.klass == ModuleClass) {
             object.get_data<Class>().define_method(name, iseq);
         } else {
             object.klass.get_data<Class>().define_method(name, iseq);

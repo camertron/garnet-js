@@ -10,6 +10,7 @@ import Leave from "./insns/leave";
 import NewHash from "./insns/newhash";
 import NewArray from "./insns/new_array";
 import OptGetInlineCache from "./insns/opt_getinlinecache";
+import OptMult from "./insns/opt_mult";
 import OptSendWithoutBlock from "./insns/opt_send_without_block";
 import OptSetInlineCache from "./insns/opt_setinlinecache";
 import Pop from "./insns/pop";
@@ -20,6 +21,7 @@ import PutObjectInt2Fix1 from "./insns/putobject_int2fix_1";
 import PutSelf from "./insns/putself";
 import PutSpecialObject from "./insns/putspecialobject";
 import PutString from "./insns/putstring";
+import Send from "./insns/send";
 import SetLocalWC0 from "./insns/setlocal_wc_0";
 import Instruction from "./instruction";
 import { RValue, String } from "./runtime";
@@ -48,8 +50,14 @@ class UnimplementedInstruction {
 
 export type YarvJson = any;
 
-type ArgData = {
+type ArgDataSig = {
     lead_num?: number;
+}
+
+type CallDataSig = {
+    mid: string,
+    orig_argc: number,
+    flag: number
 }
 
 // This object represents a set of instructions that will be executed.
@@ -175,14 +183,34 @@ export class InstructionSequence {
                     compiled.push(new DefineClass(name, this.compile(iseq, compiled), flags));
                     break;
                 }
+                case "send": {
+                    const [, call_data, block_iseq] = insn;
+                    const { mid, orig_argc, flag }: CallDataSig = call_data;
+                    const compiled_block_iseq = ( () => {
+                        if (block_iseq) {
+                            return this.compile(block_iseq, compiled);
+                        } else {
+                            return undefined;
+                        }
+                    })();
+
+                    compiled.push(new Send(new CallData(mid, orig_argc, flag), compiled_block_iseq));
+
+                    break;
+                }
                 case "opt_send_without_block": {
-                    const { mid, orig_argc, flag }: { mid: string, orig_argc: number, flag: number } = insn[1];
+                    const { mid, orig_argc, flag }: CallDataSig = insn[1];
                     compiled.push(
                         new OptSendWithoutBlock(
                             new CallData(mid, orig_argc, flag)
                         )
                     );
 
+                    break;
+                }
+                case "opt_mult": {
+                    const { mid, orig_argc, flag }: CallDataSig = insn[1];
+                    compiled.push(new OptMult(new CallData("*", 1, flag)));
                     break;
                 }
                 case "leave": {
@@ -295,7 +323,7 @@ export class InstructionSequence {
 
     // This is the information about the arguments that should be passed into
     // this instruction sequence.
-    args(): ArgData {
+    args(): ArgDataSig {
         return this.iseq[11];
     }
 

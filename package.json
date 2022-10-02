@@ -28,7 +28,6 @@
     "test": "npx jasmine-node test"
   },
   "dependencies": {
-    "utfstring": "^2.1.0"
   },
   "devDependencies": {
     "benchmarkify": "^3.0.0",

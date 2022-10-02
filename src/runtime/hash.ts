@@ -49,17 +49,20 @@ export class Hash {
 }
 
 export const HashClass = Runtime.define_class("Hash", ObjectClass, (klass: Class) => {
-    klass.define_native_method("[]", (self: RValue, key: RValue): RValue => {
+    klass.define_native_method("[]", (self: RValue, args: RValue[]): RValue => {
+        const key = args[0];
         const hash = self.get_data<Hash>();
         return hash.get(key);
     });
 
-    klass.define_native_method("[]=", (self: RValue, key: RValue, value: RValue): RValue => {
+    klass.define_native_method("[]=", (self: RValue, args: RValue[]): RValue => {
+        const [key, value] = args;
         const hash = self.get_data<Hash>();
         return hash.set(key, value);
     });
 
-    klass.define_native_method("include?", (self: RValue, key: RValue): RValue => {
+    klass.define_native_method("include?", (self: RValue, args: RValue[]): RValue => {
+        const key = args[0];
         const hash = self.get_data<Hash>();
         return hash.has(key);
     });

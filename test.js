@@ -3,7 +3,7 @@ import { Object, ModuleClass, BasicObjectClass, ObjectClass, ClassClass, evaluat
 import { Runtime } from "./dist/yarv.js";
 
 // EVALUATE YARV INSTRUCTIONS IN FILE
-let yarv_json = fs.readFileSync("examples/class.json", {encoding: "utf-8"});
+let yarv_json = fs.readFileSync("examples/include.json", {encoding: "utf-8"});
 evaluate(JSON.parse(yarv_json));
 
 // TEST CLASS HIERARCHY OF OBJECT

@@ -87,6 +87,8 @@ def process_iseq(iseq)
       [:definemethod, name, process_iseq(iseq)]
     in :defineclass, name, iseq, flags
       [:defineclass, name, process_iseq(iseq), flags]
+    in :send, call_data, block_iseq
+      [:send, call_data, process_iseq(block_iseq)]
     else
       insn
     end
