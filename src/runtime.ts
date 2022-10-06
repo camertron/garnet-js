@@ -1,6 +1,10 @@
 import { InstructionSequence } from "./instruction_sequence";
 import { NoMethodError } from "./errors";
 import { ExecutionContext } from "./execution_context";
+import { defineArrayBehaviorOn } from "./runtime/array";
+import { defineIntegerBehaviorOn } from "./runtime/integer";
+import { defineSymbolBehaviorOn } from "./runtime/symbol";
+import { defineStringBehaviorOn } from "./runtime/string";
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
@@ -86,7 +90,7 @@ export class Runtime {
     // symbols can be garbage collected. So, whereas MRI's rb_intern() creates immortal symbols,
     // this function creates regular 'ol mortal symbols just as one might do in Ruby code. To
     // the runtime, it essentially exists as a convenient way to memoize strings so we don't
-    // have to incur the overhead of making a bunch of new RValue strings all over the place.
+    // have to incur the overhead of making a bunch of new RValues all over the place.
     static intern(value: string): RValue {
         const key = {name: value};
         let symbol = this.symbols.get(key);
@@ -444,6 +448,24 @@ export const Qnil = new RValue(NilClass, null);
 export const Qtrue = new RValue(TrueClass, true);
 export const Qfalse = new RValue(FalseClass, false);
 
+NilClass.get_data<Class>().tap( (klass: Class) => {
+    klass.define_native_method("inspect", (self: RValue): RValue => {
+        return String.new("nil");
+    });
+});
+
+TrueClass.get_data<Class>().tap( (klass: Class) => {
+    klass.define_native_method("inspect", (self: RValue): RValue => {
+        return String.new("true");
+    });
+});
+
+FalseClass.get_data<Class>().tap( (klass: Class) => {
+    klass.define_native_method("inspect", (self: RValue): RValue => {
+        return String.new("false");
+    });
+});
+
 export abstract class String {
     static new(str: string): RValue {
         return new RValue(StringClass, str);
@@ -556,62 +578,7 @@ export abstract class Object {
     });
 });
 
-const each_codepoint = function*(str: string) {
-    for (let byteIndex = 0; byteIndex < str.length; byteIndex ++) {
-        const code = str.charCodeAt(byteIndex);
-
-        if (0xd800 <= code && code <= 0xdbff) {
-            const hi = code;
-            byteIndex ++;
-            const low = str.charCodeAt(byteIndex);
-            yield (hi - 0xd800) * 0x400 + (low - 0xdc00) + 0x10000;
-        } else {
-            yield code;
-        }
-    }
-};
-
-const hash_string = (str: string): number => {
-    let h = 0;
-
-    for(let cp of each_codepoint(str)) {
-        h = Math.imul(31, h) + cp | 0;
-    }
-
-    return h;
-}
-
-(StringClass.get_data<Class>()).tap( (klass: Class) => {
-    klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
-        const str = args[0];
-
-        if (str) {
-            str.assert_type(StringClass);
-            self.data = str.data;
-        }
-
-        return Qnil;
-    });
-
-    klass.define_native_method("hash", (self: RValue): RValue => {
-        return Integer.new(hash_string(self.get_data<string>()));
-    });
-
-    klass.define_native_method("to_s", (self: RValue): RValue => {
-        return self;
-    });
-
-    klass.define_native_method("inspect", (self: RValue): RValue => {
-        const str = self.get_data<string>();
-        return String.new(`"${str.replace(/\"/g, "\\\"")}"`);
-    });
-
-    klass.define_native_method("*", (self: RValue, args: RValue[]): RValue => {
-        const multiplier = args[0];
-        multiplier.assert_type(IntegerClass);  // @TODO: handle floats (yes, you can multiply strings by floats, oh ruby)
-        return String.new(self.get_data<string>().repeat(multiplier.get_data<number>()));
-    });
-});
+defineStringBehaviorOn(StringClass.get_data<Class>());
 
 export abstract class Integer {
     static new(value: number): RValue {
@@ -619,43 +586,12 @@ export abstract class Integer {
     }
 }
 
-(IntegerClass.get_data<Class>()).tap( (klass: Class) => {
-    klass.define_native_method("inspect", (self: RValue): RValue => {
-        return String.new(self.get_data<number>().toString());
-    });
-
-    klass.define_native_method("hash", (self: RValue): RValue => {
-        // Ruby hashes the object ID for fixnums. We should eventually do the same.
-        // https://github.com/ruby/ruby/blob/6e46bf1e54e7fe83dc80e49394d980b71321b6f0/hash.c#L171
-        return self;
-    });
-
-    // Normally multiplication of two ints/floats is handled by the opt_mult instruction. This
-    // definition is here for the sake of completeness.
-    klass.define_native_method("*", (self: RValue, args: RValue[]): RValue => {
-        const multiplier = args[0];
-        multiplier.assert_type(IntegerClass)  // @TODO: handle floats, maybe Numeric?
-
-        return Integer.new(self.get_data<number>() * multiplier.get_data<number>());
-    });
-});
+defineIntegerBehaviorOn(IntegerClass.get_data<Class>());
 
 export const INT2FIX0 = new RValue(IntegerClass, 0);
 export const INT2FIX1 = new RValue(IntegerClass, 1);
 
-(SymbolClass.get_data<Class>()).tap( (klass: Class) => {
-    klass.define_native_method("inspect", (self: RValue): RValue => {
-        const str = self.get_data<string>();
-        const quote = !/^\w+$/.test(str);
-        const escaped_str = str.replace(/\"/g, "\\\"");
-
-        return String.new(quote ? `:"${escaped_str}"` : `:${escaped_str}`);
-    });
-
-    klass.define_native_method("hash", (self: RValue): RValue => {
-        return Integer.new(hash_string(self.get_data<string>()));
-    });
-});
+defineSymbolBehaviorOn(SymbolClass.get_data<Class>());
 
 type ConsoleFn = (...data: any[]) => void;
 
@@ -694,45 +630,4 @@ export abstract class Array {
     }
 }
 
-(ArrayClass.get_data<Class>()).tap( (klass: Class) => {
-    klass.define_native_method("inspect", (self: RValue): RValue => {
-        const elements = self.get_data<RValue[]>();
-
-        const strings = elements.map( (element: RValue): string => {
-            return Object.send(element, "inspect").get_data<string>();
-        });
-
-        return String.new(`[${strings.join(", ")}]`);
-    });
-
-    klass.define_native_method("each", (self: RValue, args: RValue[], block?: RValue): RValue => {
-        if (block) {
-            const elements = self.get_data<RValue[]>();
-
-            for (let element of elements) {
-                Object.send(block, "call", [element]);
-            }
-        } else {
-            // @TODO: return an Enumerator
-        }
-
-        return self;
-    });
-
-    klass.define_native_method("map", (self: RValue, args: RValue[], block?: RValue): RValue => {
-        if (block) {
-            const elements = self.get_data<RValue[]>();
-            const result = [];
-
-            for (let element of elements) {
-                result.push(Object.send(block, "call", [element]));
-            }
-
-            return Array.new(result);
-        } else {
-            // @TODO: return an enumerator
-        }
-
-        return Qnil;
-    });
-});
+defineArrayBehaviorOn(ArrayClass.get_data<Class>());

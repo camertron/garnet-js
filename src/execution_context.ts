@@ -22,7 +22,7 @@ export class ExecutionContext {
 
     // The program counter used to determine which instruction to execute next.
     // This is public because it can be modified by instructions being executed.
-    private program_counter: number;
+    public program_counter: number;
 
     constructor() {
         this.stack = [];

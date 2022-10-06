@@ -1,6 +1,8 @@
 import CallData from "./call_data";
 import { NotImplementedError } from "./errors";
 import { ExecutionContext } from "./execution_context";
+import BranchIf from "./insns/branchif";
+import BranchUnless from "./insns/branchunless";
 import DefineClass from "./insns/defineclass";
 import DefineMethod from "./insns/definemethod";
 import Dup from "./insns/dup";
@@ -11,7 +13,10 @@ import GetLocalWC0 from "./insns/getlocal_wc_0";
 import Leave from "./insns/leave";
 import NewHash from "./insns/newhash";
 import NewArray from "./insns/new_array";
+import OptEq from "./insns/opt_eq";
 import OptGetInlineCache from "./insns/opt_getinlinecache";
+import OptGt from "./insns/opt_gt";
+import OptLt from "./insns/opt_lt";
 import OptMult from "./insns/opt_mult";
 import OptSendWithoutBlock from "./insns/opt_send_without_block";
 import OptSetInlineCache from "./insns/opt_setinlinecache";
@@ -68,7 +73,7 @@ export class InstructionSequence {
     public iseq: YarvJson;
     public parent?: InstructionSequence;
     public insns: Instruction[];
-    public labels: Map<Instruction, number>;
+    public labels: Map<string, number>;
 
     // # These handlers handle thrown exceptions.
     // ThrowHandler =
@@ -98,7 +103,24 @@ export class InstructionSequence {
         let insns = iseq[iseq.length - 1];
 
         insns.forEach( (insn: any) => {
+            // we've found a label, which are used by conditionals to jump to a
+            // particular branch
+            if (typeof(insn) == "string") {
+                compiled.labels.set(insn, compiled.insns.length);
+                return;
+            }
+
             switch(insn[0]) {
+                case "branchif": {
+                    const [, label] = insn;
+                    compiled.push(new BranchIf(label));
+                    break;
+                }
+                case "branchunless": {
+                    const [, label] = insn;
+                    compiled.push(new BranchUnless(label));
+                    break;
+                }
                 case "putobject": {
                     const [, object] = insn;
                     compiled.push(new PutObject(object));
@@ -228,6 +250,21 @@ export class InstructionSequence {
                 case "opt_mult": {
                     const { mid, orig_argc, flag }: CallDataSig = insn[1];
                     compiled.push(new OptMult(new CallData("*", 1, flag)));
+                    break;
+                }
+                case "opt_gt": {
+                    const { mid, orig_argc, flag }: CallDataSig = insn[1];
+                    compiled.push(new OptGt(new CallData(">", 1, flag)));
+                    break;
+                }
+                case "opt_lt": {
+                    const { mid, orig_argc, flag }: CallDataSig = insn[1];
+                    compiled.push(new OptLt(new CallData("<", 1, flag)));
+                    break;
+                }
+                case "opt_eq": {
+                    const { mid, orig_argc, flag }: CallDataSig = insn[1];
+                    compiled.push(new OptEq(new CallData("==", 1, flag)));
                     break;
                 }
                 case "leave": {

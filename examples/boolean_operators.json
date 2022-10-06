@@ -1,0 +1,1263 @@
+[
+  "YARVInstructionSequence/SimpleDataFormat",
+  3,
+  1,
+  1,
+  {
+    "arg_size": 3,
+    "local_size": 3,
+    "stack_max": 2,
+    "node_id": 148,
+    "code_location": [
+      17,
+      0,
+      19,
+      3
+    ],
+    "node_ids": [
+      139,
+      140,
+      142,
+      147,
+      147,
+      147,
+      143,
+      144,
+      146,
+      -1
+    ]
+  },
+  "equal?",
+  "<compiled>",
+  "<compiled>",
+  17,
+  "method",
+  [
+    "a",
+    "b",
+    "c"
+  ],
+  {
+    "lead_num": 3
+  },
+  [
+
+  ],
+  [
+    1,
+    "RUBY_EVENT_LINE",
+    [
+      "definemethod",
+      "sort",
+      [
+        "YARVInstructionSequence/SimpleDataFormat",
+        3,
+        1,
+        1,
+        {
+          "arg_size": 3,
+          "local_size": 3,
+          "stack_max": 3,
+          "node_id": 132,
+          "code_location": [
+            1,
+            0,
+            15,
+            3
+          ],
+          "node_ids": [
+            6,
+            7,
+            9,
+            9,
+            10,
+            11,
+            13,
+            13,
+            15,
+            16,
+            18,
+            18,
+            20,
+            22,
+            24,
+            21,
+            -1,
+            26,
+            27,
+            29,
+            29,
+            30,
+            31,
+            33,
+            33,
+            35,
+            36,
+            38,
+            38,
+            40,
+            42,
+            44,
+            41,
+            -1,
+            46,
+            47,
+            49,
+            49,
+            50,
+            51,
+            53,
+            53,
+            55,
+            56,
+            58,
+            58,
+            60,
+            62,
+            64,
+            61,
+            -1,
+            66,
+            67,
+            69,
+            69,
+            70,
+            71,
+            73,
+            73,
+            75,
+            76,
+            78,
+            78,
+            80,
+            82,
+            84,
+            81,
+            -1,
+            86,
+            87,
+            89,
+            89,
+            90,
+            91,
+            93,
+            93,
+            95,
+            96,
+            98,
+            98,
+            100,
+            102,
+            104,
+            101,
+            -1,
+            106,
+            107,
+            109,
+            109,
+            110,
+            111,
+            113,
+            113,
+            115,
+            116,
+            118,
+            118,
+            120,
+            122,
+            124,
+            121,
+            -1,
+            -1,
+            -1
+          ]
+        },
+        "sort",
+        "<compiled>",
+        "<compiled>",
+        1,
+        "method",
+        [
+          "a",
+          "b",
+          "c"
+        ],
+        {
+          "lead_num": 3
+        },
+        [
+
+        ],
+        [
+          2,
+          "RUBY_EVENT_LINE",
+          "RUBY_EVENT_CALL",
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_33"
+          ],
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_33"
+          ],
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_33"
+          ],
+          3,
+          "RUBY_EVENT_LINE",
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "newarray",
+            3
+          ],
+          15,
+          "RUBY_EVENT_RETURN",
+          [
+            "leave"
+          ],
+          "label_33",
+          4,
+          "RUBY_EVENT_LINE",
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_66"
+          ],
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_66"
+          ],
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_66"
+          ],
+          5,
+          "RUBY_EVENT_LINE",
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "newarray",
+            3
+          ],
+          15,
+          "RUBY_EVENT_RETURN",
+          [
+            "leave"
+          ],
+          "label_66",
+          6,
+          "RUBY_EVENT_LINE",
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_99"
+          ],
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_99"
+          ],
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_99"
+          ],
+          7,
+          "RUBY_EVENT_LINE",
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "newarray",
+            3
+          ],
+          15,
+          "RUBY_EVENT_RETURN",
+          [
+            "leave"
+          ],
+          "label_99",
+          8,
+          "RUBY_EVENT_LINE",
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_132"
+          ],
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_132"
+          ],
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_132"
+          ],
+          9,
+          "RUBY_EVENT_LINE",
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "newarray",
+            3
+          ],
+          15,
+          "RUBY_EVENT_RETURN",
+          [
+            "leave"
+          ],
+          "label_132",
+          10,
+          "RUBY_EVENT_LINE",
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_165"
+          ],
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_165"
+          ],
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_165"
+          ],
+          11,
+          "RUBY_EVENT_LINE",
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "newarray",
+            3
+          ],
+          15,
+          "RUBY_EVENT_RETURN",
+          [
+            "leave"
+          ],
+          "label_165",
+          12,
+          "RUBY_EVENT_LINE",
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_198"
+          ],
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_198"
+          ],
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "opt_lt",
+            {
+              "mid": "<",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "branchunless",
+            "label_198"
+          ],
+          13,
+          "RUBY_EVENT_LINE",
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "newarray",
+            3
+          ],
+          15,
+          "RUBY_EVENT_RETURN",
+          [
+            "leave"
+          ],
+          "label_198",
+          13,
+          [
+            "putnil"
+          ],
+          15,
+          "RUBY_EVENT_RETURN",
+          [
+            "leave"
+          ]
+        ]
+      ]
+    ],
+    17,
+    "RUBY_EVENT_LINE",
+    [
+      "definemethod",
+      "equal?",
+      [
+        "YARVInstructionSequence/SimpleDataFormat",
+        3,
+        1,
+        1,
+        {
+          "arg_size": 3,
+          "local_size": 3,
+          "stack_max": 2,
+          "node_id": 148,
+          "code_location": [
+            17,
+            0,
+            19,
+            3
+          ],
+          "node_ids": [
+            139,
+            140,
+            142,
+            147,
+            147,
+            147,
+            143,
+            144,
+            146,
+            -1
+          ]
+        },
+        "equal?",
+        "<compiled>",
+        "<compiled>",
+        17,
+        "method",
+        [
+          "a",
+          "b",
+          "c"
+        ],
+        {
+          "lead_num": 3
+        },
+        [
+
+        ],
+        [
+          18,
+          "RUBY_EVENT_LINE",
+          "RUBY_EVENT_CALL",
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "getlocal_WC_0",
+            4
+          ],
+          [
+            "opt_eq",
+            {
+              "mid": "==",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          [
+            "dup"
+          ],
+          [
+            "branchif",
+            "label_16"
+          ],
+          [
+            "pop"
+          ],
+          [
+            "getlocal_WC_0",
+            5
+          ],
+          [
+            "getlocal_WC_0",
+            3
+          ],
+          [
+            "opt_eq",
+            {
+              "mid": "==",
+              "flag": 16,
+              "orig_argc": 1
+            }
+          ],
+          "label_16",
+          19,
+          "RUBY_EVENT_RETURN",
+          [
+            "leave"
+          ]
+        ]
+      ]
+    ],
+    21,
+    "RUBY_EVENT_LINE",
+    [
+      "putself"
+    ],
+    [
+      "putself"
+    ],
+    [
+      "putobject_INT2FIX_1_"
+    ],
+    [
+      "putobject",
+      {
+        "value": 2,
+        "type": "Integer"
+      }
+    ],
+    [
+      "putobject",
+      {
+        "value": 3,
+        "type": "Integer"
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "sort",
+        "flag": 20,
+        "orig_argc": 3
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "inspect",
+        "flag": 16,
+        "orig_argc": 0
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "puts",
+        "flag": 20,
+        "orig_argc": 1
+      }
+    ],
+    [
+      "pop"
+    ],
+    22,
+    "RUBY_EVENT_LINE",
+    [
+      "putself"
+    ],
+    [
+      "putself"
+    ],
+    [
+      "putobject_INT2FIX_1_"
+    ],
+    [
+      "putobject",
+      {
+        "value": 3,
+        "type": "Integer"
+      }
+    ],
+    [
+      "putobject",
+      {
+        "value": 2,
+        "type": "Integer"
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "sort",
+        "flag": 20,
+        "orig_argc": 3
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "inspect",
+        "flag": 16,
+        "orig_argc": 0
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "puts",
+        "flag": 20,
+        "orig_argc": 1
+      }
+    ],
+    [
+      "pop"
+    ],
+    23,
+    "RUBY_EVENT_LINE",
+    [
+      "putself"
+    ],
+    [
+      "putself"
+    ],
+    [
+      "putobject",
+      {
+        "value": 2,
+        "type": "Integer"
+      }
+    ],
+    [
+      "putobject_INT2FIX_1_"
+    ],
+    [
+      "putobject",
+      {
+        "value": 3,
+        "type": "Integer"
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "sort",
+        "flag": 20,
+        "orig_argc": 3
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "inspect",
+        "flag": 16,
+        "orig_argc": 0
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "puts",
+        "flag": 20,
+        "orig_argc": 1
+      }
+    ],
+    [
+      "pop"
+    ],
+    24,
+    "RUBY_EVENT_LINE",
+    [
+      "putself"
+    ],
+    [
+      "putself"
+    ],
+    [
+      "putobject",
+      {
+        "value": 2,
+        "type": "Integer"
+      }
+    ],
+    [
+      "putobject",
+      {
+        "value": 3,
+        "type": "Integer"
+      }
+    ],
+    [
+      "putobject_INT2FIX_1_"
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "sort",
+        "flag": 20,
+        "orig_argc": 3
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "inspect",
+        "flag": 16,
+        "orig_argc": 0
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "puts",
+        "flag": 20,
+        "orig_argc": 1
+      }
+    ],
+    [
+      "pop"
+    ],
+    25,
+    "RUBY_EVENT_LINE",
+    [
+      "putself"
+    ],
+    [
+      "putself"
+    ],
+    [
+      "putobject",
+      {
+        "value": 3,
+        "type": "Integer"
+      }
+    ],
+    [
+      "putobject_INT2FIX_1_"
+    ],
+    [
+      "putobject",
+      {
+        "value": 2,
+        "type": "Integer"
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "sort",
+        "flag": 20,
+        "orig_argc": 3
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "inspect",
+        "flag": 16,
+        "orig_argc": 0
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "puts",
+        "flag": 20,
+        "orig_argc": 1
+      }
+    ],
+    [
+      "pop"
+    ],
+    26,
+    "RUBY_EVENT_LINE",
+    [
+      "putself"
+    ],
+    [
+      "putself"
+    ],
+    [
+      "putobject",
+      {
+        "value": 3,
+        "type": "Integer"
+      }
+    ],
+    [
+      "putobject",
+      {
+        "value": 2,
+        "type": "Integer"
+      }
+    ],
+    [
+      "putobject_INT2FIX_1_"
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "sort",
+        "flag": 20,
+        "orig_argc": 3
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "inspect",
+        "flag": 16,
+        "orig_argc": 0
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "puts",
+        "flag": 20,
+        "orig_argc": 1
+      }
+    ],
+    [
+      "pop"
+    ],
+    28,
+    "RUBY_EVENT_LINE",
+    [
+      "putself"
+    ],
+    [
+      "putself"
+    ],
+    [
+      "putobject_INT2FIX_1_"
+    ],
+    [
+      "putobject",
+      {
+        "value": 2,
+        "type": "Integer"
+      }
+    ],
+    [
+      "putobject",
+      {
+        "value": 3,
+        "type": "Integer"
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "equal?",
+        "flag": 20,
+        "orig_argc": 3
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "puts",
+        "flag": 20,
+        "orig_argc": 1
+      }
+    ],
+    [
+      "pop"
+    ],
+    29,
+    "RUBY_EVENT_LINE",
+    [
+      "putself"
+    ],
+    [
+      "putself"
+    ],
+    [
+      "putobject_INT2FIX_1_"
+    ],
+    [
+      "putobject",
+      {
+        "value": 2,
+        "type": "Integer"
+      }
+    ],
+    [
+      "putobject_INT2FIX_1_"
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "equal?",
+        "flag": 20,
+        "orig_argc": 3
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "puts",
+        "flag": 20,
+        "orig_argc": 1
+      }
+    ],
+    [
+      "pop"
+    ],
+    30,
+    "RUBY_EVENT_LINE",
+    [
+      "putself"
+    ],
+    [
+      "putself"
+    ],
+    [
+      "putobject_INT2FIX_1_"
+    ],
+    [
+      "putobject_INT2FIX_1_"
+    ],
+    [
+      "putobject",
+      {
+        "value": 2,
+        "type": "Integer"
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "equal?",
+        "flag": 20,
+        "orig_argc": 3
+      }
+    ],
+    [
+      "opt_send_without_block",
+      {
+        "mid": "puts",
+        "flag": 20,
+        "orig_argc": 1
+      }
+    ],
+    [
+      "leave"
+    ]
+  ]
+]
