@@ -3,8 +3,10 @@ import { NotImplementedError } from "./errors";
 import { ExecutionContext } from "./execution_context";
 import DefineClass from "./insns/defineclass";
 import DefineMethod from "./insns/definemethod";
+import Dup from "./insns/dup";
 import DupArray from "./insns/duparray";
 import GetConstant from "./insns/getconstant";
+import GetInstanceVariable from "./insns/getinstancevariable";
 import GetLocalWC0 from "./insns/getlocal_wc_0";
 import Leave from "./insns/leave";
 import NewHash from "./insns/newhash";
@@ -22,6 +24,7 @@ import PutSelf from "./insns/putself";
 import PutSpecialObject from "./insns/putspecialobject";
 import PutString from "./insns/putstring";
 import Send from "./insns/send";
+import SetInstanceVariable from "./insns/setinstancevariable";
 import SetLocalWC0 from "./insns/setlocal_wc_0";
 import Instruction from "./instruction";
 import { RValue, String } from "./runtime";
@@ -137,6 +140,10 @@ export class InstructionSequence {
                     compiled.push(new NewHash(size));
                     break;
                 }
+                case "dup": {
+                    compiled.push(new Dup());
+                    break;
+                }
                 case "duparray": {
                     const [, values] = insn;
                     compiled.push(new DupArray(values));
@@ -144,6 +151,11 @@ export class InstructionSequence {
                 }
                 case "pop": {
                     compiled.push(new Pop());
+                    break;
+                }
+                case "setinstancevariable": {
+                    const [, name, cache] = insn;
+                    compiled.push(new SetInstanceVariable(name, cache));
                     break;
                 }
                 case "setlocal_WC_0": {
@@ -155,6 +167,11 @@ export class InstructionSequence {
                 case "getconstant": {
                     const [, name] = insn;
                     compiled.push(new GetConstant(name));
+                    break;
+                }
+                case "getinstancevariable": {
+                    const [, name, cache] = insn;
+                    compiled.push(new GetInstanceVariable(name, cache));
                     break;
                 }
                 case "getlocal_WC_0": {

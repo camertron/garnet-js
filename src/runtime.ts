@@ -497,9 +497,9 @@ export abstract class Object {
         return new RValue(self);
     });
 
-    klass.define_native_method("new", (self: RValue): RValue => {
+    klass.define_native_method("new", (self: RValue, args: RValue[]): RValue => {
         const obj = Object.send(self, "allocate");
-        Object.send(obj, "initialize");
+        Object.send(obj, "initialize", args);
         return obj;
     });
 
