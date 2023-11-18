@@ -1,16 +1,17 @@
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
 export default class Pop extends Instruction {
-    call(context: ExecutionContext) {
+    call(context: ExecutionContext): ExecutionResult {
         context.stack.pop();
+        return null;
     }
 
-    reads(): number {
+    pops(): number {
         return 1;
     }
 
-    writes(): number {
+    pushes(): number {
         return 0;
     }
 }

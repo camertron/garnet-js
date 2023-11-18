@@ -1,6 +1,5 @@
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Qnil } from "../runtime";
 
 export default class GetInstanceVariable extends Instruction {
     public name: string;
@@ -12,10 +11,12 @@ export default class GetInstanceVariable extends Instruction {
         this.cache = cache;
     }
 
-    call(context: ExecutionContext) {
+    call(context: ExecutionContext): ExecutionResult {
         context.stack.push(
-            context.current_frame().selfo.ivars[this.name] || Qnil
+            context.frame!.self.iv_get(this.name)
         );
+
+        return null;
     }
 
     reads(): number {

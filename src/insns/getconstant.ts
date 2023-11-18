@@ -1,5 +1,5 @@
 import { NameError } from "../errors";
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Class, ClassClass, Module, Qnil } from "../runtime";
 
@@ -16,7 +16,7 @@ export default class GetConstant extends Instruction {
     // "Get constant variable <name>. If klass (second stack value) is Qnil
     // and allow_nil (first stack value) is Qtrue, constants are searched in
     // the current scope. Otherwise, get constant under klass class or module."
-    call(context: ExecutionContext) {
+    call(context: ExecutionContext): ExecutionResult {
         const allow_nil = context.stack.pop()!.get_data<boolean>();
         let parent = context.stack.pop();
 
@@ -26,12 +26,12 @@ export default class GetConstant extends Instruction {
 
         const constant = ( () => {
             // a parent of Qnil (and nils allowed) means look up the constant in the
-            // current scope, i.e. selfo
+            // current scope, i.e. self
             if (parent == Qnil) {
-                if (context.current_frame().selfo.klass === ClassClass) {
-                    return context.current_frame().selfo.get_data<Class>().find_constant(this.name);
+                if (context.frame!.self.klass === ClassClass) {
+                    return context.frame!.self.get_data<Class>().find_constant(this.name);
                 } else {
-                    return context.current_frame().selfo.klass.get_data<Class>().find_constant(this.name);
+                    return context.frame!.self.klass.get_data<Class>().find_constant(this.name);
                 }
             } else {
                 return parent!.get_data<Module>().find_constant(this.name);
@@ -43,13 +43,18 @@ export default class GetConstant extends Instruction {
         }
 
         context.stack.push(constant);
+        return null;
     }
 
-    reads(): number {
-        return 0;
+    pops(): number {
+        return 2;
     }
 
-    writes(): number {
-        return 0;
+    pushes(): number {
+        return 1;
+    }
+
+    length(): number {
+        return 2;
     }
 }

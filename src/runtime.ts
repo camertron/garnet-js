@@ -5,6 +5,12 @@ import { defineArrayBehaviorOn } from "./runtime/array";
 import { defineIntegerBehaviorOn } from "./runtime/integer";
 import { defineSymbolBehaviorOn } from "./runtime/symbol";
 import { defineStringBehaviorOn } from "./runtime/string";
+import { defineKernelBehaviorOn } from "./runtime/kernel";
+import { Dir } from "./runtime/dir";
+import { vmfs } from "./vmfs";
+import { defineProcBehaviorOn } from "./runtime/proc";
+import { defineHashBehaviorOn } from "./runtime/hash";
+import { isNode } from "./env";
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
@@ -155,6 +161,22 @@ export class Runtime {
 
         return true;
     }
+
+    static assert_type(obj: RValue, type: Module): void;
+    static assert_type(obj: RValue, type: RValue): void;
+    static assert_type(obj: RValue, type: Module | RValue) {
+        const module = (() => {
+            if (type instanceof Module) {
+                return type;
+            } else {
+                return type.get_data<Module>();
+            }
+        })();
+
+        if (obj.klass.get_data<Module>() != module) {
+            throw new TypeError(`no implicit conversion of ${module.name} into ${obj.klass.get_data<Module>().name}`);
+        }
+    }
 }
 
 export interface Callable {
@@ -162,33 +184,25 @@ export interface Callable {
 }
 
 export class InterpretedCallable implements Callable {
+    private name: string;
     private iseq: InstructionSequence;
 
-    constructor(iseq: InstructionSequence) {
+    constructor(name: string, iseq: InstructionSequence) {
+        this.name = name;
         this.iseq = iseq;
     }
 
     call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue): RValue {
-        context.evaluate(receiver, this.iseq, () => {
-            const current_frame = context.current_frame();
-
-            args.forEach( (arg: RValue, index: number) => {
-                current_frame.set_local(index, arg);
-            });
-
-            if (block) {
-                current_frame.set_block(block);
-            }
-        });
-
-        return context.stack[context.stack.length - 1];
+        return context.run_method_frame(this.name, context.frame!.nesting, this.iseq, receiver, args, block);
     }
 }
 
 export class NativeCallable implements Callable {
+    private name: string;
     private method: NativeMethod;
 
-    constructor(method: NativeMethod) {
+    constructor(name: string, method: NativeMethod) {
+        this.name = name;
         this.method = method;
     }
 
@@ -228,11 +242,11 @@ export class Module {
     }
 
     define_method(name: string, body: InstructionSequence) {
-        this.methods[name] = new InterpretedCallable(body);
+        this.methods[name] = new InterpretedCallable(name, body);
     }
 
     define_native_method(name: string, body: NativeMethod) {
-        this.methods[name] = new NativeCallable(body);
+        this.methods[name] = new NativeCallable(name, body);
     }
 
     define_singleton_method(name: string, body: InstructionSequence) {
@@ -301,36 +315,51 @@ let next_object_id = 0;
 
 export class RValue {
     public klass: RValue;
-    public ivars: {[key: string]: RValue};
+    public ivars: Map<string, RValue>;
     public data: any;
     public object_id: number;
 
     constructor(klass: RValue, data?: any) {
         this.klass = klass;
-        this.ivars = {};
         this.data = data;
         this.object_id = next_object_id;
         next_object_id ++;
     }
 
-    assert_type(type: Module): void;
-    assert_type(type: RValue): void;
-    assert_type(type: Module | RValue) {
-        const module = (() => {
-            if (type instanceof Module) {
-                return type;
-            } else {
-                return type.get_data<Class>();
-            }
-        })();
-
-        if (this.klass.get_data<Module>() != module) {
-            throw new TypeError(`no implicit conversion of ${module.name} into ${this.klass.get_data<Module>().name}`);
-        }
-    }
-
     get_data<T>(): T {
         return this.data as T;
+    }
+
+    iv_set(name: string, value: RValue) {
+        if (!this.ivars) {
+            this.ivars = new Map();
+        }
+
+        this.ivars.set(name, value);
+    }
+
+    iv_get(name: string): RValue {
+        if (!this.ivars) {
+            return Qnil;
+        }
+
+        if (this.ivars.has(name)) {
+            return this.ivars.get(name)!;
+        }
+
+        return Qnil;
+    }
+
+    iv_exists(name: string): boolean {
+        if (!this.ivars) {
+            return false;
+        }
+
+        return this.ivars.has(name);
+    }
+
+    is_truthy() {
+        return this != Qfalse && this.klass != NilClass;
     }
 }
 
@@ -386,8 +415,10 @@ export const BasicObjectClass = Runtime.constants["BasicObject"] = new RValue(Cl
 export const ObjectClass      = Runtime.constants["Object"]      = new RValue(ClassClass, object_class);
 export const StringClass      = Runtime.constants["String"]      = new RValue(ClassClass, new Class("String", ObjectClass));
 export const ArrayClass       = Runtime.constants["Array"]       = new RValue(ClassClass, new Class("Array", ObjectClass));
+export const HashClass        = Runtime.constants["Hash"]        = new RValue(ClassClass, new Class("Hash", ObjectClass));
 export const IntegerClass     = Runtime.constants["Integer"]     = new RValue(ClassClass, new Class("Integer", ObjectClass));
 export const SymbolClass      = Runtime.constants["Symbol"]      = new RValue(ClassClass, new Class("Symbol", ObjectClass));
+export const ProcClass        = Runtime.constants["Proc"]        = new RValue(ClassClass, new Class("Proc", ObjectClass));
 export const NilClass         = Runtime.constants["NilClass"]    = new RValue(ClassClass, new Class("NilClass", ObjectClass));
 export const TrueClass        = Runtime.constants["TrueClass"]   = new RValue(ClassClass, new Class("TrueClass", ObjectClass));
 export const FalseClass       = Runtime.constants["FalseClass"]  = new RValue(ClassClass, new Class("FalseClass", ObjectClass));
@@ -401,18 +432,9 @@ class_class.superclass = ModuleClass;
 const ConstBase = new RValue(new RValue(ClassClass, new Class("ConstBase", null)), Runtime);
 export { ConstBase };
 
-let kernel_puts = (_self: RValue, args: RValue[]): RValue => {
-    for (let arg of args) {
-        console.log(Object.send(arg, "to_s").get_data<string>());
-    }
+export const Main = new RValue(ObjectClass);
 
-    return Qnil;
-};
-
-(KernelModule.get_data<Module>()).tap( (mod: Module) => {
-    mod.define_native_method("puts", kernel_puts);
-    mod.define_native_singleton_method("puts", kernel_puts);
-});
+defineKernelBehaviorOn(KernelModule.get_data<Module>());
 
 (ModuleClass.get_data<Module>()).tap( (mod: Module) => {
     mod.define_native_method("inspect", (self: RValue): RValue => {
@@ -438,7 +460,7 @@ let kernel_puts = (_self: RValue, args: RValue[]): RValue => {
 
     mod.define_native_method("include", (self: RValue, args: RValue[]): RValue => {
         const mod_to_include = args[0];
-        mod_to_include.assert_type(ModuleClass);
+        Runtime.assert_type(mod_to_include, ModuleClass);
         self.get_data<Module>().include(mod_to_include);
         return self;
     });
@@ -546,13 +568,13 @@ export abstract class Object {
     // NOTE: send should actually be defined by the Kernel module
     klass.define_native_singleton_method("send", (self: RValue, args: RValue[]): RValue => {
         const method_name = args[0];
-        method_name.assert_type(StringClass);
+        Runtime.assert_type(method_name, StringClass);
         return Object.send(self.klass.get_data<Class>().get_singleton_class(), method_name.get_data<string>(), args);
     });
 
     klass.define_native_method("send", (self: RValue, args: RValue[]) => {
         const method_name = args[0];
-        method_name.assert_type(StringClass);
+        Runtime.assert_type(method_name, StringClass);
         return Object.send(self, method_name.get_data<string>(), args);
     });
 
@@ -560,10 +582,12 @@ export abstract class Object {
         const name = self.klass.get_data<Class>().name ? self.klass.get_data<Class>().name : "Class";
         let parts = [`${name}:${Object.object_id_to_str(self.object_id)}`];
 
-        for (let ivar_name in self.ivars) {
-            const ivar = self.ivars[ivar_name];
-            const inspect_str = Object.send(ivar, "inspect").get_data<string>();
-            parts.push(`${ivar_name}=${inspect_str}`)
+        if (self.ivars) {
+            for (let ivar_name in self.ivars.keys()) {
+                const ivar = self.iv_get(ivar_name);
+                const inspect_str = Object.send(ivar, "inspect").get_data<string>();
+                parts.push(`${ivar_name}=${inspect_str}`)
+            }
         }
 
         return String.new(`#<${parts.join(" ")}>`)
@@ -624,10 +648,84 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
 export const STDOUT = Runtime.constants["STDOUT"] = IO.new(console.log);
 export const STDERR = Runtime.constants["STDERR"] = IO.new(console.error);
 
-export abstract class Array {
+export class Array {
     static new(arr?: RValue[]): RValue {
-        return new RValue(ArrayClass, arr || []);
+        return new RValue(ArrayClass, new Array(arr || []));
+    }
+
+    public elements: RValue[];
+
+    constructor(elements: RValue[]) {
+        this.elements = elements;
+    }
+
+    add(element: RValue) {
+        this.elements.push(element);
     }
 }
 
 defineArrayBehaviorOn(ArrayClass.get_data<Class>());
+
+export class Hash {
+    static new(): RValue {
+        return new RValue(HashClass, new Hash());
+    }
+
+    // maps hash codes to key objects
+    public keys: Map<number, RValue>;
+
+    // maps hash codes to value objects
+    public values: Map<number, RValue>;
+
+    constructor() {
+        this.keys = new Map();
+        this.values = new Map();
+    }
+
+    get(key: RValue): RValue {
+        const hash_code = this.get_hash_code(key);
+
+        if (this.keys.has(hash_code)) {
+            return this.values.get(hash_code)!;
+        }
+
+        return Qnil;
+    }
+
+    set(key: RValue, value: RValue): RValue {
+        const hash_code = this.get_hash_code(key);
+        this.keys.set(hash_code, key);
+        this.values.set(hash_code, value);
+        return value;
+    }
+
+    has(key: RValue): RValue {
+        const hash_code = this.get_hash_code(key);
+
+        if (this.keys.has(hash_code)) {
+            return Qtrue;
+        } else {
+            return Qfalse;
+        }
+    }
+
+    private get_hash_code(obj: RValue): number {
+        return Object.send(obj, "hash").get_data<number>();
+    }
+}
+
+defineHashBehaviorOn(HashClass.get_data<Class>());
+
+export class Proc {
+    static new(callable: Callable): RValue {
+        return new RValue(ProcClass, callable);
+    }
+}
+
+defineProcBehaviorOn(ProcClass.get_data<Class>());
+
+if (isNode) {
+    Dir.setwd(process.env.PWD!);
+} else {
+    Dir.setwd(vmfs.root_path());
+}

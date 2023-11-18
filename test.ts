@@ -1,10 +1,13 @@
 import * as fs from "fs"
-import { Object, ModuleClass, BasicObjectClass, ObjectClass, ClassClass, evaluate } from "./dist/yarv.js";
-import { Runtime } from "./dist/yarv.js";
+import * as YARV from "./src/yarv";
+
+await YARV.init();
+YARV.ExecutionContext.current.push_onto_load_path(process.env.PWD!);
+YARV.evaluate(fs.readFileSync("examples/return.rb").toString());
 
 // EVALUATE YARV INSTRUCTIONS IN FILE
-let yarv_json = fs.readFileSync("examples/boolean_operators.json", {encoding: "utf-8"});
-evaluate(JSON.parse(yarv_json));
+// let yarv_json = fs.readFileSync("examples/require/require.json", {encoding: "utf-8"});
+// evaluate(JSON.parse(yarv_json));
 
 // TEST CLASS HIERARCHY OF OBJECT
 // const result = Object.send(ObjectClass, "ancestors");

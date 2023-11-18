@@ -1,7 +1,15 @@
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { Runtime } from "../runtime";
+import { Class, Runtime } from "../runtime";
+
+export enum DefineClassFlags {
+    TYPE_CLASS = 0,
+    TYPE_SINGLETON_CLASS = 1,
+    TYPE_MODULE = 2,
+    FLAG_SCOPED = 8,
+    FLAG_HAS_SUPERCLASS = 16
+}
 
 export default class DefineClass extends Instruction {
     public name: string;
@@ -16,42 +24,34 @@ export default class DefineClass extends Instruction {
         this.flags = flags;
     }
 
-    call(context: ExecutionContext) {
+    call(context: ExecutionContext): ExecutionResult {
         const superclass = context.stack.pop()!;
-        const cbase = context.stack.pop()!;
+        const object = context.stack.pop()!;
 
-        switch (this.flags) {
-            // VM_DEFINECLASS_TYPE_CLASS
-            case 0: {
-                const klass = Runtime.define_class_under(cbase, this.name, superclass);
-                context.evaluate(klass, this.iseq);
-                break;
-            }
-
-            // VM_DEFINECLASS_TYPE_SINGLETON_CLASS, @TODO
-            case 1: {
-                break;
-            }
-
-            // VM_DEFINECLASS_TYPE_MODULE
-            case 2: {
-                const module = Runtime.define_module_under(cbase, this.name);
-                context.evaluate(module, this.iseq);
-                break;
-            }
-
-            // VM_DEFINECLASS_TYPE_MASK, @TODO, what even is this
-            case 7: {
-                break;
-            }
+        if (this.name == "singletonclass") {
+            context.stack.push(context.run_class_frame(this.iseq, object.get_data<Class>().get_singleton_class()));
+        } else if (object.get_data<Class>().constants[this.name]) {
+            context.stack.push(context.run_class_frame(this.iseq, object.get_data<Class>().find_constant(this.name)!));
+        } else if ((this.flags & DefineClassFlags.TYPE_MODULE) > 0) {
+            const module = Runtime.define_module_under(object, this.name);
+            context.stack.push(context.run_class_frame(this.iseq, module));
+        } else {
+            const klass = Runtime.define_class_under(object, this.name, superclass);
+            context.stack.push(context.run_class_frame(this.iseq, klass))
         }
+
+        return null;
     }
 
-    reads(): number {
+    pops(): number {
         return 2;
     }
 
-    writes(): number {
-        return 0;
+    pushes(): number {
+        return 1;
+    }
+
+    length(): number {
+        return 4;
     }
 }

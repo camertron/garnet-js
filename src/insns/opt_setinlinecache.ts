@@ -1,4 +1,4 @@
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
 export default class OptSetInlineCache extends Instruction {
@@ -10,16 +10,9 @@ export default class OptSetInlineCache extends Instruction {
         this.cache = cache;
     }
 
-    call(_context: ExecutionContext) {
+    call(_context: ExecutionContext): ExecutionResult {
         // Since we're not actually populating inline caches in YARV, we don't need
         // to do anything in this instruction.
-    }
-
-    reads(): number {
-        return 0;
-    }
-
-    writes(): number {
-        return 0;
+        return null;
     }
 }

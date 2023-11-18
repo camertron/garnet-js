@@ -1,16 +1,17 @@
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
 export default class PutSelf extends Instruction {
-    call(context: ExecutionContext) {
-        context.stack.push(context.current_frame().selfo);
+    call(context: ExecutionContext): ExecutionResult {
+        context.stack.push(context.frame!.self);
+        return null;
     }
 
-    reads(): number {
+    pops(): number {
         return 0;
     }
 
-    writes(): number {
+    pushes(): number {
         return 1;
     }
 

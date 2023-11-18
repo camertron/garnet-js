@@ -5,18 +5,14 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "node",
+            "type": "node-terminal",
             "request": "launch",
             "name": "Run Test Script",
             "sourceMaps": true,
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "program": "${workspaceFolder}/test.js",
-            "preLaunchTask": "npm: build",
-            // "outFiles": [
-            //     "${workspaceFolder}/build/**/*.js"
-            // ]
+            "command": "npx tsx ${workspaceFolder}/test.ts"
         }
     ]
 }

@@ -1,5 +1,5 @@
 import { Class, Integer, RValue, String } from "../runtime";
-import { hash_string } from "../string_utils";
+import { hash_string } from "../util/string_utils";
 
 export const defineSymbolBehaviorOn = (klass: Class) => {
     klass.define_native_method("inspect", (self: RValue): RValue => {

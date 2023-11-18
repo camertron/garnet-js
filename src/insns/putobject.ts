@@ -1,4 +1,4 @@
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction, { ValueType } from "../instruction";
 
 export default class PutObject extends Instruction {
@@ -9,15 +9,16 @@ export default class PutObject extends Instruction {
         this.object = object;
     }
 
-    call(context: ExecutionContext) {
+    call(context: ExecutionContext): ExecutionResult {
         context.stack.push(Instruction.to_ruby(this.object));
+        return null;
     }
 
-    reads(): number {
+    pops(): number {
         return 0;
     }
 
-    writes(): number {
+    pushes(): number {
         return 1;
     }
 }

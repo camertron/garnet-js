@@ -1,29 +1,20 @@
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
 export default class Leave extends Instruction {
-    call(_context: ExecutionContext) {
-    }
-
-    override does_branch(): boolean {
-        return true;
+    call(context: ExecutionContext): ExecutionResult {
+        return context.leave();
     }
 
     override does_leave(): boolean {
         return true;
     }
 
-    reads(): number {
+    pops(): number {
         return 1;
     }
 
-    writes(): number {
+    pushes(): number {
         return 0;
-    }
-
-    override has_side_effects(): boolean {
-        // Leave doesn't really have a side effects... but we say it does so that
-        // control flow has somewhere to end up.
-        return true;
     }
 }

@@ -1,27 +1,25 @@
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
+import GetLocal from "./getlocal";
 
 export default class GetLocalWC0 extends Instruction {
-    public name: string;
     public index: number;
 
-    constructor(name: string, index: number) {
+    constructor(index: number) {
         super();
 
-        this.name = name;
         this.index = index;
     }
 
-    call(context: ExecutionContext) {
-        const value = context.current_frame().get_local(this.index);
-        context.stack.push(value);
+    call(context: ExecutionContext): ExecutionResult {
+        return new GetLocal(this.index, 0).call(context);
     }
 
-    reads(): number {
-        return 0;
+    length(): number {
+        return 2;
     }
 
-    writes(): number {
+    pushes(): number {
         return 1;
     }
 }

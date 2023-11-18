@@ -1,27 +1,25 @@
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
+import SetLocal from "./setlocal";
 
 export default class SetLocalWC0 extends Instruction {
-    public name: string;
     public index: number;
 
-    constructor(name: string, index: number) {
+    constructor(index: number) {
         super();
 
-        this.name = name;
         this.index = index;
     }
 
-    call(context: ExecutionContext) {
-        const value = context.stack.pop()!;
-        context.current_frame().set_local(this.index, value);
+    call(context: ExecutionContext): ExecutionResult {
+        return new SetLocal(this.index, 0).call(context);
     }
 
-    reads(): number {
+    pops(): number {
         return 1;
     }
 
-    writes(): number {
-        return 0;
+    length(): number {
+        return 2;
     }
 }

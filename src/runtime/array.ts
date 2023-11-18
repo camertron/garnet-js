@@ -2,7 +2,7 @@ import { Array, Class, Object, Qnil, RValue, String } from "../runtime";
 
 export const defineArrayBehaviorOn = (klass: Class) => {
     klass.define_native_method("inspect", (self: RValue): RValue => {
-        const elements = self.get_data<RValue[]>();
+        const elements = self.get_data<Array>().elements;
 
         const strings = elements.map( (element: RValue): string => {
             return Object.send(element, "inspect").get_data<string>();
@@ -13,7 +13,7 @@ export const defineArrayBehaviorOn = (klass: Class) => {
 
     klass.define_native_method("each", (self: RValue, args: RValue[], block?: RValue): RValue => {
         if (block) {
-            const elements = self.get_data<RValue[]>();
+            const elements = self.get_data<Array>().elements;
 
             for (let element of elements) {
                 Object.send(block, "call", [element]);
@@ -27,7 +27,7 @@ export const defineArrayBehaviorOn = (klass: Class) => {
 
     klass.define_native_method("map", (self: RValue, args: RValue[], block?: RValue): RValue => {
         if (block) {
-            const elements = self.get_data<RValue[]>();
+            const elements = self.get_data<Array>().elements;
             const result = [];
 
             for (let element of elements) {

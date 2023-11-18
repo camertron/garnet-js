@@ -1,5 +1,5 @@
 import { Array } from "../runtime";
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction, { ValueType } from "../instruction";
 import { RValue } from "../runtime";
 
@@ -14,15 +14,16 @@ export default class DupArray extends Instruction {
         });
     }
 
-    call(context: ExecutionContext) {
+    call(context: ExecutionContext): ExecutionResult {
         context.stack.push(Array.new([...this.values]));
+        return null;
     }
 
-    reads(): number {
-        return 0;
+    length(): number {
+        return 2;
     }
 
-    writes(): number {
+    pushes(): number {
         return 1;
     }
 }

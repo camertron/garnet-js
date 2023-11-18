@@ -1,4 +1,4 @@
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { RValue } from "../runtime";
 
@@ -7,18 +7,20 @@ export default class PutString extends Instruction {
 
     constructor(string: RValue) {
         super();
+
         this.string = string;
     }
 
-    call(context: ExecutionContext) {
+    call(context: ExecutionContext): ExecutionResult {
         context.stack.push(this.string);
+        return null;
     }
 
-    reads(): number {
+    pops(): number {
         return 0;
     }
 
-    writes(): number {
+    pushes(): number {
         return 1;
     }
 }

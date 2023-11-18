@@ -1,4 +1,4 @@
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Array } from "../runtime";
 
@@ -11,16 +11,21 @@ export default class NewArray extends Instruction {
         this.size = size;
     }
 
-    call(context: ExecutionContext) {
+    call(context: ExecutionContext): ExecutionResult {
         const elements = context.stack.splice(context.stack.length - this.size, this.size);
         context.stack.push(Array.new(elements));
+        return null;
     }
 
-    reads(): number {
+    pops(): number {
         return this.size;
     }
 
-    writes(): number {
+    pushes(): number {
         return 1;
+    }
+
+    length(): number {
+        return 2;
     }
 }

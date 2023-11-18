@@ -1,4 +1,4 @@
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
 
@@ -12,15 +12,12 @@ export default class DefineMethod extends Instruction {
         this.iseq = iseq;
     }
 
-    call(context: ExecutionContext) {
-        context.define_method(context.current_frame().selfo, this.name, this.iseq);
+    call(context: ExecutionContext): ExecutionResult {
+        context.define_method(context.frame!.self, this.name, this.iseq);
+        return null;
     }
 
-    reads(): number {
-        return 0;
-    }
-
-    writes(): number {
-        return 0;
+    length(): number {
+        return 3;
     }
 }

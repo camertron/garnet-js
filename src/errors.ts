@@ -25,3 +25,10 @@ export class TypeError extends Error {
         this.name = "TypeError";
     }
 }
+
+export class LoadError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "LoadError";
+    }
+}

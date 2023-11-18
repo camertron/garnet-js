@@ -1,6 +1,6 @@
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Hash } from "../runtime/hash";
+import { Hash } from "../runtime";
 
 export default class NewHash extends Instruction {
     public size: number;
@@ -11,7 +11,7 @@ export default class NewHash extends Instruction {
         this.size = size;
     }
 
-    call(context: ExecutionContext) {
+    call(context: ExecutionContext): ExecutionResult {
         const elements = context.stack.splice(context.stack.length - this.size, this.size);
         const hash_rvalue = Hash.new();
         const hash = hash_rvalue.get_data<Hash>();
@@ -21,13 +21,18 @@ export default class NewHash extends Instruction {
         }
 
         context.stack.push(hash_rvalue);
+        return null;
     }
 
-    reads(): number {
+    pops(): number {
         return this.size;
     }
 
-    writes(): number {
+    pushes(): number {
         return 1;
+    }
+
+    length(): number {
+        return 2;
     }
 }

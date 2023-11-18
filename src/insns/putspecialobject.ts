@@ -1,45 +1,50 @@
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { ConstBase, Qnil } from "../runtime";
+import { Class, ClassClass, ConstBase, Qnil } from "../runtime";
 
-enum SpecialObjectType {
+export enum SpecialObjectType {
     VMCORE = 1,
     CBASE = 2,
     CONST_BASE = 3
 }
 
 export default class PutSpecialObject extends Instruction {
-    public special_object_type: SpecialObjectType;
+    public type: SpecialObjectType;
 
-    constructor(val: number) {
+    constructor(type: SpecialObjectType) {
         super();
 
-        this.special_object_type = ( () => {
-            switch (val) {
-                case 1: return SpecialObjectType.VMCORE;
-                case 2: return SpecialObjectType.CBASE;
-                case 3: return SpecialObjectType.CONST_BASE;
-                default:
-                    throw `putspecialobject insn: unknown value_type ${val}`;
-            }
-        })();
+        this.type = type;
     }
 
-    call(context: ExecutionContext) {
-        switch (this.special_object_type) {
+    call(context: ExecutionContext): ExecutionResult {
+        switch (this.type) {
+            case SpecialObjectType.VMCORE:
+                throw new Error("Special object type VMCORE is not currently supported");
+
+            case SpecialObjectType.CBASE:
+                let value = context.frame!.self;
+
+                if (value.klass != ClassClass) {
+                    value = value.get_data<Class>().get_singleton_class();
+                }
+
+                context.stack.push(value);
+                break;
+
             case SpecialObjectType.CONST_BASE:
                 context.stack.push(ConstBase);
                 break;
-            default:
-                context.stack.push(Qnil);
         }
+
+        return null;
     }
 
-    reads(): number {
+    pops(): number {
         return 0;
     }
 
-    writes(): number {
+    pushes(): number {
         return 1;
     }
 }

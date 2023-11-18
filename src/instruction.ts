@@ -1,4 +1,4 @@
-import { ExecutionContext } from "./execution_context";
+import { ExecutionContext, ExecutionResult } from "./execution_context";
 import { Qfalse, Qnil, Qtrue, Runtime, RValue, String } from "./runtime";
 import { Integer } from "./runtime";
 
@@ -22,12 +22,14 @@ export default abstract class Instruction {
                 return object.value as boolean ? Qtrue : Qfalse;
             case "NilClass":
                 return Qnil;
+            case "RValue":
+                return object.value as RValue;
             default:
                 throw new TypeError(`no implicit conversion of ${object.type} into Ruby object`);
         }
     }
 
-    abstract call(context: ExecutionContext): void;
+    abstract call(context: ExecutionContext): ExecutionResult;
 
     // Whether or not this instruction is a branch instruction.
     does_branch(): boolean {
@@ -45,11 +47,22 @@ export default abstract class Instruction {
       return false;
     }
 
-    // How many values are read from the stack.
-    abstract reads(): number;
+    // This returns the number of values that are popped off the stack.
+    pops(): number {
+        return 0;
+    }
 
-    // How many values are written to the stack.
-    abstract writes(): number;
+    // This returns the number of values that are pushed onto the stack.
+    pushes(): number {
+        return 0;
+    }
+
+    // This returns the size of the instruction in terms of the number of slots
+    // it occupies in the instruction sequence. Effectively this is 1 plus the
+    // number of operands.
+    length() {
+        return 0;
+    }
 
     // Does the instruction have side effects? Control-flow counts as a
     // side-effect, as do some special-case instructions like Leave

@@ -17,7 +17,8 @@ const allowed_circular_deps = [
   "Circular dependency: src/runtime.ts -> src/runtime/array.ts -> src/runtime.ts",
   "Circular dependency: src/runtime.ts -> src/runtime/integer.ts -> src/runtime.ts",
   "Circular dependency: src/runtime.ts -> src/runtime/symbol.ts -> src/runtime.ts",
-  "Circular dependency: src/runtime.ts -> src/runtime/string.ts -> src/runtime.ts"
+  "Circular dependency: src/runtime.ts -> src/runtime/string.ts -> src/runtime.ts",
+  "Circular dependency: src/runtime.ts -> src/runtime/kernel.ts -> src/runtime.ts"
 ];
 
 export default [

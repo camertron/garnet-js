@@ -3,5 +3,5 @@ def max(a, b)
   b
 end
 
-puts max(1, 2)
-puts max(3, 2)
+puts max(1, 2).inspect
+puts max(3, 2).inspect

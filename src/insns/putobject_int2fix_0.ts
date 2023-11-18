@@ -1,17 +1,18 @@
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { INT2FIX0 } from "../runtime";
 
 export default class PutObjectInt2Fix0 extends Instruction {
-    call(context: ExecutionContext) {
+    call(context: ExecutionContext): ExecutionResult {
         context.stack.push(INT2FIX0);
+        return null;
     }
 
-    reads(): number {
+    pops(): number {
         return 0;
     }
 
-    writes(): number {
+    pushes(): number {
         return 1;
     }
 

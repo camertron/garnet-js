@@ -1,54 +1,6 @@
-import { String, Runtime, RValue, Object, ObjectClass, Class, Qnil, Qtrue, Qfalse } from "../runtime";
+import { String, RValue, Object, Class, Hash } from "../runtime";
 
-export class Hash {
-    static new(): RValue {
-        return new RValue(HashClass, new Hash());
-    }
-
-    // maps hash codes to key objects
-    public keys: Map<number, RValue>;
-
-    // maps hash codes to value objects
-    public values: Map<number, RValue>;
-
-    constructor() {
-        this.keys = new Map();
-        this.values = new Map();
-    }
-
-    get(key: RValue): RValue {
-        const hash_code = this.get_hash_code(key);
-
-        if (this.keys.has(hash_code)) {
-            return this.values.get(hash_code)!;
-        }
-
-        return Qnil;
-    }
-
-    set(key: RValue, value: RValue): RValue {
-        const hash_code = this.get_hash_code(key);
-        this.keys.set(hash_code, key);
-        this.values.set(hash_code, value);
-        return value;
-    }
-
-    has(key: RValue): RValue {
-        const hash_code = this.get_hash_code(key);
-
-        if (this.keys.has(hash_code)) {
-            return Qtrue;
-        } else {
-            return Qfalse;
-        }
-    }
-
-    private get_hash_code(obj: RValue): number {
-        return Object.send(obj, "hash").get_data<number>();
-    }
-}
-
-export const HashClass = Runtime.define_class("Hash", ObjectClass, (klass: Class) => {
+export const defineHashBehaviorOn = (klass: Class) => {
     klass.define_native_method("[]", (self: RValue, args: RValue[]): RValue => {
         const key = args[0];
         const hash = self.get_data<Hash>();
@@ -81,4 +33,4 @@ export const HashClass = Runtime.define_class("Hash", ObjectClass, (klass: Class
 
         return String.new(`{${pairs.join(", ")}}`);
     });
-});
+};

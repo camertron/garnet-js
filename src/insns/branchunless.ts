@@ -1,23 +1,24 @@
-import { ExecutionContext } from "../execution_context";
+import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Qfalse, Qnil } from "../runtime";
+import { Label } from "../instruction_sequence";
 
 export default class BranchUnless extends Instruction {
-    public label: string;
+    public label: Label;
 
-    constructor(label: string) {
+    constructor(label: Label) {
         super();
 
         this.label = label;
     }
 
-    call(context: ExecutionContext) {
-        const condition = context.stack.pop()!;
+    call(context: ExecutionContext): ExecutionResult {
+        const condition = context.pop();
 
-        if (condition == Qnil || condition == Qfalse) {
-            const jump_index = context.current_iseq().labels.get(this.label)!;
-            context.program_counter = jump_index;
+        if (condition && !condition.is_truthy()) {
+            return context.jump(this.label);
         }
+
+        return null;
     }
 
     does_branch(): boolean {
@@ -26,13 +27,9 @@ export default class BranchUnless extends Instruction {
 
     does_fall_through(): boolean {
         return true;
-      }
-
-    reads(): number {
-        return 1;
     }
 
-    writes(): number {
-        return 0;
+    pops(): number {
+        return 1;
     }
 }
