@@ -19,7 +19,7 @@ export default class DupArray extends Instruction {
         return null;
     }
 
-    length(): number {
+    number(): number {
         return 2;
     }
 

@@ -1,5 +1,5 @@
 import { ExecutionContext, ExecutionResult } from "./execution_context";
-import { Qfalse, Qnil, Qtrue, Runtime, RValue, String } from "./runtime";
+import { Float, Qfalse, Qnil, Qtrue, Runtime, RValue, String } from "./runtime";
 import { Integer } from "./runtime";
 
 export type ValueType = {
@@ -17,6 +17,8 @@ export default abstract class Instruction {
                 return Runtime.intern(object.value as string);
             case "Integer":
                 return Integer.new(object.value as number);
+            case "Float":
+                return Float.new(object.value as number);
             case "TrueClass":
             case "FalseClass":
                 return object.value as boolean ? Qtrue : Qfalse;
@@ -60,7 +62,7 @@ export default abstract class Instruction {
     // This returns the size of the instruction in terms of the number of slots
     // it occupies in the instruction sequence. Effectively this is 1 plus the
     // number of operands.
-    length() {
+    number() {
         return 0;
     }
 

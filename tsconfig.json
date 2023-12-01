@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
-    "target": "esnext",
-    "module": "esnext",
+    "target": "es2020",
+    "module": "es2020",
     "outDir": "build",
     "lib": [
       "es2020",
@@ -15,7 +15,7 @@
     "strictPropertyInitialization": false,
     "strict": true,
     "types": ["node"],
-    "esModuleInterop": true,
+    "esModuleInterop": true
   },
   "paths": {
   },

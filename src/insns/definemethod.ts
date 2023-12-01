@@ -17,7 +17,7 @@ export default class DefineMethod extends Instruction {
         return null;
     }
 
-    length(): number {
+    number(): number {
         return 3;
     }
 }

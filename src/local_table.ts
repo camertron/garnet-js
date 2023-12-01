@@ -68,13 +68,13 @@ export class LocalTable {
         return null;
     }
 
-    find_or_error(name: string, depth: number = 0): Lookup {
+    find_or_throw(name: string, depth: number = 0): Lookup {
         const found = this.find(name, depth);
 
         if (found) {
             return found;
         } else {
-            throw new Error(`Local variable ${name} not found`);
+            throw new Error(`Local variable '${name}' not found`);
         }
     }
 

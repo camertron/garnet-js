@@ -1,21 +1,28 @@
-import CallData from "./call_data";
+import { BlockCallData, MethodCallData } from "./call_data";
+import AnyToString from "./insns/any_to_string";
 import BranchIf from "./insns/branchif";
 import { BranchNil } from "./insns/branchnil";
 import BranchUnless from "./insns/branchunless";
+import ConcatStrings from "./insns/concat_strings";
 import DefineClass from "./insns/defineclass";
 import DefineMethod from "./insns/definemethod";
 import DefineSMethod from "./insns/definesmethod";
 import Dup from "./insns/dup";
+import ExpandArray from "./insns/expandarray";
+import GetGlobal from "./insns/get_global";
 import GetConstant from "./insns/getconstant";
 import GetInstanceVariable from "./insns/getinstancevariable";
 import GetLocal from "./insns/getlocal";
 import GetLocalWC0 from "./insns/getlocal_wc_0";
 import GetLocalWC1 from "./insns/getlocal_wc_1";
+import Intern from "./insns/intern";
+import InvokeBlock from "./insns/invokeblock";
 import InvokeSuper from "./insns/invokesuper";
 import { Jump } from "./insns/jump";
 import Leave from "./insns/leave";
 import NewArray from "./insns/new_array";
 import NewHash from "./insns/newhash";
+import ObjToString from "./insns/obj_to_string";
 import Once from "./insns/once";
 import Pop from "./insns/pop";
 import PutNil from "./insns/putnil";
@@ -26,11 +33,14 @@ import PutSelf from "./insns/putself";
 import PutSpecialObject, { SpecialObjectType } from "./insns/putspecialobject";
 import PutString from "./insns/putstring";
 import Send from "./insns/send";
+import SetGlobal from "./insns/set_global";
+import SetConstant from "./insns/setconstant";
 import SetInstanceVariable from "./insns/setinstancevariable";
 import SetLocal from "./insns/setlocal";
 import SetLocalWC0 from "./insns/setlocal_wc_0";
 import SetLocalWC1 from "./insns/setlocal_wc_1";
 import Swap from "./insns/swap";
+import TopN from "./insns/topn";
 import Instruction, { ValueType } from "./instruction";
 import { LocalTable, Lookup } from "./local_table";
 import { Options } from "./options";
@@ -324,6 +334,10 @@ export class InstructionSequence {
         this.push(new NewArray(size));
     }
 
+    expandarray(size: number, flags: number) {
+        this.push(new ExpandArray(size, flags));
+    }
+
     branchnil(label: Label) {
         this.push(new BranchNil(label));
     }
@@ -348,7 +362,7 @@ export class InstructionSequence {
         this.push(new Jump(label));
     }
 
-    send(calldata: CallData, block_iseq: InstructionSequence | null) {
+    send(calldata: MethodCallData, block_iseq: InstructionSequence | null) {
         this.push(new Send(calldata, block_iseq));
     }
 
@@ -368,12 +382,32 @@ export class InstructionSequence {
         this.push(new GetConstant(name));
     }
 
+    setconstant(name: string) {
+        this.push(new SetConstant(name));
+    }
+
+    getglobal(name: string) {
+        this.push(new GetGlobal(name));
+    }
+
+    setglobal(name: string) {
+        this.push(new SetGlobal(name));
+    }
+
     newhash(length: number) {
         this.push(new NewHash(length));
     }
 
     swap() {
         this.push(new Swap());
+    }
+
+    topn(count: number) {
+        this.push(new TopN(count));
+    }
+
+    invokeblock(calldata: BlockCallData) {
+        this.push(new InvokeBlock(calldata))
     }
 
     push(value: any): any {
@@ -406,6 +440,22 @@ export class InstructionSequence {
         this.push(new PutSpecialObject(type));
     }
 
+    objtostring(calldata: MethodCallData) {
+        this.push(new ObjToString(calldata));
+    }
+
+    anytostring() {
+        this.push(new AnyToString());
+    }
+
+    concatstrings(count: number) {
+        this.push(new ConcatStrings(count));
+    }
+
+    intern() {
+        this.push(new Intern());
+    }
+
     private child_iseq(name: string, line: number, type: string): InstructionSequence {
         return new InstructionSequence(name, this.file, line, type, this, this.options);
     }
@@ -429,6 +479,18 @@ export class InstructionSequence {
         return this.child_iseq(`<class:${name}>`, line, "class");
     }
 
+    module_child_iseq(name: string, line: number) {
+        return this.child_iseq(`<module:${name}>`, line, "class");
+    }
+
+    singleton_class_child_iseq(line: number) {
+        return this.child_iseq("singleton class", line, "class");
+    }
+
+    rescue_child_iseq(line: number): InstructionSequence {
+        return this.child_iseq(`rescue in ${this.name}`, line, "rescue");
+    }
+
     compile() {
         // @TODO: optimizations and specializations
 
@@ -445,28 +507,28 @@ export class InstructionSequence {
                 insn.patch(`label_${length}`);
             } else if (insn instanceof DefineClass) {
                 insn.iseq.compile();
-                length += insn.length();
+                length += insn.number();
             } else if (insn instanceof DefineMethod || insn instanceof DefineSMethod) {
                 insn.iseq.compile!()
-                length += insn.length();
+                length += insn.number();
             } else if (insn instanceof InvokeSuper || insn instanceof Send) {
                 if (insn.block_iseq) {
                     insn.block_iseq.compile();
                 }
 
-                length += insn.length();
+                length += insn.number();
             } else if (insn instanceof Once) {
                 insn.iseq.compile();
-                length += insn.length();
+                length += insn.number();
             } else {
-                length += insn.length();
+                length += insn.number();
             }
         });
 
         this.compiled_insns = this.insns.to_array();
     }
 
-    public catch_break(iseq: InstructionSequence, begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
+    catch_break(iseq: InstructionSequence, begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
         this.catch_table.push(
             new CatchBreak(
                 iseq,
@@ -478,7 +540,7 @@ export class InstructionSequence {
         );
     }
 
-    private catch_ensure(iseq: InstructionSequence, begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
+    catch_ensure(iseq: InstructionSequence, begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
         this.catch_table.push(
             new CatchEnsure(
                 iseq,
@@ -490,7 +552,7 @@ export class InstructionSequence {
         );
     }
 
-    private catch_next(begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
+    catch_next(begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
         this.catch_table.push(
             new CatchNext(
                 null,
@@ -502,7 +564,7 @@ export class InstructionSequence {
         );
     }
 
-    private catch_redo(begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
+    catch_redo(begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
         this.catch_table.push(
             new CatchRedo(
                 null,
@@ -514,7 +576,7 @@ export class InstructionSequence {
         );
     }
 
-    private catch_rescue(iseq: InstructionSequence, begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
+    catch_rescue(iseq: InstructionSequence, begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
         this.catch_table.push(
             new CatchRescue(
                 iseq,
@@ -526,7 +588,7 @@ export class InstructionSequence {
         );
     }
 
-    private catch_retry(begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
+    catch_retry(begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
         this.catch_table.push(
             new CatchRetry(
                 null,

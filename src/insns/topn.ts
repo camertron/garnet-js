@@ -1,21 +1,21 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import GetLocal from "./getlocal";
 
-export default class GetLocalWC0 extends Instruction {
-    public index: number;
+export default class TopN extends Instruction {
+    public count: number;
 
-    constructor(index: number) {
+    constructor(count: number) {
         super();
 
-        this.index = index;
+        this.count = count;
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        return new GetLocal(this.index, 0).call(context);
+        context.stack.push(context.stack[-this.number - 1]);
+        return null;
     }
 
-    number(): number {
+    length(): number {
         return 2;
     }
 

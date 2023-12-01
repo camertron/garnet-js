@@ -1,14 +1,14 @@
-import CallData, { CallDataFlag } from "../call_data";
+import { MethodCallData, CallDataFlag } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
 import { InterpretedCallable, Proc } from "../runtime";
 
 export default class Send extends Instruction {
-    public call_data: CallData;
+    public call_data: MethodCallData;
     public block_iseq: InstructionSequence | null;
 
-    constructor(call_data: CallData, block_iseq: InstructionSequence | null) {
+    constructor(call_data: MethodCallData, block_iseq: InstructionSequence | null) {
         super();
         this.call_data = call_data;
         this.block_iseq = block_iseq;
@@ -39,7 +39,7 @@ export default class Send extends Instruction {
         return 1;
     }
 
-    length(): number {
+    number(): number {
         return 3;
     }
 }

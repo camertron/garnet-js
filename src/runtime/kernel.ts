@@ -1,7 +1,7 @@
 import { Compiler } from "../compiler";
-import { LoadError } from "../errors";
+import { LoadError, RubyError, TypeError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Array, Module, Object, Qfalse, Qnil, Qtrue, RValue, StringClass, String, Runtime } from "../runtime";
+import { Array, Module, Object, Qfalse, Qnil, Qtrue, RValue, StringClass, String, Runtime, ClassClass, ModuleClass, Class } from "../runtime";
 import { vmfs } from "../vmfs";
 
 const kernel_puts = (_self: RValue, args: RValue[]): RValue => {
@@ -57,11 +57,59 @@ export const defineKernelBehaviorOn = (mod: Module) => {
         }
 
         const code = vmfs.read(full_path);
-        const insns = Compiler.compile_string(code.toString());
+        const insns = Compiler.compile_string(code.toString(), full_path);
         ec.run_top_frame(insns);
 
         loaded_features.push(String.new(full_path));
 
         return Qtrue;
+    });
+
+    mod.define_native_method("===", (self: RValue, args: RValue[]): RValue => {
+        const obj = args[0];
+
+        if (obj.klass == ClassClass || obj.klass == ModuleClass) {
+            if (self.klass.get_data<Class>() == obj.get_data<Class>()) {
+                return Qtrue;
+            } else {
+                return Qfalse;
+            }
+        } else {
+            return Qfalse;
+        }
+    });
+
+    mod.define_native_method("is_a?", (self: RValue, args: RValue[]): RValue => {
+        const target = args[0];
+
+        if (target.klass == ClassClass || target.klass == ModuleClass) {
+            let found = false;
+
+            Runtime.each_unique_ancestor(self.klass, (ancestor) => {
+                if (target == ancestor) {
+                    found = true;
+                    return false;
+                }
+
+                return true;
+            });
+
+            return found ? Qtrue : Qfalse;
+        } else {
+            throw new TypeError("class or module required");
+        }
+    });
+
+    mod.define_native_method("raise", (_self: RValue, args: RValue[]): RValue => {
+        const error = args[0].get_data<RubyError>();
+        throw error;
+    });
+
+    mod.define_native_method("respond_to?", (self: RValue, args: RValue[]): RValue => {
+        if (Object.find_method_under(self.klass, args[0].get_data<string>())) {
+            return Qtrue;
+        } else {
+            return Qfalse;
+        }
     });
 };

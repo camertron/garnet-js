@@ -1,5 +1,5 @@
 import { InstructionSequence } from "./instruction_sequence";
-import { NoMethodError } from "./errors";
+import { NoMethodError, RubyError } from "./errors";
 import { ExecutionContext } from "./execution_context";
 import { defineArrayBehaviorOn } from "./runtime/array";
 import { defineIntegerBehaviorOn } from "./runtime/integer";
@@ -11,6 +11,7 @@ import { vmfs } from "./vmfs";
 import { defineProcBehaviorOn } from "./runtime/proc";
 import { defineHashBehaviorOn } from "./runtime/hash";
 import { isNode } from "./env";
+import { defineFloatBehaviorOn } from "./runtime/float";
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
@@ -179,17 +180,36 @@ export class Runtime {
     }
 }
 
-export interface Callable {
-    call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue): RValue;
+export enum Visibility {
+    public,
+    private,
+    protected
+};
+
+export abstract class Callable {
+    protected visibility_: Visibility;
+
+    abstract call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue): RValue;
+
+    get visibility(): Visibility {
+        return this.visibility_;
+    }
+
+    set visibility(vis: Visibility) {
+        this.visibility_ = vis;
+    }
 }
 
-export class InterpretedCallable implements Callable {
+export class InterpretedCallable extends Callable {
     private name: string;
     private iseq: InstructionSequence;
 
     constructor(name: string, iseq: InstructionSequence) {
+        super();
+
         this.name = name;
         this.iseq = iseq;
+        this.visibility_ = Visibility.public;
     }
 
     call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue): RValue {
@@ -197,13 +217,16 @@ export class InterpretedCallable implements Callable {
     }
 }
 
-export class NativeCallable implements Callable {
+export class NativeCallable extends Callable {
     private name: string;
     private method: NativeMethod;
 
     constructor(name: string, method: NativeMethod) {
+        super();
+
         this.name = name;
         this.method = method;
+        this.visibility_ = Visibility.public;
     }
 
     call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue): RValue {
@@ -211,11 +234,14 @@ export class NativeCallable implements Callable {
     }
 }
 
-export class CallableAlias implements Callable {
+export class CallableAlias extends Callable {
     private alias: string;
 
     constructor(alias: string) {
+        super();
+
         this.alias = alias;
+        this.visibility_ = Visibility.public;
     }
 
     call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue): RValue {
@@ -261,7 +287,7 @@ export class Module {
         this.methods[new_name] = new CallableAlias(existing_name);
     }
 
-    find_constant(name: string): RValue | null {
+    find_constant(name: string, inherit: boolean = true): RValue | null {
         let current_mod: Module | undefined = this;
 
         while (current_mod) {
@@ -271,6 +297,10 @@ export class Module {
                 return constant;
             }
 
+            if (!inherit) {
+                return Qnil;
+            }
+
             if (!current_mod.nesting_parent) {
                 break;
             }
@@ -278,7 +308,7 @@ export class Module {
             current_mod = current_mod.nesting_parent.get_data<Module>();
         }
 
-        return Runtime.constants[name];
+        return ObjectClass.get_data<Class>().constants[name] || Runtime.constants[name];
     }
 
     include(mod: RValue) {
@@ -417,11 +447,13 @@ export const StringClass      = Runtime.constants["String"]      = new RValue(Cl
 export const ArrayClass       = Runtime.constants["Array"]       = new RValue(ClassClass, new Class("Array", ObjectClass));
 export const HashClass        = Runtime.constants["Hash"]        = new RValue(ClassClass, new Class("Hash", ObjectClass));
 export const IntegerClass     = Runtime.constants["Integer"]     = new RValue(ClassClass, new Class("Integer", ObjectClass));
+export const FloatClass       = Runtime.constants["Float"]       = new RValue(ClassClass, new Class("Float", ObjectClass));
 export const SymbolClass      = Runtime.constants["Symbol"]      = new RValue(ClassClass, new Class("Symbol", ObjectClass));
 export const ProcClass        = Runtime.constants["Proc"]        = new RValue(ClassClass, new Class("Proc", ObjectClass));
 export const NilClass         = Runtime.constants["NilClass"]    = new RValue(ClassClass, new Class("NilClass", ObjectClass));
 export const TrueClass        = Runtime.constants["TrueClass"]   = new RValue(ClassClass, new Class("TrueClass", ObjectClass));
 export const FalseClass       = Runtime.constants["FalseClass"]  = new RValue(ClassClass, new Class("FalseClass", ObjectClass));
+export const RegexpClass      = Runtime.constants["Regexp"]      = new RValue(ClassClass, new Class("Regexp", ObjectClass));
 export const KernelModule     = Runtime.constants["Kernel"]      = new RValue(ModuleClass, new Module("Kernel"));
 
 object_class.superclass = BasicObjectClass;
@@ -464,6 +496,25 @@ defineKernelBehaviorOn(KernelModule.get_data<Module>());
         self.get_data<Module>().include(mod_to_include);
         return self;
     });
+
+    mod.define_native_method("private", (self: RValue, args: RValue[]): RValue => {
+        // @TODO: handle calling .private with no args
+        Runtime.assert_type(args[0], SymbolClass);
+        const mtd_name = args[0].get_data<string>();
+        self.get_data<Module>().methods[mtd_name].visibility = Visibility.private;
+        return Qnil;
+    });
+
+    mod.define_native_method("const_defined?", (self: RValue, args: RValue[]): RValue => {
+        if (args[0].klass != StringClass && args[0].klass != SymbolClass) {
+            Runtime.assert_type(args[0], StringClass);
+        }
+
+        const c = args[0].get_data<string>();
+        const found = self.klass.get_data<Class>().find_constant(c);
+
+        return found ? Qtrue : Qfalse;
+    });
 });
 
 export const Qnil = new RValue(NilClass, null);
@@ -488,13 +539,13 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
     });
 });
 
-export abstract class String {
+export class String {
     static new(str: string): RValue {
         return new RValue(StringClass, str);
     }
 }
 
-export abstract class Object {
+export class Object {
     static send(self: RValue, method_name: string, args: RValue[] = [], block?: RValue): RValue {
         let method = null;
 
@@ -512,7 +563,7 @@ export abstract class Object {
         }
     }
 
-    private static find_method_under(mod: RValue, method_name: string): Callable | null {
+    static find_method_under(mod: RValue, method_name: string): Callable | null {
         let found_method = null;
 
         Runtime.each_unique_ancestor(mod, (ancestor: RValue): boolean => {
@@ -579,7 +630,8 @@ export abstract class Object {
     });
 
     klass.define_native_method("inspect", (self: RValue): RValue => {
-        const name = self.klass.get_data<Class>().name ? self.klass.get_data<Class>().name : "Class";
+        const class_name = self.klass.get_data<Class>().name;
+        const name = class_name ? class_name : "Class";
         let parts = [`${name}:${Object.object_id_to_str(self.object_id)}`];
 
         if (self.ivars) {
@@ -604,7 +656,7 @@ export abstract class Object {
 
 defineStringBehaviorOn(StringClass.get_data<Class>());
 
-export abstract class Integer {
+export class Integer {
     static new(value: number): RValue {
         return new RValue(IntegerClass, value);
     }
@@ -615,9 +667,17 @@ defineIntegerBehaviorOn(IntegerClass.get_data<Class>());
 export const INT2FIX0 = new RValue(IntegerClass, 0);
 export const INT2FIX1 = new RValue(IntegerClass, 1);
 
+export class Float {
+    static new(value: number): RValue {
+        return new RValue(FloatClass, value);
+    }
+}
+
+defineFloatBehaviorOn(FloatClass.get_data<Class>());
+
 defineSymbolBehaviorOn(SymbolClass.get_data<Class>());
 
-type ConsoleFn = (...data: any[]) => void;
+export type ConsoleFn = (...data: any[]) => void;
 
 export class IO {
     // this is all kinds of wrong but it's fine for now

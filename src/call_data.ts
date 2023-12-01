@@ -24,22 +24,10 @@ const callDataFlagMap = (() => {
     return map;
 })();
 
-export default class CallData {
-    public mid: string;
-    public argc: number;
-    public flag: number;
-    public kwarg: any;
-
-    constructor(mid: string, argc: number, flag: number, kwarg: any) {
-        this.mid = mid;
-        this.argc = argc;
-        this.flag = flag;
-        this.kwarg = kwarg;
-    }
-
-    static create(method: string, argc: number = 0, flags: number = CallDataFlag.ARGS_SIMPLE, kw_arg: any = null) {
-        return new CallData(method, argc, flags, kw_arg);
-    }
+export abstract class CallData {
+    argc: number;
+    flag: number;
+    kw_arg: any;
 
     has_flag(flag: CallDataFlag): boolean {
         const index = callDataFlagMap[flag];
@@ -48,15 +36,49 @@ export default class CallData {
         return ((flag & (1 << index)) != 0);
     }
 
-    private flags(): CallDataFlag[] {
+    protected flags(): CallDataFlag[] {
         let result: CallDataFlag[] = [];
 
-        Object.keys(CallDataFlag).forEach( (value: string, index: number) => {
+        Object.keys(CallDataFlag).forEach((value: string, index: number) => {
             if ((this.flag & (1 << index)) != 0) {
                 result.push(CallDataFlag[value as keyof typeof CallDataFlag]);
             }
         });
 
         return result;
+    }
+}
+
+export class MethodCallData extends CallData {
+    public mid: string;
+    public argc: number;
+    public flag: number;
+    public kw_arg: any;
+
+    constructor(mid: string, argc: number, flag: number, kw_arg: string[] | null) {
+        super();
+
+        this.mid = mid;
+        this.argc = argc;
+        this.flag = flag;
+        this.kw_arg = kw_arg;
+    }
+
+    static create(method: string, argc: number = 0, flags: number = CallDataFlag.ARGS_SIMPLE, kw_arg: string[] | null = null) {
+        return new MethodCallData(method, argc, flags, kw_arg);
+    }
+}
+
+export class BlockCallData extends CallData {
+    public argc: number;
+    public flag: number;
+    public kw_arg: any;
+
+    constructor(argc: number, flag: number, kw_arg: string[] | null) {
+        super();
+
+        this.argc = argc;
+        this.flag = flag;
+        this.kw_arg = kw_arg;
     }
 }

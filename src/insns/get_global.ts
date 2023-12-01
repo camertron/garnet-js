@@ -1,20 +1,17 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
-export default class GetLocal extends Instruction {
-    public index: number;
-    public depth: number;
+export default class GetGlobal extends Instruction {
+    public name: string;
 
-    constructor(index: number, depth: number) {
+    constructor(name: string) {
         super();
 
-        this.index = index;
-        this.depth = depth;
+        this.name = name;
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        const value = context.local_get(this.index, this.depth);
-        context.stack.push(value);
+        context.stack.push(context.globals[this.name]);
         return null;
     }
 

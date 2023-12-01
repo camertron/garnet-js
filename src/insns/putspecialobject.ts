@@ -33,7 +33,7 @@ export default class PutSpecialObject extends Instruction {
                 break;
 
             case SpecialObjectType.CONST_BASE:
-                context.stack.push(ConstBase);
+                context.stack.push(context.const_base);
                 break;
         }
 

@@ -1,11 +1,11 @@
-import CallData from "../call_data";
+import { MethodCallData } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
 export default class OptSendWithoutBlock extends Instruction {
-    public call_data: CallData;
+    public call_data: MethodCallData;
 
-    constructor(call_data: CallData) {
+    constructor(call_data: MethodCallData) {
         super();
         this.call_data = call_data;
     }
@@ -26,7 +26,7 @@ export default class OptSendWithoutBlock extends Instruction {
         return 1;
     }
 
-    length(): number {
+    number(): number {
         return this.call_data.argc + 1;
     }
 }

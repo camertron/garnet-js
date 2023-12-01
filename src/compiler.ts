@@ -1,37 +1,45 @@
 import { ParseResult } from "@ruby/prism/types/deserialize";
-import CallData, { CallDataFlag } from "./call_data";
-import { InstructionSequence } from "./instruction_sequence";
+import { MethodCallData, BlockCallData, CallDataFlag } from "./call_data";
+import { InstructionSequence, Label } from "./instruction_sequence";
 import { Options } from "./options";
-import { AndNode, ArgumentsNode, ArrayNode, AssocNode, BlockNode, BlockParametersNode, CallNode, ClassNode, ConstantReadNode, DefNode, ElseNode, HashNode, IfNode, InstanceVariableReadNode, InstanceVariableWriteNode, IntegerNode, KeywordHashNode, LocalVariableReadNode, LocalVariableWriteNode, Location, ModuleNode, Node, OrNode, ParametersNode, ProgramNode, RequiredParameterNode, ReturnNode, StatementsNode, StringNode, SymbolNode } from "@ruby/prism/types/nodes";
+import { AndNode, ArgumentsNode, ArrayNode, AssocNode, AssocSplatNode, BeginNode, BlockArgumentNode, BlockNode, BlockParameterNode, BlockParametersNode, CallNode, CaseNode, ClassNode, ConstantPathNode, ConstantReadNode, ConstantWriteNode, DefNode, ElseNode, EmbeddedStatementsNode, EnsureNode, FalseNode, FloatNode, GlobalVariableReadNode, GlobalVariableWriteNode, HashNode, IfNode, InstanceVariableOperatorWriteNode, InstanceVariableOrWriteNode, InstanceVariableReadNode, InstanceVariableTargetNode, InstanceVariableWriteNode, IntegerNode, InterpolatedStringNode, InterpolatedSymbolNode, KeywordHashNode, LocalVariableReadNode, LocalVariableTargetNode, LocalVariableWriteNode, Location, ModuleNode, MultiWriteNode, NilNode, Node, OptionalParameterNode, OrNode, ParametersNode, ParenthesesNode, ProgramNode, RegularExpressionNode, RequiredParameterNode, RescueNode, RestParameterNode, ReturnNode, SelfNode, SingletonClassNode, SplatNode, StatementsNode, StringNode, SymbolNode, TrueNode, UnlessNode, WhenNode, WhileNode, YieldNode } from "@ruby/prism/types/nodes";
 import { Lookup } from "./local_table";
-import { ObjectClass, Qnil } from "./runtime";
+import { ObjectClass, Qtrue } from "./runtime";
 import { DefineClassFlags } from "./insns/defineclass";
 import { SpecialObjectType } from "./insns/putspecialobject";
+import { ExpandArrayFlag } from "./insns/expandarray";
+import { Regexp } from "./runtime/regexp";
 
 export class Compiler {
     private options: Options;
     private source: string;
+    private path: string;
     private iseq: InstructionSequence;
     private line_offsets_: number[];
+    private local_depth: number;
 
     public static parse: (code: string) => ParseResult;
 
-    constructor(source: string, options?: Options) {
+    constructor(source: string, path: string, options?: Options) {
         this.source = source;
+        this.path = path;
         this.options = options || new Options();
+        this.local_depth = 0;
     }
 
-    static compile(source: string, ast: any, options?: Options): InstructionSequence {
-        const compiler = new Compiler(source, options);
+    static compile(source: string, path: string, ast: any, options?: Options): InstructionSequence {
+        const compiler = new Compiler(source, path, options);
         return compiler.visit_program_node(ast.value, true);
     }
 
-    static compile_string(source: string, options?: Options) {
+    static compile_string(source: string, path: string, options?: Options) {
         const ast = Compiler.parse(source);
-        return this.compile(source, ast, options);
+        return this.compile(source, path, ast, options);
     }
 
     private visit(node: Node, used: boolean) {
+        // console.log(`Parsing ${node.constructor.name} at ${this.path}:${this.start_line_for_loc(node.location)}`)
+
         switch (node.constructor.name) {
             case "ProgramNode":
                 this.visit_program_node(node as ProgramNode, used);
@@ -51,6 +59,10 @@ export class Compiler {
 
             case "IntegerNode":
                 this.visit_integer_node(node as IntegerNode, used);
+                break;
+
+            case "FloatNode":
+                this.visit_float_node(node as FloatNode, used);
                 break;
 
             case "StringNode":
@@ -89,8 +101,20 @@ export class Compiler {
                 this.visit_required_parameter_node(node as RequiredParameterNode, used);
                 break;
 
+            case "OptionalParameterNode":
+                this.visit_optional_parameter_node(node as OptionalParameterNode, used);
+                break;
+
+            case "RestParameterNode":
+                this.visit_rest_parameter_node(node as RestParameterNode, used);
+                break;
+
             case "IfNode":
                 this.visit_if_node(node as IfNode, used);
+                break;
+
+            case "UnlessNode":
+                this.visit_unless_node(node as UnlessNode, used);
                 break;
 
             case "ElseNode":
@@ -117,12 +141,20 @@ export class Compiler {
                 this.visit_constant_read_node(node as ConstantReadNode, used);
                 break;
 
+            case "ConstantWriteNode":
+                this.visit_constant_write_node(node as ConstantWriteNode, used);
+                break;
+
             case "SymbolNode":
                 this.visit_symbol_node(node as SymbolNode, used);
                 break;
 
             case "BlockParametersNode":
                 this.visit_block_parameters_node(node as BlockParametersNode, used);
+                break;
+
+            case "BlockParameterNode":
+                this.visit_block_parameter_node(node as BlockParameterNode, used);
                 break;
 
             case "InstanceVariableWriteNode":
@@ -133,12 +165,120 @@ export class Compiler {
                 this.visit_instance_variable_read_node(node as InstanceVariableReadNode, used);
                 break;
 
+            case "InstanceVariableTargetNode":
+                this.visit_instance_variable_target_node(node as InstanceVariableTargetNode, used);
+                break;
+
             case "ReturnNode":
                 this.visit_return_node(node as ReturnNode, used);
                 break;
 
+            case "BeginNode":
+                this.visit_begin_node(node as BeginNode, used);
+                break;
+
+            case "RescueNode":
+                this.visit_rescue_node(node as RescueNode, used);
+                break;
+
+            case "NilNode":
+                this.visit_nil_node(node as NilNode, used);
+                break;
+
+            case "TrueNode":
+                this.visit_true_node(node as TrueNode, used);
+                break;
+
+            case "FalseNode":
+                this.visit_false_node(node as FalseNode, used);
+                break;
+
+            case "EnsureNode":
+                this.visit_ensure_node(node as EnsureNode, used);
+                break;
+
+            case "LocalVariableTargetNode":
+                this.visit_local_variable_target_node(node as LocalVariableTargetNode, used);
+                break;
+
+            case "InterpolatedStringNode":
+                this.visit_interpolated_string_node(node as InterpolatedStringNode, used);
+                break;
+
+            case "InterpolatedSymbolNode":
+                this.visit_interpolated_symbol_node(node as InterpolatedSymbolNode, used);
+                break;
+
+            case "EmbeddedStatementsNode":
+                this.visit_embedded_statements_node(node as EmbeddedStatementsNode, used);
+                break;
+
+            case "SelfNode":
+                this.visit_self_node(node as SelfNode, used);
+                break;
+
+            case "ConstantPathNode":
+                this.visit_constant_path_node(node as ConstantPathNode, used);
+                break;
+
+            case "SplatNode":
+                this.visit_splat_node(node as SplatNode, used);
+                break;
+
+            case "BlockArgumentNode":
+                this.visit_block_argument_node(node as BlockArgumentNode, used);
+                break;
+
+            case "ParenthesesNode":
+                this.visit_parentheses_node(node as ParenthesesNode, used);
+                break;
+
+            case "InstanceVariableOperatorWriteNode":
+                this.visit_instance_variable_operator_write_node(node as InstanceVariableOperatorWriteNode, used);
+                break;
+
+            case "GlobalVariableReadNode":
+                this.visit_global_variable_read_node(node as GlobalVariableReadNode, used);
+                break;
+
+            case "GlobalVariableWriteNode":
+                this.visit_global_variable_write_node(node as GlobalVariableWriteNode, used);
+                break;
+
+            case "CaseNode":
+                this.visit_case_node(node as CaseNode, used);
+                break;
+
+            case "KeywordHashNode":
+                this.visit_keyword_hash_node(node as KeywordHashNode, used);
+                break;
+
+            case "InstanceVariableOrWriteNode":
+                this.visit_instance_variable_or_write_node(node as InstanceVariableOrWriteNode, used);
+                break;
+
+            case "YieldNode":
+                this.visit_yield_node(node as YieldNode, used);
+                break;
+
+            case "SingletonClassNode":
+                this.visit_singleton_class_node(node as SingletonClassNode, used);
+                break;
+
+            case "WhileNode":
+                this.visit_while_node(node as WhileNode, used);
+                break;
+
+            case "MultiWriteNode":
+                this.visit_multi_write_node(node as MultiWriteNode, used);
+                break;
+
+            case "RegularExpressionNode":
+                this.visit_regular_expression_node(node as RegularExpressionNode, used);
+                break;
+
             default:
-                throw new Error(`I can't handle ${node.constructor.name}s yet, help me!`);
+                throw new Error(`I can't handle ${node.constructor.name}s yet, help me!\nAt ${this.path}:${this.start_line_for_loc(node.location)}`);
         }
     }
 
@@ -165,7 +305,7 @@ export class Compiler {
     }
 
     private visit_program_node(node: ProgramNode, _used: boolean): InstructionSequence {
-        const top_iseq = new InstructionSequence("<compiled>", "<compiled>", this.start_line_for_loc(node.location)!, "top", null, this.options);
+        const top_iseq = new InstructionSequence("<main>", this.path, this.start_line_for_loc(node.location)!, "top", null, this.options);
 
         node.locals.forEach((local: string) => {
             top_iseq.local_table.plain(local);
@@ -252,7 +392,7 @@ export class Compiler {
 
         let argc = 0;
         let flags = 0;
-        let kw_arg = null;
+        let kw_arg: string[] = [];
 
         if (node.arguments_) {
             argc = node.arguments_.arguments_.length;
@@ -267,8 +407,11 @@ export class Compiler {
 
                     case "KeywordHashNode":
                         flags |= CallDataFlag.KWARG;
-                        kw_arg = (argument as KeywordHashNode).elements.map((element) => {
-                            return ((element as AssocNode).key as SymbolNode).unescaped;
+                        (argument as KeywordHashNode).elements.forEach((element) => {
+                            switch (element.constructor.name) {
+                                case "AssocNode":
+                                    kw_arg.push(((element as AssocNode).key as SymbolNode).unescaped);
+                            }
                         });
                         break;
                 }
@@ -299,7 +442,7 @@ export class Compiler {
             flags |= CallDataFlag.VCALL;
         }
 
-        this.iseq.send(CallData.create(node.name, argc, flags, kw_arg), block_iseq);
+        this.iseq.send(MethodCallData.create(node.name, argc, flags, kw_arg), block_iseq);
 
         if (safe_label) {
             this.iseq.jump(safe_label);
@@ -338,6 +481,13 @@ export class Compiler {
         }
     }
 
+    private visit_float_node(node: FloatNode, used: boolean) {
+        if (used) {
+            const floatVal = this.text_for_loc(node.location);
+            this.iseq.putobject({ type: "Float", value: parseFloat(floatVal) });
+        }
+    }
+
     private visit_string_node(node: StringNode, used: boolean) {
         if (!used) return
 
@@ -349,7 +499,7 @@ export class Compiler {
     }
 
     private visit_local_variable_read_node(node: LocalVariableReadNode, used: boolean) {
-        const lookup = this.find_local_or_throw(node.name, node.depth)
+        const lookup = this.find_local_or_throw(node.name, node.depth + this.local_depth);
 
         if (used) {
             this.iseq.getlocal(lookup.index, lookup.depth);
@@ -360,11 +510,53 @@ export class Compiler {
         this.visit(node.value, true);
 
         if (used) {
-            this.iseq.dup()
+            this.iseq.dup();
         }
 
-        const lookup = this.find_local_or_throw(node.name, node.depth);
+        const lookup = this.find_local_or_throw(node.name, node.depth + this.local_depth);
         this.iseq.setlocal(lookup.index, lookup.depth);
+    }
+
+    private visit_local_variable_target_node(node: LocalVariableTargetNode, used: boolean) {
+        const lookup = this.find_local_or_throw(node.name, node.depth + this.local_depth);
+        this.iseq.setlocal(lookup.index, lookup.depth);
+    }
+
+    private visit_multi_write_node(node: MultiWriteNode, used: boolean) {
+        this.visit(node.value, true);
+        if (used) this.iseq.dup();
+        this.iseq.expandarray(node.lefts.length, node.rest ? ExpandArrayFlag.SPLAT_FLAG : 0);
+        this.visit_all(node.lefts, true);
+
+        let flags = 0;
+
+        if (node.rest) {
+            flags |= ExpandArrayFlag.SPLAT_FLAG;
+        }
+
+        if (node.rights.length > 0) {
+            flags |= ExpandArrayFlag.POSTARG_FLAG;
+        }
+
+        this.iseq.expandarray(node.rights.length, flags);
+
+        if (node.rest) {
+            const splat_expr = (node.rest as SplatNode).expression;
+
+            if (splat_expr) {
+                this.visit(splat_expr, true);
+            }
+        }
+
+        this.visit_all(node.rights, true);
+
+        // const targets = [...node.targets];
+        // targets.pop if targets.last.is_a?(Prism::SplatNode) && targets.last.operator == ","
+
+        // visit(node.value, used)
+        // iseq.dup
+        // iseq.expandarray(targets.length, 0)
+        // visit_all(targets, true)
     }
 
     private visit_array_node(node: ArrayNode, used: boolean) {
@@ -396,7 +588,7 @@ export class Compiler {
                 this.visit(element, used);
 
                 if (used) {
-                    const call_data = new CallData("core#hash_merge_kwd", 2, CallDataFlag.ARGS_SIMPLE, null)
+                    const call_data = MethodCallData.create("core#hash_merge_kwd", 2)
                     this.iseq.send(call_data, null);
                 }
             } else {
@@ -458,26 +650,88 @@ export class Compiler {
         }
     }
 
+    // (required, optional = nil, *rest, post)
     private visit_parameters_node(node: ParametersNode, _used: boolean) {
         this.visit_all(node.requireds, true);
+        this.iseq.argument_options.lead_num = node.requireds.length;
         this.visit_all(node.optionals, true);
+        this.iseq.argument_size += node.requireds.length + node.optionals.length;
+
+        if (node.rest) {
+            this.iseq.argument_options.rest_start = this.iseq.argument_size
+            this.visit(node.rest, true);
+            this.iseq.argument_size ++;
+        }
+
+        // posts are of type RequiredParameterNode
+        if (node.posts) {
+            this.iseq.argument_options.post_start = this.iseq.argument_size;
+            this.visit_all(node.posts, true);
+            this.iseq.argument_size += node.posts.length;
+            this.iseq.argument_options.post_num = node.posts.length;
+        }
+
+        if (node.block) {
+
+        }
     }
 
-    private visit_required_parameter_node(_node: RequiredParameterNode, _used: boolean) {
-        this.iseq.argument_size += 1;
-        this.iseq.argument_options.lead_num += 1;
+    private visit_required_parameter_node(node: RequiredParameterNode, used: boolean) {
+        // no-op
+    }
+
+    private visit_optional_parameter_node(node: OptionalParameterNode, _used: boolean) {
+        let index = this.iseq.argument_options.lead_num;
+        const opt_length = this.iseq.argument_options.opt.length;
+
+        if (opt_length > 0) {
+            index += opt_length - 1;
+        }
+
+        this.iseq.local_table.plain(node.name);
+
+        if (this.iseq.argument_options.opt.length == 0) {
+            const start_label = this.iseq.label();
+            this.iseq.push(start_label);
+            this.iseq.argument_options.opt.push(start_label);
+        }
+
+        this.visit(node.value, true);
+        this.iseq.setlocal(index, 0);
+
+        const arg_given_label = this.iseq.label()
+        this.iseq.push(arg_given_label);
+        this.iseq.argument_options.opt.push(arg_given_label);
+    }
+
+    private visit_rest_parameter_node(node: RestParameterNode, used: boolean) {
+        // no-op
+    }
+
+    private visit_splat_node(node: SplatNode, used: boolean) {
+        // no-op
+    }
+
+    private visit_block_parameter_node(node: BlockParameterNode, used: boolean) {
+        // no-op
+    }
+
+    private visit_block_argument_node(node: BlockArgumentNode, used: boolean) {
+        if (node.expression) {
+            this.visit(node.expression, used);
+        }
     }
 
     private visit_if_node(node: IfNode, used: boolean) {
-        const body_label = this.iseq.label()
-        const else_label = this.iseq.label()
-        const done_label = this.iseq.label()
+        const body_label = this.iseq.label();
+        const else_label = this.iseq.label();
+        const done_label = this.iseq.label();
 
         this.visit(node.predicate, true);
 
-        this.iseq.branchunless(else_label)
-        this.iseq.jump(body_label)
-        this.iseq.push(body_label)
+        this.iseq.branchunless(else_label);
+        this.iseq.jump(body_label);
+        this.iseq.push(body_label);
 
         if (node.statements) {
             this.visit(node.statements, used);
@@ -493,6 +747,44 @@ export class Compiler {
             this.visit(node.consequent, used);
         } else {
             if (used) this.iseq.putnil();
+        }
+
+        this.iseq.push(done_label);
+    }
+
+    private visit_unless_node(node: UnlessNode, used: boolean) {
+        const body_label = this.iseq.label();
+        const else_label = this.iseq.label();
+        const done_label = this.iseq.label();
+
+        this.visit(node.predicate, true);
+        this.iseq.branchunless(body_label);
+        this.iseq.jump(else_label);
+
+        this.iseq.push(else_label);
+
+        if (node.consequent) {
+            this.visit(node.consequent, used);
+        } else {
+            if (used) {
+                this.iseq.putnil();
+            }
+        }
+
+        this.iseq.jump(done_label);
+
+        if (used) {
+            this.iseq.pop();
+        }
+
+        this.iseq.push(body_label);
+
+        if (node.statements) {
+          this.visit(node.statements, used);
+        } else {
+            if (used) {
+                this.iseq.putnil();
+            }
         }
 
         this.iseq.push(done_label);
@@ -566,7 +858,7 @@ export class Compiler {
     }
 
     private visit_module_node(node: ModuleNode, used: boolean) {
-        const module_iseq = this.iseq.class_child_iseq(node.name, this.start_line_for_loc(node.location)!);
+        const module_iseq = this.iseq.module_child_iseq(node.name, this.start_line_for_loc(node.location)!);
         this.with_child_iseq(module_iseq, () => {
             if (node.body) {
                 this.visit(node.body, true);
@@ -607,6 +899,17 @@ export class Compiler {
         }
     }
 
+    private visit_constant_write_node(node: ConstantWriteNode, used: boolean) {
+        this.visit(node.value, true);
+
+        if (used) {
+            this.iseq.dup();
+        }
+
+        this.iseq.putspecialobject(SpecialObjectType.CONST_BASE);
+        this.iseq.setconstant(node.name);
+    }
+
     private visit_symbol_node(node: SymbolNode, used: boolean) {
         if (used) {
             this.iseq.putobject({type: "Symbol", value: node.unescaped});
@@ -631,6 +934,10 @@ export class Compiler {
         }
     }
 
+    private visit_instance_variable_target_node(node: InstanceVariableTargetNode, _used: boolean) {
+        this.iseq.setinstancevariable(node.name);
+    }
+
     private visit_return_node(node: ReturnNode, used: boolean) {
         if (node.arguments_) {
             if (node.arguments_.arguments_.length == 1) {
@@ -644,6 +951,356 @@ export class Compiler {
         this.iseq.leave();
     }
 
+    private visit_begin_node(node: BeginNode, used: boolean) {
+        const begin_label = this.iseq.label();
+        const end_label = this.iseq.label();
+        const exit_label = this.iseq.label();
+        const else_label = this.iseq.label();
+
+        this.iseq.push(begin_label);
+
+        if (node.statements) {
+            const [first_statements, last_statement] = this.split_rest_last(node.statements.body);
+            this.visit_all(first_statements, true);
+            this.visit(last_statement, used);
+
+            if (node.elseClause) {
+                this.iseq.jump(else_label);
+            } else {
+                this.iseq.jump(exit_label);
+            }
+        }
+
+        this.iseq.push(end_label);
+
+        // Rescue clauses execute in a so-called "transparent" scope, which we and MRI accomplish
+        // by pushing a stack frame. Locals inside this frame are actually tracked in the parent
+        // frame, so local depth needs to be incremented and added to the depth calculated by Prism.
+        // Not all Ruby implementations use a stack frame for rescue clauses, so Prism doesn't
+        // increase the depth for rescues. See https://github.com/ruby/prism/pull/1908 for more info.
+        this.local_depth ++;
+
+        if (node.rescueClause) {
+            const rescue_iseq = this.iseq.rescue_child_iseq(this.start_line_for_loc(node.location)!);
+
+            this.with_child_iseq(rescue_iseq, () => {
+                this.visit(node.rescueClause!, true);
+            });
+
+            this.iseq.catch_rescue(
+                rescue_iseq, begin_label, end_label, exit_label, rescue_iseq.local_table.size()
+            );
+        }
+
+        this.local_depth --;
+
+        if (node.elseClause) {
+            this.iseq.push(else_label);
+            this.visit(node.elseClause, used);
+        }
+
+        this.iseq.push(exit_label);
+
+        if (node.ensureClause) {
+            this.visit(node.ensureClause, false);
+        }
+    }
+
+    private visit_rescue_node(node: RescueNode, used: boolean) {
+        const handled_label = this.iseq.label();
+        const unhandled_label = this.iseq.label();
+        const exit_label = this.iseq.label();
+
+        if (node.exceptions.length > 0) {
+            // check if raised exception is an instance of any of the rescuable exception classes
+            node.exceptions.forEach((exception) => {
+                this.iseq.getlocal(0, 0);
+                this.visit(exception, true);
+                this.iseq.send(MethodCallData.create("is_a?", 1), null);
+                this.iseq.branchif(handled_label);
+            });
+
+            // none of the exceptions matched
+            this.iseq.jump(unhandled_label);
+        } else {
+            // rescue StandardError by default
+            this.iseq.getlocal(0, 0);
+            this.iseq.putnil(); // scope to look up constant
+            this.iseq.putobject({type: "TrueClass", value: Qtrue}); // allow nil scope
+            this.iseq.getconstant("StandardError");
+            this.iseq.send(MethodCallData.create("is_a?", 1), null);
+            this.iseq.branchif(handled_label);
+            this.iseq.jump(unhandled_label);
+        }
+
+        this.iseq.push(handled_label);
+
+        if (node.statements) {
+            if (node.reference) {
+                this.visit(node.reference, true);
+            }
+
+            this.visit(node.statements, used);
+        }
+
+        this.iseq.jump(exit_label);
+
+        this.iseq.push(unhandled_label);
+
+        if (node.consequent) {
+            this.visit_rescue_node(node.consequent, used);
+        }
+
+        // nothing handled the error, so re-raise
+        this.iseq.putself();
+        this.iseq.getlocal(0, 0);
+        this.iseq.send(MethodCallData.create("raise", 1), null);
+
+        this.iseq.push(exit_label);
+        this.iseq.leave();
+    }
+
+    private visit_ensure_node(node: EnsureNode, used: boolean) {
+        if (node.statements) {
+            this.visit(node.statements, used);
+        }
+    }
+
+    private visit_nil_node(node: NilNode, used: boolean) {
+        if (used) {
+            this.iseq.putnil();
+        }
+    }
+
+    private visit_true_node(node: TrueNode, used: boolean) {
+        if (used) {
+            this.iseq.putobject({type: "TrueClass", value: true});
+        }
+    }
+
+    private visit_false_node(node: FalseNode, used: boolean) {
+        if (used) {
+            this.iseq.putobject({type: "FalseClass", value: false});
+        }
+    }
+
+    private visit_interpolated_string_node(node: InterpolatedStringNode, used: boolean) {
+        this.visit_all(node.parts, true);
+        this.iseq.dup();
+        this.iseq.objtostring(MethodCallData.create("to_s", 0, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE));
+        this.iseq.anytostring()
+        this.iseq.concatstrings(node.parts.length);
+
+        if (!used) {
+            this.iseq.pop()
+        }
+    }
+
+    private visit_interpolated_symbol_node(node: InterpolatedSymbolNode, used: boolean) {
+        this.visit_all(node.parts, true);
+        this.iseq.dup();
+        this.iseq.objtostring(MethodCallData.create("to_s", 0, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE));
+        this.iseq.anytostring();
+        this.iseq.concatstrings(node.parts.length);
+        this.iseq.intern();
+    }
+
+    private visit_embedded_statements_node(node: EmbeddedStatementsNode, used: boolean) {
+        if (node.statements) {
+            this.visit(node.statements, used);
+        }
+    }
+
+    private visit_self_node(node: SelfNode, used: boolean) {
+        if (used) {
+            this.iseq.putself();
+        }
+    }
+
+    private visit_constant_path_node(node: ConstantPathNode, used: boolean) {
+        if (node.parent == null) {
+            this.iseq.putobject({type: "RValue", value: ObjectClass});
+            this.iseq.putobject({type: "TrueClass", value: true});
+        } else {
+            this.visit(node.parent, used);
+            this.iseq.putobject({type: "FalseClass", value: false});
+        }
+
+        this.iseq.getconstant((node.child as ConstantReadNode).name);
+    }
+
+    private visit_parentheses_node(node: ParenthesesNode, used: boolean) {
+        if (node.body) {
+            this.visit(node.body, used);
+        } else {
+            if (used) {
+                this.iseq.putnil();
+            }
+        }
+    }
+
+    private visit_instance_variable_operator_write_node(node: InstanceVariableOperatorWriteNode, used: boolean) {
+        this.iseq.getinstancevariable(node.name);
+        this.visit(node.value, true);
+        this.iseq.send(MethodCallData.create(node.operator, 1), null);
+
+        if (used) {
+            this.iseq.dup();
+        }
+
+        this.iseq.setinstancevariable(node.name);
+    }
+
+    private visit_global_variable_read_node(node: GlobalVariableReadNode, used: boolean) {
+        if (used) {
+            this.iseq.getglobal(node.name);
+        }
+    }
+
+    private visit_global_variable_write_node(node: GlobalVariableWriteNode, used: boolean) {
+        if (used) {
+            this.iseq.setglobal(node.name);
+        }
+    }
+
+    private visit_case_node(node: CaseNode, used: boolean) {
+        if (node.predicate) {
+            this.visit(node.predicate, true);
+        }
+
+        const done_label = this.iseq.label();
+        const labels: Label[] = [];
+
+        (node.conditions as WhenNode[]).forEach((clause) => {
+            const label = this.iseq.label();
+
+            clause.conditions.forEach((condition) => {
+                this.visit(condition, true);
+                this.iseq.topn(1);
+                this.iseq.send(MethodCallData.create("===", 1, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE), null);
+                this.iseq.branchif(label);
+            });
+
+            labels.push(label);
+        });
+
+        this.iseq.pop();
+
+        if (node.consequent) {
+            this.visit(node.consequent, used);
+        } else {
+            if (used) {
+                this.iseq.putnil();
+            }
+        }
+
+        this.iseq.jump(done_label);
+
+        (node.conditions as WhenNode[]).forEach((clause, index) => {
+            this.iseq.push(labels[index]);
+            this.iseq.pop();
+
+            if (clause.statements) {
+                this.visit(clause.statements, used);
+            } else {
+                this.iseq.putnil();
+            }
+
+            this.iseq.jump(done_label);
+        });
+
+        this.iseq.push(done_label);
+    }
+
+    private visit_keyword_hash_node(node: KeywordHashNode, used: boolean) {
+        (node.elements as AssocSplatNode[]).forEach((element) => {
+            if (element.value) {
+                this.visit(element.value, used);
+            }
+        });
+    }
+
+    private visit_instance_variable_or_write_node(node: InstanceVariableOrWriteNode, used: boolean) {
+        const label = this.iseq.label();
+
+        this.iseq.getinstancevariable(node.name);
+        if (used) this.iseq.dup();
+        this.iseq.branchif(label);
+
+        if (used) this.iseq.pop()
+        this.visit(node.value, true);
+        if (used) this.iseq.dup();
+        this.iseq.setinstancevariable(node.name);
+
+        this.iseq.push(label);
+    }
+
+    private visit_yield_node(node: YieldNode, used: boolean) {
+        let argc = 0;
+
+        if (node.arguments_) {
+            this.visit(node.arguments_, true);
+            argc = node.arguments_.arguments_.length;
+        }
+
+        this.iseq.invokeblock(new BlockCallData(argc, CallDataFlag.ARGS_SIMPLE, null));
+        if (!used) this.iseq.pop();
+    }
+
+    private visit_singleton_class_node(node: SingletonClassNode, used: boolean) {
+        this.visit(node.expression, true);
+        this.iseq.putnil()
+
+        const singleton_iseq = this.iseq.singleton_class_child_iseq(this.start_line_for_loc(node.location)!);
+
+        this.with_child_iseq(singleton_iseq, () => {
+            if (node.body) {
+                this.visit(node.body, true);
+            } else {
+                this.iseq.putnil();
+            }
+
+            this.iseq.leave();
+        });
+
+        this.iseq.defineclass("singletonclass", singleton_iseq, DefineClassFlags.TYPE_SINGLETON_CLASS);
+        if (!used) this.iseq.pop();
+    }
+
+    private visit_while_node(node: WhileNode, used: boolean) {
+        const predicate_label = this.iseq.label();
+        const body_label = this.iseq.label();
+        const done_label = this.iseq.label();
+
+        this.iseq.jump(predicate_label);
+        this.iseq.putnil();
+        this.iseq.pop();
+        this.iseq.jump(predicate_label);
+
+        this.iseq.push(body_label);
+
+        if (node.statements) {
+            this.visit(node.statements, false);
+        }
+
+        this.iseq.push(predicate_label);
+        this.visit(node.predicate, true);
+        this.iseq.branchunless(done_label);
+
+        this.iseq.jump(body_label);
+        this.iseq.push(done_label);
+
+        this.iseq.putnil();
+        if (!used) this.iseq.pop();
+    }
+
+    private visit_regular_expression_node(node: RegularExpressionNode, used: boolean) {
+        if (used) {
+            // @TODO: handle options
+            this.iseq.putobject({type: "RValue", value: Regexp.new(node.unescaped, "")})
+        }
+    }
+
     private find_local_or_throw(name: string, depth: number): Lookup {
         let current_iseq = this.iseq;
 
@@ -651,7 +1308,7 @@ export class Compiler {
             current_iseq = current_iseq.parent_iseq!;
         }
 
-        return current_iseq.local_table.find_or_error(name, depth);
+        return current_iseq.local_table.find_or_throw(name, depth);
     }
 
     private text_for_loc(location: Location): string {
@@ -665,9 +1322,11 @@ export class Compiler {
         let last_line_offset = 0;
 
         for (let i = 0; i < this.line_offsets.length; i ++) {
-            if (location.startOffset >= this.line_offsets[i] && location.startOffset <= last_line_offset) {
-                return i + 1;
+            if (location.startOffset > last_line_offset && location.startOffset <= this.line_offsets[i]) {
+                return i;
             }
+
+            last_line_offset = this.line_offsets[i];
         }
 
         return null;

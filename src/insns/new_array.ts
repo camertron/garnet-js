@@ -25,7 +25,7 @@ export default class NewArray extends Instruction {
         return 1;
     }
 
-    length(): number {
+    number(): number {
         return 2;
     }
 }

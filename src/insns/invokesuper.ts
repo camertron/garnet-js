@@ -1,13 +1,13 @@
-import CallData, { CallDataFlag } from "../call_data";
+import { MethodCallData, CallDataFlag } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
 
 export default class InvokeSuper extends Instruction {
-    public calldata: CallData;
+    public calldata: MethodCallData;
     public block_iseq: InstructionSequence;
 
-    constructor(calldata: CallData, block_iseq: InstructionSequence) {
+    constructor(calldata: MethodCallData, block_iseq: InstructionSequence) {
         super();
 
         this.calldata = calldata;
@@ -19,7 +19,7 @@ export default class InvokeSuper extends Instruction {
         return null;
     }
 
-    length(): number {
+    number(): number {
         return 2;
     }
 

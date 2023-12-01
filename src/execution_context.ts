@@ -1,8 +1,9 @@
-import CallData from "./call_data";
+import { MethodCallData } from "./call_data";
+import { RubyError } from "./errors";
 import { BlockFrame, ClassFrame, Frame, MethodFrame, RescueFrame, TopFrame } from "./frame";
 import Instruction from "./instruction";
 import { CatchBreak, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
-import { Array as RubyArray, ModuleClass, Class, ClassClass, Object, RValue, String } from "./runtime";
+import { Array as RubyArray, ModuleClass, Class, ClassClass, Object, RValue, String, Qnil, STDOUT, IO } from "./runtime";
 
 export type ExecutionResult = JumpResult | LeaveResult | null;
 
@@ -70,7 +71,7 @@ export class ExecutionContext {
         this.globals["$:"].get_data<RubyArray>().elements.push(String.new(path));
     }
 
-    call_method(call_data: CallData, receiver: RValue, args: RValue[], block?: RValue): RValue {
+    call_method(call_data: MethodCallData, receiver: RValue, args: RValue[], block?: RValue): RValue {
         return Object.send(receiver, call_data.mid, args, block);
     }
 
@@ -175,18 +176,26 @@ export class ExecutionContext {
                             result = error.value
                             this.stack.push(result);
                         } else {
-                            const catch_entry = this.find_catch_entry(frame, CatchRescue)
+                            if (error instanceof RubyError) {
+                                error.backtrace ||= this.create_backtrace();
 
-                            if (!catch_entry) {
+                                const catch_entry = this.find_catch_entry(frame, CatchRescue)
+
+                                if (!catch_entry) {
+                                    // uncaught exception
+                                    throw error;
+                                }
+
+                                this.stack.splice!(frame.stack_index + frame.iseq.local_table.size() + catch_entry.restore_sp)
+                                this.frame = frame;
+
+                                frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.exit_label);
+                                result = this.run_rescue_frame(catch_entry.iseq!, frame, error.to_rvalue());
+                                this.stack.push(result);
+                            } else {
+                                // re-raise javascript errors
                                 throw error;
                             }
-
-                            this.stack.splice!(frame.stack_index + frame.iseq.local_table.size() + catch_entry.restore_sp)
-                            this.frame = frame;
-
-                            frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.exit_label);
-                            result = this.run_rescue_frame(catch_entry.iseq!, frame, error as Error);
-                            this.stack.push(result);
                         }
                     }
 
@@ -207,6 +216,43 @@ export class ExecutionContext {
                 }
             }
         }
+    }
+
+    create_backtrace(): string[] {
+        let current: Frame | null = this.frame;
+        const backtrace = [];
+
+        while (current) {
+            backtrace.push(`${current.iseq.file}:${current.line + 1} in ${current.iseq.name}`);
+            current = current.parent;
+        }
+
+        return backtrace;
+    }
+
+    static print_backtrace(e: any) {
+        const backtrace = e.backtrace;
+        const stdout = STDOUT.get_data<IO>();
+
+        stdout.puts(`${backtrace[0]}: ${e.message} (${e.constructor.name})`);
+
+        for (let i = 1; i < backtrace.length; i ++) {
+            stdout.puts(backtrace[i]);
+        }
+    }
+
+    frame_yield(): MethodFrame | null {
+        let current: Frame | null = this.frame;
+
+        while (!(current instanceof MethodFrame)) {
+            if (current) {
+                current = current.parent;
+            } else {
+                return null;
+            }
+        }
+
+        return current;
     }
 
     run_top_frame(iseq: InstructionSequence): RValue {
@@ -239,10 +285,9 @@ export class ExecutionContext {
         });
     }
 
-    run_rescue_frame(iseq: InstructionSequence, frame: Frame, error: Error): RValue {
+    run_rescue_frame(iseq: InstructionSequence, frame: Frame, error: RValue): RValue {
         return this.run_frame(new RescueFrame(iseq, frame, this.stack.length), () => {
-            // @TODO: support rescue
-            // this.local_set(0, 0, error);
+            this.local_set(0, 0, error);
             return null
         });
     }
@@ -251,7 +296,7 @@ export class ExecutionContext {
         const iseq = frame.iseq;
 
         for (const catch_entry of iseq.catch_table) {
-            if (catch_entry instanceof type) {
+            if (!(catch_entry instanceof type)) {
                 continue;
             }
 
@@ -288,10 +333,16 @@ export class ExecutionContext {
         this.stack[this.frame_at(depth)!.stack_index + index] = value;
     }
 
+    get const_base() {
+        return this.frame!.nesting![this.frame!.nesting.length - 1];
+    }
+
     private setup_arguments(iseq: InstructionSequence, args: RValue[], block?: RValue | null): Label | null {
         let locals = [...args];
         let local_index = 0;
         let start_label: Label | null = null;
+
+        const post_num = iseq.argument_options.post_num;
 
         // First, set up all of the leading arguments. These are positional and
         // required arguments at the start of the argument list.
@@ -310,29 +361,34 @@ export class ExecutionContext {
         const opt = iseq.argument_options.opt;
         if (opt) {
             for (let i = 0; i < opt.length - 1; i ++) {
-                if (locals.length == 0) {
-                    start_label = opt[i];
-                    break;
+                // Posts are required args and are populated before optionals.
+                // Therefore, if there won't be enough locals to fill in our required posts,
+                // stop assigning optionals.
+                const optionals_done = locals.length == 0 || (post_num > 0 && locals.length <= post_num);
+
+                if (optionals_done) {
+                    if (!start_label) {
+                        start_label = opt[i];
+                    }
                 } else {
                     this.local_set(local_index, 0, locals.shift()!);
-                    local_index ++;
                 }
 
-                if (!start_label) {
-                    start_label = opt[opt.length - 1];
-                }
+                local_index ++;
+            }
+
+            if (!start_label) {
+                start_label = opt[opt.length - 1];
             }
         }
 
         // If there is a splat argument, then we'll set that up here. It will
         // grab up all of the remaining positional arguments.
-        const rest_start = iseq.argument_options.rest_start;
-        if (rest_start) {
-            const post_start = iseq.argument_options.post_start;
-            if (post_start) {
-                const length = post_start - rest_start;
-                this.local_set(local_index, 0, RubyArray.new(locals.slice(0, length - 1)));
-                locals = locals.slice(length);
+        if (iseq.argument_options.rest_start > 0) {
+            if (iseq.argument_options.post_start > 0) {
+                const length = locals.length - iseq.argument_options.post_num;
+                this.local_set(local_index, 0, RubyArray.new(locals.splice(0, length)));
+                // locals = locals.slice(length);
             } else {
                 this.local_set(local_index, 0, RubyArray.new([...locals]))
                 locals.length = 0;
@@ -343,7 +399,6 @@ export class ExecutionContext {
 
         // Next, set up any post arguments. These are positional arguments that
         // come after the splat argument.
-        const post_num = iseq.argument_options.post_num;
         if (post_num) {
             for (let i = 0; i < post_num; i ++) {
                 this.local_set(local_index, 0, locals.shift()!);

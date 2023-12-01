@@ -1,5 +1,6 @@
 import { Array as RubyArray, Class, Integer, Qnil, RValue, StringClass, String, IntegerClass, Runtime } from "../runtime";
 import { hash_string } from "../util/string_utils";
+import { Regexp } from "./regexp";
 
 export const defineStringBehaviorOn = (klass: Class) => {
     klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
@@ -44,5 +45,35 @@ export const defineStringBehaviorOn = (klass: Class) => {
         const str = self.get_data<string>();
 
         return RubyArray.new(str.split(delim).map((elem) => String.new(elem)));
+    });
+
+    klass.define_native_method("gsub", (self: RValue, args: RValue[], block?: RValue): RValue => {
+        const str = self.get_data<string>();
+        const pattern = args[0].get_data<Regexp | string>();
+        const replacement = args[1].get_data<string>();
+
+        if (pattern instanceof Regexp) {
+            const matches: [number, number][] = [];
+
+            pattern.scan(str, (match: [number, number][]): boolean => {
+                matches.push(match[0]);
+                return true;
+            });
+
+            const chunks = [];
+            let last_pos = 0;
+
+            for (let i = 0; i < matches.length; i ++) {
+                chunks.push(str.slice(last_pos, matches[i][0]));
+                chunks.push(replacement);
+                last_pos = matches[i][1];
+            }
+
+            chunks.push(str.slice(last_pos, str.length));
+
+            return String.new(chunks.join(""));
+        }
+
+        return self;
     });
 };

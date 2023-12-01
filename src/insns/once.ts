@@ -23,7 +23,7 @@ export default class Once extends Instruction {
         return null;
     }
 
-    length(): number {
+    number(): number {
         return 3;
     }
 

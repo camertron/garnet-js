@@ -30,14 +30,18 @@ export default class DefineClass extends Instruction {
 
         if (this.name == "singletonclass") {
             context.stack.push(context.run_class_frame(this.iseq, object.get_data<Class>().get_singleton_class()));
-        } else if (object.get_data<Class>().constants[this.name]) {
-            context.stack.push(context.run_class_frame(this.iseq, object.get_data<Class>().find_constant(this.name)!));
-        } else if ((this.flags & DefineClassFlags.TYPE_MODULE) > 0) {
-            const module = Runtime.define_module_under(object, this.name);
-            context.stack.push(context.run_class_frame(this.iseq, module));
         } else {
-            const klass = Runtime.define_class_under(object, this.name, superclass);
-            context.stack.push(context.run_class_frame(this.iseq, klass))
+            const constant = object.get_data<Class>().find_constant(this.name);
+
+            if (constant) {
+                context.stack.push(context.run_class_frame(this.iseq, constant));
+            } else if ((this.flags & DefineClassFlags.TYPE_MODULE) > 0) {
+                const module = Runtime.define_module_under(object, this.name);
+                context.stack.push(context.run_class_frame(this.iseq, module));
+            } else {
+                const klass = Runtime.define_class_under(object, this.name, superclass);
+                context.stack.push(context.run_class_frame(this.iseq, klass))
+            }
         }
 
         return null;
@@ -51,7 +55,7 @@ export default class DefineClass extends Instruction {
         return 1;
     }
 
-    length(): number {
+    number(): number {
         return 4;
     }
 }

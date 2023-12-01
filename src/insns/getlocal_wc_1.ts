@@ -15,7 +15,7 @@ export default class GetLocalWC1 extends Instruction {
         return new GetLocal(this.index, 1).call(context);
     }
 
-    length(): number {
+    number(): number {
         return 2;
     }
 

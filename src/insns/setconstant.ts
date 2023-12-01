@@ -1,25 +1,27 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
+import { Module } from "../runtime";
 
-export default class SetLocal extends Instruction {
-    public index: number;
-    public depth: number;
+export default class SetConstant extends Instruction {
+    public name: string;
 
-    constructor(index: number, depth: number) {
+    constructor(name: string) {
         super();
 
-        this.index = index;
-        this.depth = depth;
+        this.name = name;
     }
 
     call(context: ExecutionContext): ExecutionResult {
+        const parent = context.stack.pop()!;
         const value = context.stack.pop()!;
-        context.local_set(this.index, this.depth, value);
+
+        parent.get_data<Module>().constants[this.name] = value;
+
         return null;
     }
 
     pops(): number {
-        return 1;
+        return 2;
     }
 
     number(): number {

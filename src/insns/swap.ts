@@ -14,7 +14,7 @@ export default class Swap extends Instruction {
         return 2;
     }
 
-    length(): number {
+    number(): number {
         return 2;
     }
 }

@@ -22,7 +22,7 @@ export default class DefineSMethod extends Instruction {
         return null;
     }
 
-    length(): number {
+    number(): number {
         return 3;
     }
 }
