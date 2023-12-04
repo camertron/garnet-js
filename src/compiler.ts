@@ -2,13 +2,14 @@ import { ParseResult } from "@ruby/prism/types/deserialize";
 import { MethodCallData, BlockCallData, CallDataFlag } from "./call_data";
 import { InstructionSequence, Label } from "./instruction_sequence";
 import { Options } from "./options";
-import { AndNode, ArgumentsNode, ArrayNode, AssocNode, AssocSplatNode, BeginNode, BlockArgumentNode, BlockNode, BlockParameterNode, BlockParametersNode, CallNode, CaseNode, ClassNode, ConstantPathNode, ConstantReadNode, ConstantWriteNode, DefNode, ElseNode, EmbeddedStatementsNode, EnsureNode, FalseNode, FloatNode, GlobalVariableReadNode, GlobalVariableWriteNode, HashNode, IfNode, InstanceVariableOperatorWriteNode, InstanceVariableOrWriteNode, InstanceVariableReadNode, InstanceVariableTargetNode, InstanceVariableWriteNode, IntegerNode, InterpolatedStringNode, InterpolatedSymbolNode, KeywordHashNode, LocalVariableReadNode, LocalVariableTargetNode, LocalVariableWriteNode, Location, ModuleNode, MultiWriteNode, NilNode, Node, OptionalParameterNode, OrNode, ParametersNode, ParenthesesNode, ProgramNode, RegularExpressionNode, RequiredParameterNode, RescueNode, RestParameterNode, ReturnNode, SelfNode, SingletonClassNode, SplatNode, StatementsNode, StringNode, SymbolNode, TrueNode, UnlessNode, WhenNode, WhileNode, YieldNode } from "@ruby/prism/types/nodes";
+import { AndNode, ArgumentsNode, ArrayNode, AssocNode, AssocSplatNode, BeginNode, BlockArgumentNode, BlockNode, BlockParameterNode, BlockParametersNode, CallNode, CaseNode, ClassNode, ConstantPathNode, ConstantReadNode, ConstantWriteNode, DefNode, ElseNode, EmbeddedStatementsNode, EnsureNode, FalseNode, FloatNode, GlobalVariableOrWriteNode, GlobalVariableReadNode, GlobalVariableWriteNode, HashNode, IfNode, IndexOrWriteNode, InstanceVariableOperatorWriteNode, InstanceVariableOrWriteNode, InstanceVariableReadNode, InstanceVariableTargetNode, InstanceVariableWriteNode, IntegerNode, InterpolatedStringNode, InterpolatedSymbolNode, KeywordHashNode, LambdaNode, LocalVariableReadNode, LocalVariableTargetNode, LocalVariableWriteNode, Location, ModuleNode, MultiWriteNode, NextNode, NilNode, Node, OptionalParameterNode, OrNode, ParametersNode, ParenthesesNode, ProgramNode, RegularExpressionNode, RequiredParameterNode, RescueNode, RestParameterNode, ReturnNode, SelfNode, SingletonClassNode, SplatNode, StatementsNode, StringNode, SymbolNode, TrueNode, UnlessNode, WhenNode, WhileNode, YieldNode } from "@ruby/prism/types/nodes";
 import { Lookup } from "./local_table";
-import { ObjectClass, Qtrue } from "./runtime";
+import { NativeCallable, ObjectClass, Proc, Qtrue, RValue } from "./runtime";
 import { DefineClassFlags } from "./insns/defineclass";
 import { SpecialObjectType } from "./insns/putspecialobject";
 import { ExpandArrayFlag } from "./insns/expandarray";
 import { Regexp } from "./runtime/regexp";
+import { DefinedType } from "./insns/defined";
 
 export class Compiler {
     private options: Options;
@@ -245,6 +246,10 @@ export class Compiler {
                 this.visit_global_variable_write_node(node as GlobalVariableWriteNode, used);
                 break;
 
+            case "GlobalVariableOrWriteNode":
+                this.visit_global_variable_or_write_node(node as GlobalVariableOrWriteNode, used);
+                break;
+
             case "CaseNode":
                 this.visit_case_node(node as CaseNode, used);
                 break;
@@ -275,6 +280,18 @@ export class Compiler {
 
             case "RegularExpressionNode":
                 this.visit_regular_expression_node(node as RegularExpressionNode, used);
+                break;
+
+            case "NextNode":
+                this.visit_next_node(node as NextNode, used);
+                break;
+
+            case "LambdaNode":
+                this.visit_lambda_node(node as LambdaNode, used);
+                break;
+
+            case "IndexOrWriteNode":
+                this.visit_index_or_write_node(node as IndexOrWriteNode, used);
                 break;
 
             default:
@@ -946,6 +963,8 @@ export class Compiler {
                 this.visit(node.arguments_, true);
                 this.iseq.newarray(node.arguments_.arguments_.length);
             }
+        } else {
+            this.iseq.putnil();
         }
 
         this.iseq.leave();
@@ -1158,9 +1177,30 @@ export class Compiler {
     }
 
     private visit_global_variable_write_node(node: GlobalVariableWriteNode, used: boolean) {
-        if (used) {
-            this.iseq.setglobal(node.name);
-        }
+        this.visit(node.value, true);
+        if (used) this.iseq.dup()
+        this.iseq.setglobal(node.name);
+    }
+
+    private visit_global_variable_or_write_node(node: GlobalVariableOrWriteNode, used: boolean) {
+        const defined_label = this.iseq.label();
+        const undefined_label = this.iseq.label();
+
+        this.iseq.putnil();
+        this.iseq.defined(DefinedType.TYPE_GVAR, node.name, Qtrue);
+        this.iseq.branchunless(defined_label);
+
+        this.iseq.getglobal(node.name);
+        if (used) this.iseq.dup();
+        this.iseq.branchif(undefined_label);
+
+        if (used) this.iseq.pop();
+        this.iseq.push(defined_label);
+        this.visit(node.value, true);
+        if (used) this.iseq.dup();
+        this.iseq.setglobal(node.name);
+
+        this.iseq.push(undefined_label);
     }
 
     private visit_case_node(node: CaseNode, used: boolean) {
@@ -1299,6 +1339,101 @@ export class Compiler {
             // @TODO: handle options
             this.iseq.putobject({type: "RValue", value: Regexp.new(node.unescaped, "")})
         }
+    }
+
+    private visit_next_node(node: NextNode, used: boolean) {
+        if (node.arguments_) {
+            if (node.arguments_.arguments_.length == 1) {
+                this.visit(node.arguments_, true);
+            } else if (node.arguments_.arguments_.length > 1) {
+                this.visit(node.arguments_, true);
+                this.iseq.newarray(node.arguments_.arguments_.length);
+            }
+        } else {
+            this.iseq.putnil();
+        }
+
+        this.iseq.leave();
+    }
+
+    private visit_lambda_node(node: LambdaNode, used: boolean) {
+        const lambda_iseq = this.iseq.block_child_iseq(this.start_line_for_loc(node.location)!);
+
+        this.with_child_iseq(lambda_iseq, () => {
+            if (node.parameters) {
+                this.visit(node.parameters, true);
+            }
+
+            for (const local of node.locals) {
+                this.iseq.local_table.plain(local);
+            }
+
+            if (node.body) {
+                this.visit(node.body, true);
+            } else {
+                this.iseq.putnil();
+            }
+
+            this.iseq.leave();
+        });
+
+        // These two lines result in a send instruction that wraps the given block_iseq in a Proc object.
+        // The Proc gets pushed onto the stack and eventually passed to VMCore#lambda, which simply
+        // returns it.
+        this.iseq.putspecialobject(SpecialObjectType.VMCORE);
+        this.iseq.send(MethodCallData.create("lambda", 0, CallDataFlag.FCALL), lambda_iseq);
+
+        if (!used) {
+            this.iseq.pop();
+        }
+    }
+
+    private visit_index_or_write_node(node: IndexOrWriteNode, used: boolean) {
+        const already_set = this.iseq.label();
+        const done = this.iseq.label();
+
+        if (node.receiver) {
+            this.visit(node.receiver, true);
+        } else {
+            // not sure how we ever get here, since "[0] ||= 1" is invalid syntax
+            this.iseq.putself();
+        }
+
+        let arg_size = 0;
+
+        if (node.arguments_) {
+            this.visit(node.arguments_, true);
+            arg_size += node.arguments_.arguments_.length;
+        }
+
+        // dup receiver and arguments so we don't have to visit them again for []=
+        this.iseq.dupn(1 + arg_size);
+
+        // get value at index
+        // this.iseq.opt_aref(MethodCallData.create("[]", arg_size, CallDataFlag.FCALL, null));
+        this.iseq.send(MethodCallData.create("[]", arg_size, CallDataFlag.FCALL, null), null);
+
+        // branchif pops, so dup top instruction to return it; test for truthiness
+        this.iseq.dup();
+        this.iseq.branchif(already_set);
+
+        // remove duped instruction, since we won't be returning it
+        this.iseq.pop();
+
+        this.visit(node.value, true);
+
+        // +1 for assigned value, the last argument
+        // this.iseq.opt_aset(MethodCallData.create("[]=", arg_size + 1, CallDataFlag.FCALL, null));
+        this.iseq.send(MethodCallData.create("[]=", arg_size + 1, CallDataFlag.FCALL, null), null);
+        // this.iseq.pop();
+        this.iseq.jump(done);
+
+        this.iseq.push(already_set);
+
+        // []= was not called, so pop duped receiver and args
+        this.iseq.adjuststack(1 + arg_size);
+
+        this.iseq.push(done);
     }
 
     private find_local_or_throw(name: string, depth: number): Lookup {

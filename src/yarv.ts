@@ -5,7 +5,7 @@ import { Compiler } from "./compiler";
 import { loadPrism } from "@ruby/prism";
 import { Options } from "./options";
 import { RubyError } from "./errors";
-import { Onigmo, Regexp } from "./runtime/regexp";
+import { Onigmo, Regexp, init as regexp_init } from "./runtime/regexp";
 
 // @TODO: figure out how to load wasm modules in the browser
 import * as fs from "fs"
@@ -24,7 +24,7 @@ export async function init() {
         const onigmo = await WebAssembly.instantiate(onigmo_module, wasi.getImportObject());
         wasi.initialize(onigmo);
 
-        Regexp.onigmo = onigmo as unknown as Onigmo;
+        regexp_init(onigmo as unknown as Onigmo);
     }
 }
 

@@ -1,5 +1,5 @@
 import { InstructionSequence } from "./instruction_sequence";
-import { NoMethodError, RubyError } from "./errors";
+import { NoMethodError, NotImplementedError, RubyError } from "./errors";
 import { ExecutionContext } from "./execution_context";
 import { defineArrayBehaviorOn } from "./runtime/array";
 import { defineIntegerBehaviorOn } from "./runtime/integer";
@@ -515,11 +515,59 @@ defineKernelBehaviorOn(KernelModule.get_data<Module>());
 
         return found ? Qtrue : Qfalse;
     });
+
+    mod.define_native_method("attr_reader", (self: RValue, args: RValue[]): RValue => {
+        for (const arg of args) {
+            if (arg.klass != StringClass && arg.klass != SymbolClass) {
+                const arg_s = Object.send(arg, "inspect").get_data<string>();
+                throw new TypeError(`${arg_s} is not a symbol nor a string`);
+            }
+
+            const arg_s = arg.get_data<string>();
+            self.get_data<Class>().methods[arg_s] = new NativeCallable(arg_s, (self: RValue, _args: RValue[]): RValue => {
+                return self.iv_get(`@${arg_s}`);
+            });
+        }
+
+        return Qnil;
+    });
 });
 
 export const Qnil = new RValue(NilClass, null);
 export const Qtrue = new RValue(TrueClass, true);
 export const Qfalse = new RValue(FalseClass, false);
+
+export const VMCoreClass = Runtime.define_class("VMCore", ObjectClass, (klass: Class) => {
+    klass.define_native_method("hash_merge_kwd", (self: RValue, args: RValue[]): RValue => {
+        throw new NotImplementedError("hash_merge_kwd is not implemented yet");
+    });
+
+    klass.define_native_method("hash_merge_ptr", (self: RValue, args: RValue[]): RValue => {
+        throw new NotImplementedError("hash_merge_ptr is not implemented yet");
+    });
+
+    klass.define_native_method("set_method_alias", (self: RValue, args: RValue[]): RValue => {
+        throw new NotImplementedError("set_method_alias is not implemented yet");
+    });
+
+    klass.define_native_method("set_variable_alias", (self: RValue, args: RValue[]): RValue => {
+        throw new NotImplementedError("set_variable_alias is not implemented yet");
+    });
+
+    klass.define_native_method("set_postexe", (self: RValue, args: RValue[]): RValue => {
+        throw new NotImplementedError("set_postexe is not implemented yet");
+    });
+
+    klass.define_native_method("undef_method", (self: RValue, args: RValue[]): RValue => {
+        throw new NotImplementedError("undef_method is not implemented yet");
+    });
+
+    klass.define_native_method("lambda", (self: RValue, args: RValue[], block?: RValue): RValue => {
+        return block!;
+    });
+});
+
+export const VMCore = new RValue(VMCoreClass);
 
 NilClass.get_data<Class>().tap( (klass: Class) => {
     klass.define_native_method("inspect", (self: RValue): RValue => {

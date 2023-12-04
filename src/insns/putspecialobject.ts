@@ -1,6 +1,6 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Class, ClassClass, ConstBase, Qnil } from "../runtime";
+import { Class, ClassClass, VMCore } from "../runtime";
 
 export enum SpecialObjectType {
     VMCORE = 1,
@@ -20,7 +20,8 @@ export default class PutSpecialObject extends Instruction {
     call(context: ExecutionContext): ExecutionResult {
         switch (this.type) {
             case SpecialObjectType.VMCORE:
-                throw new Error("Special object type VMCORE is not currently supported");
+                context.stack.push(VMCore);
+                break;
 
             case SpecialObjectType.CBASE:
                 let value = context.frame!.self;

@@ -464,7 +464,11 @@ export class ExecutionContext {
     }
 
     pop(): RValue | undefined {
-        return this.stack.pop()
+        return this.stack.pop();
+    }
+
+    popn(n: number = 1): RValue[] {
+        return this.stack.splice(this.stack.length - n, n);
     }
 
     jump(label: Label): JumpResult {

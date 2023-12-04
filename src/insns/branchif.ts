@@ -21,8 +21,12 @@ export default class BranchIf extends Instruction {
         return null;
     }
 
-    does_branch(): boolean {
-        return true;
+    length() {
+        return 2;
+    }
+
+    branch_targets(): Label[] {
+        return [this.label];
     }
 
     does_fall_through(): boolean {
@@ -31,9 +35,5 @@ export default class BranchIf extends Instruction {
 
     reads(): number {
         return 1;
-    }
-
-    writes(): number {
-        return 0;
     }
 }

@@ -41,4 +41,21 @@ export const defineArrayBehaviorOn = (klass: Class) => {
 
         return Qnil;
     });
+
+    klass.define_native_method("[]", (self: RValue, args: RValue[], block?: RValue): RValue => {
+        const elements = self.get_data<Array>().elements;
+        const index = args[0].get_data<number>();
+
+        return elements[index] || Qnil;
+    });
+
+    // @TODO: fill array with Qnils
+    klass.define_native_method("[]=", (self: RValue, args: RValue[], block?: RValue): RValue => {
+        const elements = self.get_data<Array>().elements;
+        const index = args[0].get_data<number>();
+        const new_value = args[1];
+
+        elements[index] = new_value;
+        return new_value;
+    });
 };

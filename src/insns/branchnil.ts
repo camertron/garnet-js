@@ -22,10 +22,6 @@ export class BranchNil extends Instruction {
         return null;
     }
 
-    writes() {
-        return 2;
-    }
-
     reads() {
         return 1;
     }

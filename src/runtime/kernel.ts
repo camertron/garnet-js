@@ -41,6 +41,7 @@ export const defineKernelBehaviorOn = (mod: Module) => {
         Runtime.assert_type(path, StringClass);
 
         const path_str = path.get_data<string>();
+        console.log(path_str);
         const ec = ExecutionContext.current;
         const loaded_features = ec.globals['$"'].get_data<Array>().elements;
         const full_path = resolve_path(path_str);

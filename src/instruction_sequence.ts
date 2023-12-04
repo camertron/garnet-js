@@ -1,13 +1,16 @@
 import { BlockCallData, MethodCallData } from "./call_data";
+import AdjustStack from "./insns/adjuststack";
 import AnyToString from "./insns/any_to_string";
 import BranchIf from "./insns/branchif";
 import { BranchNil } from "./insns/branchnil";
 import BranchUnless from "./insns/branchunless";
 import ConcatStrings from "./insns/concat_strings";
 import DefineClass from "./insns/defineclass";
+import Defined, { DefinedType } from "./insns/defined";
 import DefineMethod from "./insns/definemethod";
 import DefineSMethod from "./insns/definesmethod";
 import Dup from "./insns/dup";
+import DupN from "./insns/dupn";
 import ExpandArray from "./insns/expandarray";
 import GetGlobal from "./insns/get_global";
 import GetConstant from "./insns/getconstant";
@@ -44,7 +47,7 @@ import TopN from "./insns/topn";
 import Instruction, { ValueType } from "./instruction";
 import { LocalTable, Lookup } from "./local_table";
 import { Options } from "./options";
-import { String as RubyString } from "./runtime";
+import { RValue, String as RubyString } from "./runtime";
 
 class Node {
     public instruction: Instruction;
@@ -354,6 +357,14 @@ export class InstructionSequence {
         this.push(new Dup());
     }
 
+    dupn(size: number) {
+        this.push(new DupN(size));
+    }
+
+    adjuststack(size: number) {
+        this.push(new AdjustStack(size));
+    }
+
     pop() {
         this.push(new Pop());
     }
@@ -392,6 +403,10 @@ export class InstructionSequence {
 
     setglobal(name: string) {
         this.push(new SetGlobal(name));
+    }
+
+    defined(type: DefinedType, name: string, message: RValue) {
+        this.push(new Defined(type, name, message));
     }
 
     newhash(length: number) {

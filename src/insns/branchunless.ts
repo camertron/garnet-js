@@ -21,8 +21,8 @@ export default class BranchUnless extends Instruction {
         return null;
     }
 
-    does_branch(): boolean {
-        return true;
+    branch_targets(): Label[] {
+        return [this.label];
     }
 
     does_fall_through(): boolean {
