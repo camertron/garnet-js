@@ -1,8 +1,5 @@
 import { RuntimeError } from "../errors";
 import { RValue, RegexpClass } from "../runtime";
-import * as wasmFFI from 'wasm-ffi';
-
-const { Wrapper, Struct, types } = wasmFFI.default;
 
 type Address = number;
 
@@ -15,7 +12,7 @@ type CompileInfoFields = {
     case_fold_flag: number;
 }
 
-class CompileInfoNew {
+class CompileInfo {
     private static size = 24;
     public address: Address;
 
@@ -23,8 +20,8 @@ class CompileInfoNew {
         this.address = address;
     }
 
-    static create(fields: CompileInfoFields): CompileInfoNew {
-        const start_addr = onigmo.exports.malloc(CompileInfoNew.size);
+    static create(fields: CompileInfoFields): CompileInfo {
+        const start_addr = onigmo.exports.malloc(this.size);
         const in_order = [
             fields.num_of_elements,
             fields.pattern_enc,
@@ -38,13 +35,9 @@ class CompileInfoNew {
             onig_memory.setUint32(start_addr + (i * 4), in_order[i], true);
         }
 
-        return new CompileInfoNew(start_addr);
+        return new CompileInfo(start_addr);
     }
 }
-
-const RegexpPtr = new Struct({
-    value: "uint32"
-});
 
 type ErrorInfoFields = {
     enc: Address;
@@ -52,7 +45,7 @@ type ErrorInfoFields = {
     par_end: Address;
 }
 
-class ErrorInfoNew {
+class ErrorInfo {
     private static size = 12;
     public address: Address;
 
@@ -60,8 +53,8 @@ class ErrorInfoNew {
         this.address = address;
     }
 
-    static create(fields: ErrorInfoFields): ErrorInfoNew {
-        const start_addr = onigmo.exports.malloc(ErrorInfoNew.size);
+    static create(fields: ErrorInfoFields): ErrorInfo {
+        const start_addr = onigmo.exports.malloc(this.size);
         const in_order = [
             fields.enc,
             fields.par,
@@ -72,7 +65,7 @@ class ErrorInfoNew {
             onig_memory.setUint32(start_addr + (i * 4), in_order[i], true);
         }
 
-        return new ErrorInfoNew(start_addr);
+        return new ErrorInfo(start_addr);
     }
 }
 
@@ -83,7 +76,7 @@ type RegionFields = {
     end: Address;
 }
 
-class RegionNew {
+class Region {
     private static size = 16;
     public address: Address;
 
@@ -107,8 +100,8 @@ class RegionNew {
         return onig_memory.getUint32(this.address + 12, true);
     }
 
-    static create(fields: RegionFields): RegionNew {
-        const start_addr = onigmo.exports.malloc(RegionNew.size);
+    static create(fields: RegionFields): Region {
+        const start_addr = onigmo.exports.malloc(this.size);
         const in_order = [
             fields.allocated,
             fields.num_regs,
@@ -120,7 +113,7 @@ class RegionNew {
             onig_memory.setUint32(start_addr + (i * 4), in_order[i], true);
         }
 
-        return new RegionNew(start_addr);
+        return new Region(start_addr);
     }
 
     beg_at(index: number): number {
@@ -131,6 +124,26 @@ class RegionNew {
     end_at(index: number): number {
         const addr = this.end + (index * 4);
         return onig_memory.getUint32(addr, true);
+    }
+}
+
+// Pointer to a pointer to a regexp_t
+class RegexpPtr {
+    private static size = 4;
+    public address: Address;
+
+    constructor(address: Address) {
+        this.address = address;
+    }
+
+    deref(): Address {
+        return onig_memory.getUint32(this.address, true);
+    }
+
+    static create() {
+        const start_addr = onigmo.exports.malloc(this.size);
+        onig_memory.setUint32(start_addr, 0, true);
+        return new RegexpPtr(start_addr);
     }
 }
 
@@ -147,6 +160,7 @@ class UTF16String {
             const mem = new Uint8Array(onigmo.exports.memory.buffer);
             let end = start;
 
+            // increment until null byte (0) encountered
             while (mem[end]) {
                 end ++;
             }
@@ -167,7 +181,16 @@ class UTF16String {
     }
 
     static create(str: string): UTF16String {
-        const bytes = utf16_bytes_from(str);
+        const bytes: number[] = [];
+
+        for (let i = 0; i < str.length; i++) {
+            const charCode = str.charCodeAt(i);
+            bytes.push(charCode & 0x00ff);
+            bytes.push((charCode & 0xff00) >> 8);
+        }
+
+        bytes.push(0);
+
         const start_addr = onigmo.exports.malloc(bytes.length);
         const mem = new Uint8Array(onigmo.exports.memory.buffer);
         mem.set(bytes, start_addr);
@@ -189,8 +212,6 @@ class ASCIIString {
         return String.fromCharCode(...new Uint8Array(pts));
     }
 }
-
-const OnigmoWrapper = new Wrapper({});
 
 type ErrorCode = number;
 type Position = number;
@@ -248,7 +269,7 @@ export const init = (onigmoWasm: Onigmo) => {
 
 export class Regexp {
     static new(pattern: string, options: string): RValue {
-        return new RValue(RegexpClass, compile(pattern, options));
+        return new RValue(RegexpClass, this.compile(pattern, options));
     }
 
     static make_compile_info(): CompileInfoFields {
@@ -260,6 +281,44 @@ export class Regexp {
             option: ONIG_OPTION_NONE,
             case_fold_flag: onigmo.exports.OnigDefaultCaseFoldFlag
         };
+    }
+
+    static compile(pat: string, options: string): Regexp {
+        const compile_info = CompileInfo.create(Regexp.make_compile_info());
+
+        const regexp_ptr = RegexpPtr.create();
+        const errorinfo = ErrorInfo.create({enc: 0, par: 0, par_end: 0});
+        const pattern = UTF16String.create(pat);
+
+        const error_code: ErrorCode = onigmo.exports.onig_new_deluxe(
+            regexp_ptr.address, pattern.start, pattern.end, compile_info.address, errorinfo.address
+        );
+
+        if (error_code == ONIG_NORMAL) {
+            const regexp: Address = regexp_ptr.deref();
+
+            onigmo.exports.free(compile_info.address);
+            onigmo.exports.free(regexp_ptr.address);
+            onigmo.exports.free(errorinfo.address);
+
+            return new Regexp(regexp);
+        } else {
+            const err_msg = Regexp.error_code_to_string(error_code, errorinfo);
+
+            onigmo.exports.free(compile_info.address);
+            onigmo.exports.free(regexp_ptr.address);
+            onigmo.exports.free(errorinfo.address);
+
+            throw new RuntimeError(err_msg);
+        }
+    }
+
+    static error_code_to_string(error_code: ErrorCode, errorinfo?: ErrorInfo): string {
+        const err_msg_ptr = onigmo.exports.malloc(ONIG_MAX_ERROR_MESSAGE_LEN);
+        const err_msg_len = onigmo.exports.onig_error_code_to_str(err_msg_ptr, error_code, errorinfo?.address || 0);
+        const err_msg = new ASCIIString(err_msg_ptr, err_msg_ptr + err_msg_len);
+        onigmo.exports.free(err_msg_ptr);
+        return err_msg.to_string();
     }
 
     private regexp: Address;
@@ -284,7 +343,7 @@ export class Regexp {
         onigmo.exports.onig_region_free(region_ptr, RegionFreeScheme.CONTENTS_ONLY);
 
         if (exit_code_or_position <= -2) {
-            const error_msg = error_code_to_string(exit_code_or_position);
+            const error_msg = Regexp.error_code_to_string(exit_code_or_position);
             throw new RuntimeError(error_msg);
         } else if (exit_code_or_position == ONIG_MISMATCH) {
             return null;
@@ -295,7 +354,7 @@ export class Regexp {
 
     scan(str: string, callback: (matches: [number, number][]) => boolean): void {
         const str_ptr = UTF16String.create(str);
-        const region = new RegionNew(onigmo.exports.onig_region_new());
+        const region = new Region(onigmo.exports.onig_region_new());
         let last_pos = 0;
 
         while (true) {
@@ -304,7 +363,7 @@ export class Regexp {
             );
 
             if (exit_code_or_position <= -2) {
-                const error_msg = error_code_to_string(exit_code_or_position);
+                const error_msg = Regexp.error_code_to_string(exit_code_or_position);
                 throw new RuntimeError(error_msg);
             } else if (exit_code_or_position == ONIG_MISMATCH) {
                 break;
@@ -326,58 +385,4 @@ export class Regexp {
         onigmo.exports.free(str_ptr.start);
         onigmo.exports.onig_region_free(region.address, RegionFreeScheme.CONTENTS_ONLY);
     }
-}
-
-const compile = (pat: string, options: string): Regexp => {
-    OnigmoWrapper.use(onigmo);
-
-    const compile_info = CompileInfoNew.create(Regexp.make_compile_info());
-
-    const regexp_ptr_ptr: Address = OnigmoWrapper.utils.writeStruct(new RegexpPtr());
-    const errorinfo = ErrorInfoNew.create({enc: 0, par: 0, par_end: 0});
-    const pattern = UTF16String.create(pat);
-
-    const error_code: ErrorCode = onigmo.exports.onig_new_deluxe(
-        regexp_ptr_ptr, pattern.start, pattern.end, compile_info.address, errorinfo.address
-    );
-
-    if (error_code == ONIG_NORMAL) {
-        const regexp_ptr: Address = OnigmoWrapper.utils.readPointer(regexp_ptr_ptr, types.pointer("uint32")).deref();
-
-        onigmo.exports.free(compile_info.address);
-        onigmo.exports.free(regexp_ptr_ptr);
-        onigmo.exports.free(errorinfo.address);
-
-        return new Regexp(regexp_ptr);
-    } else {
-        const err_msg = error_code_to_string(error_code, errorinfo);
-
-        onigmo.exports.free(compile_info.address);
-        onigmo.exports.free(regexp_ptr_ptr);
-        onigmo.exports.free(errorinfo.address);
-
-        throw new RuntimeError(err_msg);
-    }
-}
-
-const error_code_to_string = (error_code: ErrorCode, errorinfo?: ErrorInfoNew): string => {
-    const err_msg_ptr = onigmo.exports.malloc(ONIG_MAX_ERROR_MESSAGE_LEN);
-    const err_msg_len = onigmo.exports.onig_error_code_to_str(err_msg_ptr, error_code, errorinfo?.address || 0);
-    const err_msg = new ASCIIString(err_msg_ptr, err_msg_ptr + err_msg_len);
-    onigmo.exports.free(err_msg_ptr);
-    return err_msg.to_string();
-}
-
-const utf16_bytes_from = (str: string): Uint8Array => {
-    const result: number[] = [];
-
-    for (let i = 0; i < str.length; i++) {
-        const charCode = str.charCodeAt(i);
-        result.push(charCode & 0x00ff);
-        result.push((charCode & 0xff00) >> 8);
-    }
-
-    result.push(0);
-
-    return new Uint8Array(result);
 }
