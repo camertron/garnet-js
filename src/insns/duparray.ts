@@ -15,11 +15,11 @@ export default class DupArray extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        context.stack.push(Array.new([...this.values]));
+        context.push(Array.new([...this.values]));
         return null;
     }
 
-    number(): number {
+    length(): number {
         return 2;
     }
 

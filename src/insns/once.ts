@@ -17,13 +17,13 @@ export default class Once extends Instruction {
     call(context: ExecutionContext): ExecutionResult {
         if (this.executed) return null;
 
-        context.stack.push(context.run_block_frame(this.iseq, context.frame!));
+        context.push(context.run_block_frame(this.iseq, context.frame!, []));
         this.executed = true;
 
         return null;
     }
 
-    number(): number {
+    length(): number {
         return 3;
     }
 

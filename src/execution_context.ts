@@ -1,9 +1,9 @@
 import { MethodCallData } from "./call_data";
-import { RubyError } from "./errors";
+import { LocalJumpError, RubyError } from "./errors";
 import { BlockFrame, ClassFrame, Frame, MethodFrame, RescueFrame, TopFrame } from "./frame";
 import Instruction from "./instruction";
 import { CatchBreak, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
-import { Array as RubyArray, ModuleClass, Class, ClassClass, Object, RValue, String, Qnil, STDOUT, IO } from "./runtime";
+import { Array as RubyArray, ModuleClass, Class, ClassClass, Object, RValue, String, STDOUT, IO, Qnil } from "./runtime";
 
 export type ExecutionResult = JumpResult | LeaveResult | null;
 
@@ -34,13 +34,13 @@ class ThrownError extends Error {
     }
 }
 
-class ReturnError extends ThrownError {
+export class ReturnError extends ThrownError {
 }
 
-class BreakError extends ThrownError {
+export class BreakError extends ThrownError {
 }
 
-class NextError extends ThrownError {
+export class NextError extends ThrownError {
 }
 
 // This is the object that gets passed around all of the instructions as they
@@ -49,7 +49,7 @@ export class ExecutionContext {
     static current: ExecutionContext;
 
     // The system stack that tracks values through the execution of the program.
-    public stack: RValue[];
+    private stack: RValue[];
 
     // The global variables accessible to the program. These mirror the runtime
     // global variables if they have not been overridden.
@@ -62,8 +62,9 @@ export class ExecutionContext {
         this.stack = [];
 
         this.globals = {
-            '$:': RubyArray.new(),
-            '$"': RubyArray.new()
+            '$:': RubyArray.new(),  // load path
+            '$"': RubyArray.new(),  // loaded features
+            '$,': Qnil,             // field separator for print and Array#join
         };
     }
 
@@ -98,7 +99,7 @@ export class ExecutionContext {
         // Next, set up the local table for the frame. This is actually incorrect
         // as it could use the values already on the stack, but for now we're
         // just doing this for simplicity.
-        this.stack.push(...Array(frame.iseq.local_table.size()).fill(null));
+        this.stack.push(...Array(frame.iseq.local_table.size()).fill(Qnil));
 
         // Yield so that some frame-specific setup can be done.
         const start_label = cb ? cb() : null;
@@ -134,14 +135,21 @@ export class ExecutionContext {
                         result = (insn as Instruction).call(this);
                     } catch (error) {
                         if (error instanceof ReturnError) {
-                            if (frame.iseq.type != "method") {
-                                throw new Error(`Expected frame type to be 'method', was '${frame.iseq.type}' instead`);
+                            let method_frame: Frame = this.frame;
+
+                            while (method_frame.iseq.type != "method") {
+                                if (!method_frame.parent) break;
+                                method_frame = method_frame.parent;
                             }
 
-                            this.stack.splice(frame.stack_index);
-                            this.frame = frame.parent;
+                            if (!method_frame) {
+                                throw new LocalJumpError("unexpected return");
+                            }
 
-                            return error.value;
+                            this.stack.splice(method_frame.stack_index);
+                            this.frame = method_frame;
+
+                            throw error;
                         } else if (error instanceof BreakError) {
                             if (frame.iseq.type != "block") {
                                 throw new Error(`Expected frame type to be 'block', was '${frame.iseq.type}' instead`);
@@ -156,7 +164,7 @@ export class ExecutionContext {
                             this.stack.splice(frame.stack_index + frame.iseq.local_table.size() + catch_entry.restore_sp)
                             this.frame = frame;
 
-                            frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.exit_label);
+                            frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.cont_label);
                             this.stack.push(result = error.value);
                         } else if (error instanceof NextError) {
                             if (frame.iseq.type != "block") {
@@ -172,7 +180,7 @@ export class ExecutionContext {
                             this.stack.splice(frame.stack_index + frame.iseq.local_table.size() + catch_entry.restore_sp);
                             this.frame = frame;
 
-                            frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.exit_label);
+                            frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.cont_label);
                             result = error.value
                             this.stack.push(result);
                         } else {
@@ -189,7 +197,7 @@ export class ExecutionContext {
                                 this.stack.splice!(frame.stack_index + frame.iseq.local_table.size() + catch_entry.restore_sp)
                                 this.frame = frame;
 
-                                frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.exit_label);
+                                frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.cont_label);
                                 result = this.run_rescue_frame(catch_entry.iseq!, frame, error.to_rvalue());
                                 this.stack.push(result);
                             } else {
@@ -255,11 +263,21 @@ export class ExecutionContext {
         return current;
     }
 
+    frame_svar(): Frame | null {
+      let current = this.frame;
+
+      while (current instanceof BlockFrame) {
+        current = current.parent;
+      }
+
+      return current;
+    }
+
     run_top_frame(iseq: InstructionSequence): RValue {
         return this.run_frame(new TopFrame(iseq));
     }
 
-    run_block_frame(iseq: InstructionSequence, frame: Frame, ...args: any[]): RValue {
+    run_block_frame(iseq: InstructionSequence, frame: Frame, args: RValue[]): RValue {
         return this.run_frame(new BlockFrame(iseq, frame, this.stack.length), () => {
             return this.setup_arguments(iseq, args, null);
         });
@@ -277,12 +295,21 @@ export class ExecutionContext {
             this.stack.length,
             self,
             name,
+            args,
             block
         );
 
-        return this.run_frame(method_frame, () => {
-            return this.setup_arguments(iseq, args, block);
-        });
+        try {
+            return this.run_frame(method_frame, () => {
+                return this.setup_arguments(iseq, args, block);
+            });
+        } catch (e) {
+            if (e instanceof ReturnError) {
+                return e.value;
+            } else {
+                throw e;
+            }
+        }
     }
 
     run_rescue_frame(iseq: InstructionSequence, frame: Frame, error: RValue): RValue {
@@ -295,7 +322,7 @@ export class ExecutionContext {
     private find_catch_entry<T extends CatchEntry>(frame: Frame, type: new (...args: any[]) => T) {
         const iseq = frame.iseq;
 
-        for (const catch_entry of iseq.catch_table) {
+        for (const catch_entry of iseq.catch_table.entries) {
             if (!(catch_entry instanceof type)) {
                 continue;
             }
@@ -342,16 +369,14 @@ export class ExecutionContext {
         let local_index = 0;
         let start_label: Label | null = null;
 
-        const post_num = iseq.argument_options.post_num;
+        const post_num = iseq.argument_options.post_num || 0;
 
         // First, set up all of the leading arguments. These are positional and
         // required arguments at the start of the argument list.
-        const lead_num = iseq.argument_options.lead_num;
-        if (lead_num) {
-            for (let i = 0; i < lead_num; i ++) {
-                this.local_set(local_index, 0, locals.shift()!);
-                local_index ++;
-            }
+        const lead_num = iseq.argument_options.lead_num || 0;
+        for (let i = 0; i < lead_num; i ++) {
+            this.local_set(local_index, 0, locals.shift()!);
+            local_index ++;
         }
 
         // Next, set up all of the optional arguments. The opt array contains
@@ -384,9 +409,9 @@ export class ExecutionContext {
 
         // If there is a splat argument, then we'll set that up here. It will
         // grab up all of the remaining positional arguments.
-        if (iseq.argument_options.rest_start > 0) {
-            if (iseq.argument_options.post_start > 0) {
-                const length = locals.length - iseq.argument_options.post_num;
+        if (iseq.argument_options.rest_start != null && iseq.argument_options.rest_start > 0) {
+            if (iseq.argument_options.post_start != null && iseq.argument_options.post_start > 0) {
+                const length = locals.length - (iseq.argument_options.post_num || 0);
                 this.local_set(local_index, 0, RubyArray.new(locals.splice(0, length)));
                 // locals = locals.slice(length);
             } else {
@@ -399,11 +424,9 @@ export class ExecutionContext {
 
         // Next, set up any post arguments. These are positional arguments that
         // come after the splat argument.
-        if (post_num) {
-            for (let i = 0; i < post_num; i ++) {
-                this.local_set(local_index, 0, locals.shift()!);
-                local_index ++;
-            }
+        for (let i = 0; i < post_num; i ++) {
+            this.local_set(local_index, 0, locals.shift()!);
+            local_index ++;
         }
 
         // @TODO: support keyword arguments
@@ -456,8 +479,8 @@ export class ExecutionContext {
         //     }
         // }
 
-        if (iseq.argument_options.block_start) {
-            this.local_set(local_index, 0, block!);
+        if (iseq.argument_options.block_start != null) {
+            this.local_set(local_index, 0, block ? block : Qnil);
         }
 
         return start_label;
@@ -467,8 +490,28 @@ export class ExecutionContext {
         return this.stack.pop();
     }
 
+    push(...values: RValue[]): void {
+        this.stack.push(...values);
+    }
+
+    peek(): RValue {
+        return this.stack[this.stack.length - 1];
+    }
+
+    get stack_len(): number {
+        return this.stack.length;
+    }
+
     popn(n: number = 1): RValue[] {
         return this.stack.splice(this.stack.length - n, n);
+    }
+
+    topn(n: number): RValue {
+        return this.stack[this.stack_len - n - 1];
+    }
+
+    setn(n: number, value: RValue): void {
+        this.stack[this.stack_len - n - 1] = value;
     }
 
     jump(label: Label): JumpResult {

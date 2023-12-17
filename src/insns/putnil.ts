@@ -4,7 +4,7 @@ import { Qnil } from "../runtime";
 
 export default class PutNil extends Instruction {
     call(context: ExecutionContext): ExecutionResult {
-        context.stack.push(Qnil);
+        context.push(Qnil);
         return null;
     }
 

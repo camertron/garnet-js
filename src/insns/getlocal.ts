@@ -14,11 +14,11 @@ export default class GetLocal extends Instruction {
 
     call(context: ExecutionContext): ExecutionResult {
         const value = context.local_get(this.index, this.depth);
-        context.stack.push(value);
+        context.push(value);
         return null;
     }
 
-    number(): number {
+    length(): number {
         return 2;
     }
 

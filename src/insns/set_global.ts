@@ -11,12 +11,12 @@ export default class SetGlobal extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        const value = context.stack.pop()!;
+        const value = context.pop()!;
         context.globals[this.name] = value;
         return null;
     }
 
-    number(): number {
+    length(): number {
         return 2;
     }
 

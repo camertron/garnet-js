@@ -13,7 +13,7 @@ export default class SetLocal extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        const value = context.stack.pop()!;
+        const value = context.pop()!;
         context.local_set(this.index, this.depth, value);
         return null;
     }
@@ -22,7 +22,7 @@ export default class SetLocal extends Instruction {
         return 1;
     }
 
-    number(): number {
+    length(): number {
         return 2;
     }
 }

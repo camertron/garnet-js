@@ -12,8 +12,8 @@ export default class SetConstant extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        const parent = context.stack.pop()!;
-        const value = context.stack.pop()!;
+        const parent = context.pop()!;
+        const value = context.pop()!;
 
         parent.get_data<Module>().constants[this.name] = value;
 
@@ -24,7 +24,7 @@ export default class SetConstant extends Instruction {
         return 2;
     }
 
-    number(): number {
+    length(): number {
         return 2;
     }
 }

@@ -12,7 +12,8 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "command": "npx tsx ${workspaceFolder}/test.ts"
+            "command": "RUBY_EXE=bin/ruby bin/ruby -I /Users/camertron/workspace/ruby/mspec/lib -C ruby/spec /Users/camertron/workspace/ruby/mspec/bin/mspec"
+            // "command": "npx tsx ${workspaceFolder}/tester2.ts"
         }
     ]
 }

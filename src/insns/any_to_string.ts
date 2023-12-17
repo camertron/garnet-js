@@ -4,15 +4,15 @@ import { Object, Class, StringClass, String } from "../runtime";
 
 export default class AnyToString extends Instruction {
     call(context: ExecutionContext): ExecutionResult {
-        const value = context.stack.pop()!;
-        const original = context.stack.pop()!;
+        const value = context.pop()!;
+        const original = context.pop()!;
 
         if (value.klass == StringClass) {
-            context.stack.push(value);
+            context.push(value);
         } else {
             const class_name = original.klass.get_data<Class>().name;
             const name = class_name ? class_name : "Class";
-            context.stack.push(String.new(`#<${name}:${Object.object_id_to_str(original.object_id)}>`));
+            context.push(String.new(`#<${name}:${Object.object_id_to_str(original.object_id)}>`));
         }
 
         return null;

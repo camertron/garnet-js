@@ -2,16 +2,16 @@ import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
 export default class TopN extends Instruction {
-    public count: number;
+    public index: number;
 
-    constructor(count: number) {
+    constructor(index: number) {
         super();
 
-        this.count = count;
+        this.index = index;
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        context.stack.push(context.stack[-this.number - 1]);
+        context.push(context.topn(this.index));
         return null;
     }
 

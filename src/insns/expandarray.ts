@@ -20,7 +20,7 @@ export default class ExpandArray extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        let object = context.stack.pop()!;
+        let object = context.pop()!;
 
         object = (() => {
             if (object.klass == ArrayClass) {
@@ -56,7 +56,7 @@ export default class ExpandArray extends Instruction {
                 values.push(object);
             }
 
-            values.forEach((item) => context.stack.push(item));
+            values.forEach((item) => context.push(item));
         } else {
             const values = [];
 
@@ -75,7 +75,7 @@ export default class ExpandArray extends Instruction {
             }
 
             for (let i = values.length - 1; i >= 0; i --) {
-                context.stack.push(values[i]!);
+                context.push(values[i]!);
             }
         }
 

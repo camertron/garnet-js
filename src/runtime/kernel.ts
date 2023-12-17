@@ -1,8 +1,7 @@
-import { Compiler } from "../compiler";
-import { LoadError, RubyError, TypeError } from "../errors";
-import { ExecutionContext } from "../execution_context";
-import { Array, Module, Object, Qfalse, Qnil, Qtrue, RValue, StringClass, String, Runtime, ClassClass, ModuleClass, Class } from "../runtime";
-import { vmfs } from "../vmfs";
+import { isNode } from "../env";
+import { ArgumentError, RubyError, RuntimeError, TypeError } from "../errors";
+import { Array, Module, Object, Qfalse, Qnil, Qtrue, RValue, StringClass, String, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, ArrayClass } from "../runtime";
+import { Integer } from "./integer";
 
 const kernel_puts = (_self: RValue, args: RValue[]): RValue => {
     for (let arg of args) {
@@ -12,58 +11,40 @@ const kernel_puts = (_self: RValue, args: RValue[]): RValue => {
     return Qnil;
 };
 
-const find_on_load_path = (path: string): string | null => {
-    const ec = ExecutionContext.current;
-    const load_paths = ec.globals["$:"].get_data<Array>().elements;
+export class Kernel {
+    public static exit_handlers: RValue[] = [];
 
-    for(let load_path of load_paths) {
-        const full_path = vmfs.join_paths(load_path.get_data<string>(), `${path}.rb`);
+    static is_a(obj: RValue, mod: RValue): boolean {
+        let found = false;
 
-        if (vmfs.path_exists(full_path)) {
-            return full_path;
-        }
+        Runtime.each_unique_ancestor(obj.klass, (ancestor) => {
+            if (mod == ancestor) {
+                found = true;
+                return false;
+            }
+
+            return true;
+        });
+
+        return found;
     }
-
-    return null;
-};
-
-const resolve_path = (path: string): string | null => {
-    // TODO: support relative paths
-    return find_on_load_path(path);
 }
 
-export const defineKernelBehaviorOn = (mod: Module) => {
+export const init = async () => {
+    const mod = KernelModule.get_data<Module>();
+    let child_process: unknown;
+
+    if (isNode) {
+        child_process = await import("child_process");
+    }
+
     mod.define_native_method("puts", kernel_puts);
     mod.define_native_singleton_method("puts", kernel_puts);
 
     mod.define_native_method("require", (_self: RValue, args: RValue[]): RValue => {
         const path = args[0];
         Runtime.assert_type(path, StringClass);
-
-        const path_str = path.get_data<string>();
-        console.log(path_str);
-        const ec = ExecutionContext.current;
-        const loaded_features = ec.globals['$"'].get_data<Array>().elements;
-        const full_path = resolve_path(path_str);
-
-        if (!full_path) {
-            throw new LoadError(`cannot load such file -- ${path_str}`);
-        }
-
-        // required files are only evaluated once
-        for (const loaded_feature of loaded_features) {
-            if (loaded_feature.get_data<string>() == full_path) {
-                return Qfalse;
-            }
-        }
-
-        const code = vmfs.read(full_path);
-        const insns = Compiler.compile_string(code.toString(), full_path);
-        ec.run_top_frame(insns);
-
-        loaded_features.push(String.new(full_path));
-
-        return Qtrue;
+        return Runtime.require(path.get_data<string>()) ? Qtrue : Qfalse;
     });
 
     mod.define_native_method("===", (self: RValue, args: RValue[]): RValue => {
@@ -80,22 +61,15 @@ export const defineKernelBehaviorOn = (mod: Module) => {
         }
     });
 
+    mod.define_native_method("<=>", (_self: RValue, _args: RValue[]): RValue => {
+        return Qnil;
+    });
+
     mod.define_native_method("is_a?", (self: RValue, args: RValue[]): RValue => {
         const target = args[0];
 
         if (target.klass == ClassClass || target.klass == ModuleClass) {
-            let found = false;
-
-            Runtime.each_unique_ancestor(self.klass, (ancestor) => {
-                if (target == ancestor) {
-                    found = true;
-                    return false;
-                }
-
-                return true;
-            });
-
-            return found ? Qtrue : Qfalse;
+            return Kernel.is_a(self, target) ? Qtrue : Qfalse;
         } else {
             throw new TypeError("class or module required");
         }
@@ -112,5 +86,58 @@ export const defineKernelBehaviorOn = (mod: Module) => {
         } else {
             return Qfalse;
         }
+    });
+
+    mod.define_native_method("at_exit", (self: RValue, args: RValue[], block?: RValue): RValue => {
+        if (block) {
+            Kernel.exit_handlers.unshift(block);
+            return block;
+        }
+
+        throw new ArgumentError("at_exit called without a block");
+    });
+
+    mod.define_native_method("`", (self: RValue, args: RValue[], block?: RValue): RValue => {
+        if (!isNode) {
+            throw new RuntimeError("backticks are only supported in nodejs");
+        }
+
+        const result = (child_process as typeof import("child_process")).spawnSync(args[0].get_data<string>());
+        return String.new(result.stdout.toString('utf-8')); // hopefully utf-8 is ok
+    });
+
+    mod.define_native_method("class", (self: RValue): RValue => {
+        return self.klass;
+    });
+
+    mod.define_native_method("Integer", (self: RValue, args: RValue[]): RValue => {
+        if (args[0].klass == IntegerClass) {
+            return args[0];
+        } else if (args[0].klass == StringClass) {
+            const str = args[0].get_data<string>();
+
+            if (str.match(/^\d+$/)) {
+                return Integer.get(parseInt(str));
+            }
+        }
+
+        const arg_str = Object.send(args[0], "inspect").get_data<string>();
+        throw new ArgumentError(`invalid value for Integer(): ${arg_str}`);
+    });
+
+    mod.define_native_method("Array", (self: RValue, args: RValue[]): RValue => {
+        if (args[0].klass == ArrayClass) {
+            return args[0];
+        } else if (Object.send(args[0], "respond_to?", [Runtime.intern("to_ary")]).is_truthy()) {
+            return Object.send(args[0], "to_ary");
+        } else if (Object.send(args[0], "respond_to?", [Runtime.intern("to_a")]).is_truthy()) {
+            return Object.send(args[0], "to_a");
+        } else {
+            return Array.new([args[0]]);
+        }
+    });
+
+    mod.define_native_method("instance_variable_get", (self: RValue, args: RValue[]): RValue => {
+        return self.iv_get(Object.send(args[0], "to_s").get_data<string>());
     });
 };

@@ -1,17 +1,29 @@
 import { InstructionSequence } from "./instruction_sequence";
-import { NoMethodError, NotImplementedError, RubyError } from "./errors";
+import { Compiler } from "./compiler";
+import { LoadError, NoMethodError, NotImplementedError } from "./errors";
 import { ExecutionContext } from "./execution_context";
 import { defineArrayBehaviorOn } from "./runtime/array";
-import { defineIntegerBehaviorOn } from "./runtime/integer";
+import { Integer, defineIntegerBehaviorOn } from "./runtime/integer";
 import { defineSymbolBehaviorOn } from "./runtime/symbol";
 import { defineStringBehaviorOn } from "./runtime/string";
-import { defineKernelBehaviorOn } from "./runtime/kernel";
 import { Dir } from "./runtime/dir";
 import { vmfs } from "./vmfs";
 import { defineProcBehaviorOn } from "./runtime/proc";
 import { defineHashBehaviorOn } from "./runtime/hash";
 import { isNode } from "./env";
 import { defineFloatBehaviorOn } from "./runtime/float";
+import { defineModuleBehaviorOn } from "./runtime/module";
+import { init as kernelInit } from "./runtime/kernel";
+import { init as errorInit } from "./errors";
+import { init as processInit } from "./runtime/process";
+import { init as envInit } from "./runtime/env";
+import { init as fileInit } from "./runtime/file";
+import { init as dirInit } from "./runtime/dir";
+import { init as comparableInit } from "./runtime/comparable";
+import { init as numericInit } from "./runtime/numeric";
+import { init as rb_config_init } from "./stdlib/rbconfig"
+import { init as enumerableInit } from "./runtime/enumerable";
+import { init as rangeInit } from "./runtime/range";
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
@@ -23,9 +35,15 @@ type SymbolType = {
     name: string
 }
 
+type NativeExtension = {
+    init_fn: () => void,
+    inited: boolean
+}
+
 export class Runtime {
     static constants: {[key: string]: RValue} = {};
     static symbols: WeakMap<SymbolType, RValue> = new WeakMap();
+    static native_extensions: {[key: string]: NativeExtension} = {};
 
     static define_module(name: string, cb?: ModuleDefinitionCallback): RValue {
         if (!this.constants[name]) {
@@ -178,7 +196,70 @@ export class Runtime {
             throw new TypeError(`no implicit conversion of ${module.name} into ${obj.klass.get_data<Module>().name}`);
         }
     }
+
+    static require(path: string): boolean {
+        console.log(path);
+        const ec = ExecutionContext.current;
+        const loaded_features = ec.globals['$"'].get_data<Array>().elements;
+        const full_path = this.find_on_load_path(path);
+
+        if (!full_path) {
+            if (this.native_extensions[path]) {
+                return this.load_native_extension(path);
+            }
+
+            throw new LoadError(`cannot load such file -- ${path}`);
+        }
+
+        // required files are only evaluated once
+        for (const loaded_feature of loaded_features) {
+            if (loaded_feature.get_data<string>() == full_path) {
+                return false;
+            }
+        }
+
+        const code = vmfs.read(full_path);
+        const insns = Compiler.compile_string(code.toString(), full_path);
+        ec.run_top_frame(insns);
+
+        loaded_features.push(String.new(full_path));
+
+        return true;
+    }
+
+    private static find_on_load_path(path: string): string | null {
+        const ec = ExecutionContext.current;
+        const load_paths = ec.globals["$:"].get_data<Array>().elements;
+
+        for(let load_path of load_paths) {
+            const full_path = vmfs.join_paths(load_path.get_data<string>(), `${path}.rb`);
+
+            if (vmfs.path_exists(full_path)) {
+                return full_path;
+            }
+        }
+
+        return null;
+    };
+
+    static register_native_extension(require_path: string, init_fn: () => void) {
+        this.native_extensions[require_path] = { init_fn, inited: false };
+    }
+
+    static load_native_extension(require_path: string): boolean {
+        const ext = this.native_extensions[require_path];
+
+        if (ext.inited) {
+            return false;
+        } else {
+            ext.inited = true;
+            this.native_extensions[require_path].init_fn();
+            return true;
+        }
+    }
 }
+
+Runtime.register_native_extension("rbconfig", rb_config_init);
 
 export enum Visibility {
     public,
@@ -187,29 +268,21 @@ export enum Visibility {
 };
 
 export abstract class Callable {
-    protected visibility_: Visibility;
+    public visibility: Visibility;
 
     abstract call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue): RValue;
-
-    get visibility(): Visibility {
-        return this.visibility_;
-    }
-
-    set visibility(vis: Visibility) {
-        this.visibility_ = vis;
-    }
 }
 
 export class InterpretedCallable extends Callable {
     private name: string;
     private iseq: InstructionSequence;
 
-    constructor(name: string, iseq: InstructionSequence) {
+    constructor(name: string, iseq: InstructionSequence, visibility: Visibility) {
         super();
 
         this.name = name;
         this.iseq = iseq;
-        this.visibility_ = Visibility.public;
+        this.visibility = visibility;
     }
 
     call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue): RValue {
@@ -218,34 +291,17 @@ export class InterpretedCallable extends Callable {
 }
 
 export class NativeCallable extends Callable {
-    private name: string;
     private method: NativeMethod;
 
-    constructor(name: string, method: NativeMethod) {
+    constructor(method: NativeMethod, visibility: Visibility = Visibility.public) {
         super();
 
-        this.name = name;
         this.method = method;
-        this.visibility_ = Visibility.public;
+        this.visibility = visibility;
     }
 
     call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue): RValue {
         return this.method(receiver, args, block);
-    }
-}
-
-export class CallableAlias extends Callable {
-    private alias: string;
-
-    constructor(alias: string) {
-        super();
-
-        this.alias = alias;
-        this.visibility_ = Visibility.public;
-    }
-
-    call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue): RValue {
-        return Object.send(receiver, this.alias, args, block);
     }
 }
 
@@ -257,6 +313,9 @@ export class Module {
     public prepends: RValue[];
     public singleton_class?: RValue;
     public nesting_parent?: RValue;
+    public default_visibility: Visibility = Visibility.public;
+
+    private name_rval_: RValue;
 
     constructor(name: string | null, nesting_parent?: RValue) {
         this.name = name;
@@ -268,11 +327,11 @@ export class Module {
     }
 
     define_method(name: string, body: InstructionSequence) {
-        this.methods[name] = new InterpretedCallable(name, body);
+        this.methods[name] = new InterpretedCallable(name, body, this.default_visibility);
     }
 
-    define_native_method(name: string, body: NativeMethod) {
-        this.methods[name] = new NativeCallable(name, body);
+    define_native_method(name: string, body: NativeMethod, visibility?: Visibility) {
+        this.methods[name] = new NativeCallable(body, visibility);
     }
 
     define_singleton_method(name: string, body: InstructionSequence) {
@@ -284,7 +343,7 @@ export class Module {
     }
 
     alias_method(new_name: string, existing_name: string) {
-        this.methods[new_name] = new CallableAlias(existing_name);
+        this.methods[new_name] = this.methods[existing_name];
     }
 
     find_constant(name: string, inherit: boolean = true): RValue | null {
@@ -325,7 +384,7 @@ export class Module {
 
     get_singleton_class(): RValue {
         if (!this.singleton_class) {
-            const singleton_klass = new Class(`Class:${this.name}`, ObjectClass);
+            const singleton_klass = new Class(`Class:${this.name}`, ModuleClass);
             this.singleton_class = new RValue(ClassClass.klass, singleton_klass);
         }
 
@@ -339,6 +398,13 @@ export class Module {
     inspect(): string {
         return `module ${this.name}`;
     }
+
+    get name_rval(): RValue {
+        if (!this.name) return Qnil;
+        if (this.name_rval_) return this.name_rval_;
+        this.name_rval_ = String.new(this.name);
+        return this.name_rval_;
+    }
 }
 
 let next_object_id = 0;
@@ -348,6 +414,9 @@ export class RValue {
     public ivars: Map<string, RValue>;
     public data: any;
     public object_id: number;
+
+    // methods defined only on the instance
+    public methods: {[key: string]: Callable} = {};
 
     constructor(klass: RValue, data?: any) {
         this.klass = klass;
@@ -441,13 +510,16 @@ export const ClassClass       = Runtime.constants["Class"]       = new RValue(nu
 ClassClass.klass = ClassClass;
 
 export const ModuleClass      = Runtime.constants["Module"]      = new RValue(ClassClass, module_class);
+class_class.superclass = ModuleClass;
+
 export const BasicObjectClass = Runtime.constants["BasicObject"] = new RValue(ClassClass, basic_object_class);
 export const ObjectClass      = Runtime.constants["Object"]      = new RValue(ClassClass, object_class);
 export const StringClass      = Runtime.constants["String"]      = new RValue(ClassClass, new Class("String", ObjectClass));
 export const ArrayClass       = Runtime.constants["Array"]       = new RValue(ClassClass, new Class("Array", ObjectClass));
 export const HashClass        = Runtime.constants["Hash"]        = new RValue(ClassClass, new Class("Hash", ObjectClass));
-export const IntegerClass     = Runtime.constants["Integer"]     = new RValue(ClassClass, new Class("Integer", ObjectClass));
-export const FloatClass       = Runtime.constants["Float"]       = new RValue(ClassClass, new Class("Float", ObjectClass));
+export const NumericClass     = Runtime.constants["Numeric"]     = new RValue(ClassClass, new Class("Numeric", ObjectClass));
+export const IntegerClass     = Runtime.constants["Integer"]     = new RValue(ClassClass, new Class("Integer", NumericClass));
+export const FloatClass       = Runtime.constants["Float"]       = new RValue(ClassClass, new Class("Float", NumericClass));
 export const SymbolClass      = Runtime.constants["Symbol"]      = new RValue(ClassClass, new Class("Symbol", ObjectClass));
 export const ProcClass        = Runtime.constants["Proc"]        = new RValue(ClassClass, new Class("Proc", ObjectClass));
 export const NilClass         = Runtime.constants["NilClass"]    = new RValue(ClassClass, new Class("NilClass", ObjectClass));
@@ -466,72 +538,7 @@ export { ConstBase };
 
 export const Main = new RValue(ObjectClass);
 
-defineKernelBehaviorOn(KernelModule.get_data<Module>());
-
-(ModuleClass.get_data<Module>()).tap( (mod: Module) => {
-    mod.define_native_method("inspect", (self: RValue): RValue => {
-        const mod = self.get_data<Module>();
-
-        if (mod.name) {
-            return String.new(mod.name);
-        } else {
-            return String.new(`#<Module:${Object.object_id_to_str(self.object_id)}>`);
-        }
-    });
-
-    mod.define_native_method("ancestors", (self: RValue): RValue => {
-        const result: RValue[] = [];
-
-        Runtime.each_unique_ancestor(self, (ancestor: RValue): boolean => {
-            result.push(ancestor);
-            return true;
-        });
-
-        return Array.new(result);
-    });
-
-    mod.define_native_method("include", (self: RValue, args: RValue[]): RValue => {
-        const mod_to_include = args[0];
-        Runtime.assert_type(mod_to_include, ModuleClass);
-        self.get_data<Module>().include(mod_to_include);
-        return self;
-    });
-
-    mod.define_native_method("private", (self: RValue, args: RValue[]): RValue => {
-        // @TODO: handle calling .private with no args
-        Runtime.assert_type(args[0], SymbolClass);
-        const mtd_name = args[0].get_data<string>();
-        self.get_data<Module>().methods[mtd_name].visibility = Visibility.private;
-        return Qnil;
-    });
-
-    mod.define_native_method("const_defined?", (self: RValue, args: RValue[]): RValue => {
-        if (args[0].klass != StringClass && args[0].klass != SymbolClass) {
-            Runtime.assert_type(args[0], StringClass);
-        }
-
-        const c = args[0].get_data<string>();
-        const found = self.klass.get_data<Class>().find_constant(c);
-
-        return found ? Qtrue : Qfalse;
-    });
-
-    mod.define_native_method("attr_reader", (self: RValue, args: RValue[]): RValue => {
-        for (const arg of args) {
-            if (arg.klass != StringClass && arg.klass != SymbolClass) {
-                const arg_s = Object.send(arg, "inspect").get_data<string>();
-                throw new TypeError(`${arg_s} is not a symbol nor a string`);
-            }
-
-            const arg_s = arg.get_data<string>();
-            self.get_data<Class>().methods[arg_s] = new NativeCallable(arg_s, (self: RValue, _args: RValue[]): RValue => {
-                return self.iv_get(`@${arg_s}`);
-            });
-        }
-
-        return Qnil;
-    });
-});
+defineModuleBehaviorOn(ModuleClass.get_data<Module>());
 
 export const Qnil = new RValue(NilClass, null);
 export const Qtrue = new RValue(TrueClass, true);
@@ -573,17 +580,49 @@ NilClass.get_data<Class>().tap( (klass: Class) => {
     klass.define_native_method("inspect", (self: RValue): RValue => {
         return String.new("nil");
     });
+
+    klass.define_native_method("to_i", (self: RValue): RValue => {
+        return Integer.get(0);
+    });
+
+    klass.define_native_method("any?", (self: RValue): RValue => {
+        return Qfalse;
+    });
 });
 
 TrueClass.get_data<Class>().tap( (klass: Class) => {
-    klass.define_native_method("inspect", (self: RValue): RValue => {
+    klass.define_native_method("inspect", (_self: RValue): RValue => {
         return String.new("true");
+    });
+
+    klass.define_native_method("to_s", (_self: RValue): RValue => {
+        return String.new("true");
+    });
+
+    klass.define_native_method("^", (_self: RValue, args: RValue[]): RValue => {
+        return !args[0].is_truthy() ? Qtrue : Qfalse;
+    });
+
+    klass.define_native_method("!", (_self: RValue): RValue => {
+        return Qfalse;
     });
 });
 
 FalseClass.get_data<Class>().tap( (klass: Class) => {
-    klass.define_native_method("inspect", (self: RValue): RValue => {
+    klass.define_native_method("inspect", (_self: RValue): RValue => {
         return String.new("false");
+    });
+
+    klass.define_native_method("to_s", (_self: RValue): RValue => {
+        return String.new("false");
+    });
+
+    klass.define_native_method("^", (_self: RValue, args: RValue[]): RValue => {
+        return !args[0].is_truthy() ? Qfalse : Qtrue;
+    });
+
+    klass.define_native_method("!", (_self: RValue): RValue => {
+        return Qtrue;
     });
 });
 
@@ -594,13 +633,23 @@ export class String {
 }
 
 export class Object {
-    static send(self: RValue, method_name: string, args: RValue[] = [], block?: RValue): RValue {
+    static send(self: RValue, method_name: string, args: RValue[] = [], block?: RValue | Callable): RValue {
         let method = null;
 
-        if (self.klass == ClassClass) {
+        if (!self.methods) {
+            debugger;
+        }
+
+        if (self.methods[method_name]) {
+            method = self.methods[method_name];
+        } else if (self.klass == ClassClass || self.klass == ModuleClass) {
             method = Object.find_method_under(self.get_data<Class>().get_singleton_class(), method_name);
         } else {
             method = Object.find_method_under(self.klass, method_name);
+        }
+
+        if (block instanceof Callable) {
+            block = Proc.new(block)
         }
 
         if (method) {
@@ -659,6 +708,20 @@ export class Object {
             }
         }
     });
+
+    klass.define_native_method("name", (self: RValue): RValue => {
+        return self.get_data<Class>().name_rval;
+    });
+
+    klass.define_native_method("to_s", (self: RValue): RValue => {
+        const name = self.get_data<Class>().name;
+
+        if (name) {
+            return String.new(name);
+        } else {
+            return Object.send(self, "inspect");
+        }
+    });
 });
 
 (ObjectClass.get_data<Class>()).tap( (klass: Class) => {
@@ -704,16 +767,10 @@ export class Object {
 
 defineStringBehaviorOn(StringClass.get_data<Class>());
 
-export class Integer {
-    static new(value: number): RValue {
-        return new RValue(IntegerClass, value);
-    }
-}
+Runtime.constants["RUBY_VERSION"] = String.new("3.2.2");
+Runtime.constants["RUBY_ENGINE"] = String.new("YARV-JS");
 
 defineIntegerBehaviorOn(IntegerClass.get_data<Class>());
-
-export const INT2FIX0 = new RValue(IntegerClass, 0);
-export const INT2FIX1 = new RValue(IntegerClass, 1);
 
 export class Float {
     static new(value: number): RValue {
@@ -772,8 +829,6 @@ export class Array {
     }
 }
 
-defineArrayBehaviorOn(ArrayClass.get_data<Class>());
-
 export class Hash {
     static new(): RValue {
         return new RValue(HashClass, new Hash());
@@ -784,6 +839,8 @@ export class Hash {
 
     // maps hash codes to value objects
     public values: Map<number, RValue>;
+
+    public compare_by_identity: boolean = false;
 
     constructor() {
         this.keys = new Map();
@@ -818,7 +875,11 @@ export class Hash {
     }
 
     private get_hash_code(obj: RValue): number {
-        return Object.send(obj, "hash").get_data<number>();
+        if (this.compare_by_identity) {
+            return obj.object_id;
+        } else {
+            return Object.send(obj, "hash").get_data<number>();
+        }
     }
 }
 
@@ -831,6 +892,62 @@ export class Proc {
 }
 
 defineProcBehaviorOn(ProcClass.get_data<Class>());
+
+export const init = async () => {
+    errorInit();
+    processInit();
+    envInit();
+    fileInit();
+    dirInit();
+    comparableInit();
+    numericInit();
+    await kernelInit();
+    enumerableInit();
+    rangeInit();
+
+    defineArrayBehaviorOn(ArrayClass.get_data<Class>());
+
+    Runtime.constants["RUBY_PLATFORM"] = await (async () => {
+        if (isNode) {
+            let arch: string = process.arch;
+            if (arch === "x64") arch = "x86_64";
+
+            const platform = process.platform;
+            const release = (await import("os")).release().split(".")[0];
+
+            return String.new(`${arch}-${platform}${release}`);
+        } else {
+            const userAgent = window.navigator.userAgent.toLowerCase();
+            const browser =
+              userAgent.indexOf('edge') > -1 ? 'edge'
+                : userAgent.indexOf('edg') > -1 ? 'chromium-edge'
+                : userAgent.indexOf('opr') > -1 && !!(window as any).opr ? 'opera'
+                : userAgent.indexOf('chrome') > -1 && !!(window as any).chrome ? 'chrome'
+                : userAgent.indexOf('trident') > -1 ? 'ie'
+                : userAgent.indexOf('firefox') > -1 ? 'firefox'
+                : userAgent.indexOf('safari') > -1 ? 'safari'
+                : 'other';
+
+            const platform = (() => {
+                // 2022 way of detecting. Note : this userAgentData feature is available only in secure contexts (HTTPS)
+                if (typeof (navigator as any).userAgentData !== 'undefined' && (navigator as any).userAgentData != null) {
+                    return (navigator as any).userAgentData.platform;
+                }
+                // Deprecated but still works for most of the browser
+                if (typeof navigator.platform !== 'undefined') {
+                    if (typeof navigator.userAgent !== 'undefined' && /android/.test(navigator.userAgent.toLowerCase())) {
+                        // android device’s navigator.platform is often set as 'linux', so let’s use userAgent for them
+                        return 'android';
+                    }
+                    return navigator.platform;
+                }
+                return 'unknown';
+            })();
+
+            return String.new(`${browser}-${platform}`);
+        }
+    })();
+}
 
 if (isNode) {
     Dir.setwd(process.env.PWD!);

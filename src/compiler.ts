@@ -1,15 +1,100 @@
 import { ParseResult } from "@ruby/prism/types/deserialize";
 import { MethodCallData, BlockCallData, CallDataFlag } from "./call_data";
-import { InstructionSequence, Label } from "./instruction_sequence";
+import { CatchBreak, InstructionSequence, Label, CatchTableStack, CatchNext } from "./instruction_sequence";
 import { Options } from "./options";
-import { AndNode, ArgumentsNode, ArrayNode, AssocNode, AssocSplatNode, BeginNode, BlockArgumentNode, BlockNode, BlockParameterNode, BlockParametersNode, CallNode, CaseNode, ClassNode, ConstantPathNode, ConstantReadNode, ConstantWriteNode, DefNode, ElseNode, EmbeddedStatementsNode, EnsureNode, FalseNode, FloatNode, GlobalVariableOrWriteNode, GlobalVariableReadNode, GlobalVariableWriteNode, HashNode, IfNode, IndexOrWriteNode, InstanceVariableOperatorWriteNode, InstanceVariableOrWriteNode, InstanceVariableReadNode, InstanceVariableTargetNode, InstanceVariableWriteNode, IntegerNode, InterpolatedStringNode, InterpolatedSymbolNode, KeywordHashNode, LambdaNode, LocalVariableReadNode, LocalVariableTargetNode, LocalVariableWriteNode, Location, ModuleNode, MultiWriteNode, NextNode, NilNode, Node, OptionalParameterNode, OrNode, ParametersNode, ParenthesesNode, ProgramNode, RegularExpressionNode, RequiredParameterNode, RescueNode, RestParameterNode, ReturnNode, SelfNode, SingletonClassNode, SplatNode, StatementsNode, StringNode, SymbolNode, TrueNode, UnlessNode, WhenNode, WhileNode, YieldNode } from "@ruby/prism/types/nodes";
+import {
+    AndNode,
+    ArgumentsNode,
+    ArrayNode,
+    AssocNode,
+    AssocSplatNode,
+    BeginNode,
+    BlockArgumentNode,
+    BlockNode,
+    BlockParameterNode,
+    BlockParametersNode,
+    BreakNode,
+    CallNode,
+    CaseNode,
+    ClassNode,
+    ClassVariableReadNode,
+    ConstantPathNode,
+    ConstantReadNode,
+    ConstantWriteNode,
+    DefNode,
+    DefinedNode,
+    ElseNode,
+    EmbeddedStatementsNode,
+    EnsureNode,
+    FalseNode,
+    FloatNode,
+    ForwardingSuperNode,
+    GlobalVariableOrWriteNode,
+    GlobalVariableReadNode,
+    GlobalVariableWriteNode,
+    HashNode,
+    IfNode,
+    IndexOperatorWriteNode,
+    IndexOrWriteNode,
+    InstanceVariableOperatorWriteNode,
+    InstanceVariableOrWriteNode,
+    InstanceVariableReadNode,
+    InstanceVariableTargetNode,
+    InstanceVariableWriteNode,
+    IntegerNode,
+    InterpolatedRegularExpressionNode,
+    InterpolatedStringNode,
+    InterpolatedSymbolNode,
+    KeywordHashNode,
+    LambdaNode,
+    LocalVariableAndWriteNode,
+    LocalVariableOperatorWriteNode,
+    LocalVariableReadNode,
+    LocalVariableTargetNode,
+    LocalVariableWriteNode,
+    Location,
+    ModuleNode,
+    MultiWriteNode,
+    NextNode,
+    NilNode,
+    Node,
+    NumberedReferenceReadNode,
+    OptionalParameterNode,
+    OrNode,
+    ParametersNode,
+    ParenthesesNode,
+    ProgramNode,
+    RangeNode,
+    RegularExpressionNode,
+    RequiredParameterNode,
+    RescueNode,
+    RestParameterNode,
+    ReturnNode,
+    SelfNode,
+    SingletonClassNode,
+    SourceFileNode,
+    SplatNode,
+    StatementsNode,
+    StringNode,
+    SuperNode,
+    SymbolNode,
+    TrueNode,
+    UnlessNode,
+    WhenNode,
+    WhileNode,
+    XStringNode,
+    YieldNode
+} from "@ruby/prism/types/nodes";
 import { Lookup } from "./local_table";
-import { NativeCallable, ObjectClass, Proc, Qtrue, RValue } from "./runtime";
+import { ObjectClass, Qnil, Qtrue, String } from "./runtime";
 import { DefineClassFlags } from "./insns/defineclass";
 import { SpecialObjectType } from "./insns/putspecialobject";
 import { ExpandArrayFlag } from "./insns/expandarray";
 import { Regexp } from "./runtime/regexp";
 import { DefinedType } from "./insns/defined";
+import { GetSpecialType } from "./insns/getspecial";
+import { SyntaxError } from "./errors";
+import { ThrowType } from "./insns/throw";
 
 export class Compiler {
     private options: Options;
@@ -18,6 +103,8 @@ export class Compiler {
     private iseq: InstructionSequence;
     private line_offsets_: number[];
     private local_depth: number;
+    private local_catch_table_stack: CatchTableStack;
+    private current_line: number;
 
     public static parse: (code: string) => ParseResult;
 
@@ -26,6 +113,8 @@ export class Compiler {
         this.path = path;
         this.options = options || new Options();
         this.local_depth = 0;
+        this.local_catch_table_stack = new CatchTableStack();
+        this.current_line = 0;
     }
 
     static compile(source: string, path: string, ast: any, options?: Options): InstructionSequence {
@@ -39,7 +128,12 @@ export class Compiler {
     }
 
     private visit(node: Node, used: boolean) {
-        // console.log(`Parsing ${node.constructor.name} at ${this.path}:${this.start_line_for_loc(node.location)}`)
+        let line = this.start_line_for_loc(node.location)
+
+        if (line && line != this.current_line) {
+            this.iseq.push(line);
+            this.current_line = line;
+        }
 
         switch (node.constructor.name) {
             case "ProgramNode":
@@ -76,6 +170,14 @@ export class Compiler {
 
             case "LocalVariableWriteNode":
                 this.visit_local_variable_write_node(node as LocalVariableWriteNode, used);
+                break;
+
+            case "LocalVariableAndWriteNode":
+                this.visit_local_variable_and_write_node(node as LocalVariableAndWriteNode, used);
+                break;
+
+            case "LocalVariableOperatorWriteNode":
+                this.visit_local_variable_operator_write_node(node as LocalVariableOperatorWriteNode, used);
                 break;
 
             case "ArrayNode":
@@ -282,6 +384,10 @@ export class Compiler {
                 this.visit_regular_expression_node(node as RegularExpressionNode, used);
                 break;
 
+            case "InterpolatedRegularExpressionNode":
+                this.visit_interpolated_regular_expression_node(node as InterpolatedRegularExpressionNode, used);
+                break;
+
             case "NextNode":
                 this.visit_next_node(node as NextNode, used);
                 break;
@@ -292,6 +398,42 @@ export class Compiler {
 
             case "IndexOrWriteNode":
                 this.visit_index_or_write_node(node as IndexOrWriteNode, used);
+                break;
+
+            case "RangeNode":
+                this.visit_range_node(node as RangeNode, used);
+                break;
+
+            case "SuperNode":
+                this.visit_super_node(node as SuperNode, used);
+                break;
+
+            case "ForwardingSuperNode":
+                this.visit_forwarding_super_node(node as ForwardingSuperNode, used);
+                break;
+
+            case "XStringNode":
+                this.visit_x_string_node(node as XStringNode, used);
+                break;
+
+            case "NumberedReferenceReadNode":
+                this.visit_numbered_reference_read_node(node as NumberedReferenceReadNode, used);
+                break;
+
+            case "SourceFileNode":
+                this.visit_source_file_node(node as SourceFileNode, used);
+                break;
+
+            case "BreakNode":
+                this.visit_break_node(node as BreakNode, used);
+                break;
+
+            case "IndexOperatorWriteNode":
+                this.visit_index_operator_write_node(node as IndexOperatorWriteNode, used);
+                break;
+
+            case "DefinedNode":
+                this.visit_defined_node(node as DefinedNode, used);
                 break;
 
             default:
@@ -396,13 +538,13 @@ export class Compiler {
         if (node.receiver) {
             this.visit(node.receiver, true);
         } else {
-            this.iseq.putself()
+            this.iseq.putself();
         }
 
         let safe_label = null;
 
         if (node.isSafeNavigation()) {
-            safe_label = this.iseq.label()
+            safe_label = this.iseq.label();
             this.iseq.dup();
             this.iseq.branchnil(safe_label);
         }
@@ -467,12 +609,15 @@ export class Compiler {
         }
 
         if (!used) {
-            this.iseq.pop()
+            this.iseq.pop();
         }
     }
 
     private visit_block_node(node: BlockNode, used: boolean): InstructionSequence {
         return this.with_child_iseq(this.iseq.block_child_iseq(this.start_line_for_loc(node.location)!), () => {
+            const begin_label = this.iseq.label();
+            const end_label = this.iseq.label();
+
             node.locals.forEach((local: string) => {
                 this.iseq.local_table.plain(local);
             });
@@ -481,13 +626,18 @@ export class Compiler {
                 this.visit(node.parameters, true);
             }
 
+            this.iseq.push(begin_label);
+
             if (node.body) {
                 this.visit(node.body, true);
             } else {
                 this.iseq.putnil();
             }
 
+            this.iseq.push(end_label);
             this.iseq.leave();
+
+            this.iseq.catch_table.catch_next(begin_label, end_label, end_label, 0);
         });
     }
 
@@ -531,6 +681,31 @@ export class Compiler {
         }
 
         const lookup = this.find_local_or_throw(node.name, node.depth + this.local_depth);
+        this.iseq.setlocal(lookup.index, lookup.depth);
+    }
+
+    private visit_local_variable_and_write_node(node: LocalVariableAndWriteNode, used: boolean) {
+        const label = this.iseq.label();
+
+        const lookup = this.find_local_or_throw(node.name, node.depth + this.local_depth);
+        this.iseq.getlocal(lookup.index, lookup.depth);
+        if (used) this.iseq.dup();
+        this.iseq.branchunless(label);
+
+        if (used) this.iseq.pop()
+        this.visit(node.value, true);
+        if (used) this.iseq.dup()
+        this.iseq.setlocal(lookup.index, lookup.depth);
+
+        this.iseq.push(label);
+    }
+
+    private visit_local_variable_operator_write_node(node: LocalVariableOperatorWriteNode, used: boolean) {
+        const lookup = this.find_local_or_throw(node.name, node.depth + this.local_depth);
+        this.iseq.getlocal(lookup.index, lookup.depth);
+        this.visit(node.value, true);
+        this.iseq.send(MethodCallData.create(node.operator, 1), null);
+        if (used) this.iseq.dup();
         this.iseq.setlocal(lookup.index, lookup.depth);
     }
 
@@ -614,7 +789,7 @@ export class Compiler {
             }
         });
 
-        if (used && length > 0) {
+        if (used) {
             this.iseq.newhash(node.elements.length * 2)
         }
     }
@@ -689,7 +864,9 @@ export class Compiler {
         }
 
         if (node.block) {
-
+            this.iseq.argument_options.block_start = this.iseq.argument_size;
+            this.visit(node.block, true);
+            this.iseq.argument_size ++;
         }
     }
 
@@ -698,7 +875,7 @@ export class Compiler {
     }
 
     private visit_optional_parameter_node(node: OptionalParameterNode, _used: boolean) {
-        let index = this.iseq.argument_options.lead_num;
+        let index = this.iseq.argument_options.lead_num || 0;
         const opt_length = this.iseq.argument_options.opt.length;
 
         if (opt_length > 0) {
@@ -967,7 +1144,22 @@ export class Compiler {
             this.iseq.putnil();
         }
 
-        this.iseq.leave();
+        // throw if inside a block iseq
+        switch (this.iseq.type) {
+            // no idea if this is correct
+            case "rescue":
+                return;
+
+            case "method":
+                this.iseq.leave();
+                return;
+
+            case "block":
+                this.iseq.throw(ThrowType.RETURN);
+                return;
+        }
+
+        throw new SyntaxError("Invalid return");
     }
 
     private visit_begin_node(node: BeginNode, used: boolean) {
@@ -1006,7 +1198,7 @@ export class Compiler {
                 this.visit(node.rescueClause!, true);
             });
 
-            this.iseq.catch_rescue(
+            this.iseq.catch_table.catch_rescue(
                 rescue_iseq, begin_label, end_label, exit_label, rescue_iseq.local_table.size()
             );
         }
@@ -1187,7 +1379,7 @@ export class Compiler {
         const undefined_label = this.iseq.label();
 
         this.iseq.putnil();
-        this.iseq.defined(DefinedType.TYPE_GVAR, node.name, Qtrue);
+        this.iseq.defined(DefinedType.GVAR, node.name, Qtrue);
         this.iseq.branchunless(defined_label);
 
         this.iseq.getglobal(node.name);
@@ -1312,26 +1504,32 @@ export class Compiler {
         const body_label = this.iseq.label();
         const done_label = this.iseq.label();
 
-        this.iseq.jump(predicate_label);
-        this.iseq.putnil();
-        this.iseq.pop();
-        this.iseq.jump(predicate_label);
+        this.local_catch_table_stack.with_catch_table(() => {
+            this.local_catch_table_stack.catch_break(null, body_label, done_label, done_label, 0);
+            this.local_catch_table_stack.catch_next(body_label, done_label, predicate_label, 0);
+            this.local_catch_table_stack.catch_redo(body_label, done_label, body_label, 0);
 
-        this.iseq.push(body_label);
+            this.iseq.jump(predicate_label);
+            this.iseq.putnil();  // why is this here?
+            this.iseq.pop();
+            this.iseq.jump(predicate_label);
 
-        if (node.statements) {
-            this.visit(node.statements, false);
-        }
+            this.iseq.push(body_label);
 
-        this.iseq.push(predicate_label);
-        this.visit(node.predicate, true);
-        this.iseq.branchunless(done_label);
+            if (node.statements) {
+                this.visit(node.statements, false);
+            }
 
-        this.iseq.jump(body_label);
-        this.iseq.push(done_label);
+            this.iseq.push(predicate_label);
+            this.visit(node.predicate, true);
+            this.iseq.branchunless(done_label);
 
-        this.iseq.putnil();
-        if (!used) this.iseq.pop();
+            this.iseq.jump(body_label);
+            this.iseq.push(done_label);
+
+            this.iseq.putnil();
+            if (!used) this.iseq.pop();
+        });
     }
 
     private visit_regular_expression_node(node: RegularExpressionNode, used: boolean) {
@@ -1339,6 +1537,17 @@ export class Compiler {
             // @TODO: handle options
             this.iseq.putobject({type: "RValue", value: Regexp.new(node.unescaped, "")})
         }
+    }
+
+    private visit_interpolated_regular_expression_node(node: InterpolatedRegularExpressionNode, used: boolean) {
+        this.visit_all(node.parts, true);
+        this.iseq.dup();
+        this.iseq.objtostring(MethodCallData.create("to_s", 0, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE));
+        this.iseq.anytostring();
+
+        // @TODO: handle options
+        this.iseq.toregexp("", node.parts.length);
+        if (!used) this.iseq.pop();
     }
 
     private visit_next_node(node: NextNode, used: boolean) {
@@ -1353,7 +1562,59 @@ export class Compiler {
             this.iseq.putnil();
         }
 
-        this.iseq.leave();
+        const catch_entry = this.local_catch_table_stack.find_catch_entry(CatchNext);
+
+        if (catch_entry) {
+            this.iseq.jump(catch_entry.cont_label);
+            return;
+        } else {
+            let iseq = this.iseq;
+
+            // skip past rescue frames, which aren't actually frames
+            while (iseq.type === "rescue") {
+                if (iseq.parent_iseq) {
+                    iseq = iseq.parent_iseq;
+                } else {
+                    break;
+                }
+            }
+
+            // throw if inside a block iseq
+            if (iseq.type === "block") {
+                this.iseq.throw(ThrowType.NEXT);
+                return;
+            }
+        }
+
+        throw new SyntaxError("Invalid next");
+    }
+
+    private visit_break_node(node: BreakNode, used: boolean) {
+        if (node.arguments_) {
+            if (node.arguments_.arguments_.length == 1) {
+                this.visit(node.arguments_, true);
+            } else if (node.arguments_.arguments_.length > 1) {
+                this.visit(node.arguments_, true);
+                this.iseq.newarray(node.arguments_.arguments_.length);
+            }
+        } else {
+            this.iseq.putnil();
+        }
+
+        const catch_entry = this.local_catch_table_stack.find_catch_entry(CatchBreak);
+
+        if (catch_entry) {
+            this.iseq.jump(catch_entry.cont_label);
+            return;
+        } else {
+            // throw if inside a block iseq
+            if (this.iseq.type === "block") {
+                this.iseq.throw(ThrowType.BREAK);
+                return;
+            }
+        }
+
+        throw new SyntaxError("Invalid break");
     }
 
     private visit_lambda_node(node: LambdaNode, used: boolean) {
@@ -1434,6 +1695,154 @@ export class Compiler {
         this.iseq.adjuststack(1 + arg_size);
 
         this.iseq.push(done);
+    }
+
+    private visit_range_node(node: RangeNode, used: boolean) {
+        if (node.left) {
+            this.visit(node.left, used);
+        } else if (used) {
+            this.iseq.putnil();
+        }
+
+        if (node.right) {
+            this.visit(node.right, used);
+        } else if (used) {
+            this.iseq.putnil();
+        }
+
+        if (used) this.iseq.newrange(node.isExcludeEnd());
+    }
+
+    private visit_super_node(node: SuperNode, used: boolean) {
+        if (node.arguments_) {
+            this.visit(node.arguments_, true);
+        }
+
+        let flags = CallDataFlag.FCALL | CallDataFlag.SUPER | CallDataFlag.ZSUPER;
+        let block_iseq = null;
+
+        if (node.block) {
+          block_iseq = this.visit_block_node(node.block as BlockNode, true);
+        } else {
+          flags |= CallDataFlag.ARGS_SIMPLE;
+        }
+
+        this.iseq.putself();
+        this.iseq.invokesuper(MethodCallData.create("super", node.arguments_?.arguments_.length || 0, flags), block_iseq);
+        if (!used) this.iseq.pop();
+    }
+
+    private visit_forwarding_super_node(node: ForwardingSuperNode, used: boolean) {
+        let flags = CallDataFlag.FCALL | CallDataFlag.SUPER | CallDataFlag.ZSUPER;
+        let block_iseq = null;
+
+        if (node.block) {
+          block_iseq = this.visit_block_node(node.block as BlockNode, true);
+        } else {
+          flags |= CallDataFlag.ARGS_SIMPLE;
+        }
+
+        this.iseq.putself();
+        this.iseq.invokesuper(MethodCallData.create("super", 0, flags), block_iseq);
+        if (!used) this.iseq.pop();
+    }
+
+    private visit_x_string_node(node: XStringNode, used: boolean) {
+        this.iseq.putself();
+        this.iseq.putobject({type: "String", value: node.unescaped});
+        this.iseq.send(MethodCallData.create("`", 1, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE), null);
+        if (!used) this.iseq.pop()
+    }
+
+    private visit_numbered_reference_read_node(node: NumberedReferenceReadNode, used: boolean) {
+        if (used) {
+            this.iseq.getspecial(GetSpecialType.BACKREF, node.number << 1);
+        }
+    }
+
+    private visit_source_file_node(node: SourceFileNode, used: boolean) {
+        if (used) {
+            this.iseq.putstring(this.path);
+        }
+    }
+
+    private visit_index_operator_write_node(node: IndexOperatorWriteNode, used: boolean) {
+        if (node.arguments_) {
+            const argc = node.arguments_.arguments_.length;
+
+            if (used) this.iseq.putnil();
+            if (node.receiver) this.visit(node.receiver, true);
+            this.visit(node.arguments_, true);
+            this.iseq.dupn(argc + 1);
+            this.iseq.send(MethodCallData.create("[]", argc), null);
+            this.visit(node.value, true);
+            this.iseq.send(MethodCallData.create(node.operator, 1), null);
+            if (used) this.iseq.setn(argc + 2);
+            this.iseq.send(MethodCallData.create("[]=", 1 + argc), null)
+            this.iseq.pop();
+        } else {
+            if (node.receiver) this.visit(node.receiver, true);
+            this.iseq.dup();
+            this.iseq.send(MethodCallData.create("[]"), null);
+            this.visit(node.value, true);
+            this.iseq.send(MethodCallData.create(node.operator, 1), null);
+
+            if (used) {
+                this.iseq.swap();
+                this.iseq.topn(1);
+            }
+
+            this.iseq.send(MethodCallData.create("[]=", 1), null);
+            this.iseq.pop();
+        }
+    }
+
+    private visit_defined_node(node: DefinedNode, used: boolean) {
+        if (!used) return;
+
+        const value = node.value;
+        const type = value.constructor.name;
+
+        if (type === "CallNode") {
+            this.iseq.putself();
+            this.iseq.defined(DefinedType.FUNC, (value as CallNode).name, String.new("method"));
+        } else if (type === "ClassVariableReadNode") {
+            this.iseq.defined(DefinedType.CVAR, (value as ClassVariableReadNode).name, String.new("class variable"));
+        } else if (type === "ConstantPathNode") {
+            const val = value as ConstantPathNode;
+
+            if (val.parent == null) {
+                this.iseq.putobject({type: "RValue", value: ObjectClass});
+            } else {
+                this.visit(val.parent, true);
+            }
+
+            this.iseq.defined(DefinedType.CONST_FROM, (val.child as ConstantReadNode).name, String.new("constant"));
+        } else if (type === "ConstantReadNode") {
+            this.iseq.defined(DefinedType.CONST, (value as ConstantReadNode).name, String.new("constant"));
+        } else if (type === "FalseNode") {
+            this.iseq.putobject({type: "RValue", value: String.new("true")});
+        } else if (type === "ForwardingSuperNode") {
+            this.iseq.putself();
+            this.iseq.defined(DefinedType.ZSUPER, "", String.new("super"));
+        } else if (type === "GlobalVariableReadNode") {
+            this.iseq.defined(DefinedType.GVAR, (value as GlobalVariableReadNode).name, String.new("global-variable"));
+        } else if (type === "LocalVariableReadNode") {
+            this.iseq.putobject({type: "RValue", value: String.new("local-variable")});
+        } else if (type === "LocalVariableWriteNode") {
+            this.iseq.putobject({type: "RValue", value: String.new("assignment")});
+        } else if (type === "NilNode") {
+            this.iseq.putobject({type: "NilClass", value: Qnil});
+        } else if (type === "SelfNode") {
+            this.iseq.putobject({type: "RValue", value: String.new("self")});
+        } else if (type === "TrueNode") {
+            this.iseq.putobject({type: "RValue", value: String.new("true")});
+        } else if (type === "YieldNode") {
+            this.iseq.putnil();
+            this.iseq.defined(DefinedType.YIELD, "", String.new("yield"));
+        } else {
+            this.iseq.putobject({type: "RValue", value: String.new("expression")});
+        }
     }
 
     private find_local_or_throw(name: string, depth: number): Lookup {

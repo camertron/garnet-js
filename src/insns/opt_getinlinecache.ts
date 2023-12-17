@@ -27,11 +27,11 @@ export default class OptGetInlineCache extends Instruction {
         // potentially jump forward to the label. We're not going to track inline
         // caches in YARV, so we'll just always push nil onto the stack as if the
         // cache weren't yet populated.
-        context.stack.push(Qnil);
+        context.push(Qnil);
         return null;
     }
 
-    number(): number {
+    length(): number {
         return 3;
     }
 

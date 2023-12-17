@@ -2,6 +2,8 @@ import * as fs from "fs";
 import { isBrowser, isNode } from "./env";
 
 import { Trie } from "./util/trie";
+import { Dir } from "./runtime/dir";
+import { ErrnoENOENT } from "./errors";
 
 interface IFileHandle {
     offset(): number;
@@ -12,21 +14,39 @@ interface IFileHandle {
     close(): void;
 }
 
-interface IFileSystem {
+abstract class FileSystem {
     // paths
-    root_path(): string;
-    join_paths(...paths: string[]): string;
-    split_path(path: string): string[];
-    path_exists(path: string): boolean;
-    is_file(path: string): boolean;
-    is_directory(path: string): boolean;
-    is_relative(path: string): boolean;
+    abstract root_path(): string;
+    abstract path_exists(path: string): boolean;
+    abstract is_file(path: string): boolean;
+    abstract is_directory(path: string): boolean;
+    abstract is_relative(path: string): boolean;
+    abstract is_executable(path: string): boolean;
+    abstract real_path(path: string): string;
+
+    join_paths(...paths: string[]): string {
+        return join_paths(...paths);
+    }
+
+    split_path(path: string): string[] {
+        return path.split(VirtualFileSystem.DELIMITER);
+    }
+
+    dirname(path: string): string {
+        const segments = this.split_path(path);
+        return this.join_paths(...segments.slice(0, segments.length - 1));
+    }
+
+    basename(path: string): string {
+        const segments = this.split_path(path);
+        return segments[segments.length - 1];
+    }
 
     // operations
-    list(path: string): string[];
-    open(path: string): IFileHandle;
-    read(path: string): Buffer;
-    write(path: string, bytes: Buffer): void;
+    abstract list(path: string): string[];
+    abstract open(path: string): IFileHandle;
+    abstract read(path: string): Buffer;
+    abstract write(path: string, bytes: Buffer): void;
 }
 
 const join_paths = (...paths: string[]): string => {
@@ -61,7 +81,7 @@ const remove_leading_delimiters = (str: string): string => {
     return str.replace(VirtualFileSystem.LEADING_DELIM_RE, "")
 };
 
-class VirtualFileSystem implements IFileSystem {
+class VirtualFileSystem extends FileSystem {
     static ROOT_PATH: string = "/";
     static DELIMITER: string = "/";
     static LEADING_DELIM_RE = new RegExp(`^\.?${this.DELIMITER}+`);
@@ -70,19 +90,31 @@ class VirtualFileSystem implements IFileSystem {
     private files: Trie<string, Buffer>;
 
     constructor() {
+        super();
+
         this.files = new Trie();
+    }
+
+    // NOTE: this does not resolve symlinks because the virtual file system has no
+    // concept of them yet
+    real_path(orig_path: string): string {
+        let path = orig_path;
+
+        if (this.is_relative(path)) {
+            path = this.join_paths(Dir.getwd(), path);
+        }
+
+        path = this.normalize_path(path);
+
+        if (this.path_exists(path)) {
+            return path;
+        } else {
+            throw new ErrnoENOENT(`No such file or directory - ${orig_path}`);
+        }
     }
 
     root_path(): string {
         return VirtualFileSystem.ROOT_PATH;
-    }
-
-    join_paths(...paths: string[]): string {
-        return join_paths(...paths);
-    }
-
-    split_path(path: string): string[] {
-        return path.split(VirtualFileSystem.DELIMITER);
     }
 
     path_exists(path: string): boolean {
@@ -99,6 +131,10 @@ class VirtualFileSystem implements IFileSystem {
         path = this.normalize_path(path);
         const segments = this.split_path(path);
         return this.files.has_path(segments) && !this.files.has(segments);
+    }
+
+    is_executable(path: string): boolean {
+        return false;
     }
 
     is_relative(path: string): boolean {
@@ -139,21 +175,13 @@ class VirtualFileSystem implements IFileSystem {
     }
 }
 
-class NodeFileSystem implements IFileSystem {
+class NodeFileSystem extends FileSystem {
     root_path(): string {
         return VirtualFileSystem.ROOT_PATH;
     }
 
     is_relative(path: string): boolean {
-        return path.startsWith(".");
-    }
-
-    join_paths(...paths: string[]): string {
-        return join_paths(...paths);
-    }
-
-    split_path(path: string): string[] {
-        throw new Error("Method not implemented.");
+        return !path.startsWith(VirtualFileSystem.DELIMITER);
     }
 
     path_exists(path: string): boolean {
@@ -161,11 +189,46 @@ class NodeFileSystem implements IFileSystem {
     }
 
     is_file(path: string): boolean {
-        throw new Error("Method not implemented.");
+        if (this.path_exists(path)) {
+            return fs.statSync(path).isFile();
+        } else {
+            return false;
+        }
     }
 
     is_directory(path: string): boolean {
-        throw new Error("Method not implemented.");
+        if (this.path_exists(path)) {
+            return fs.statSync(path).isDirectory();
+        } else {
+            return false;
+        }
+    }
+
+    is_executable(path: string): boolean {
+        try {
+            fs.accessSync(path, fs.constants.X_OK);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    real_path(orig_path: string): string {
+        let path = orig_path;
+
+        if (this.is_relative(path)) {
+            path = this.join_paths(Dir.getwd(), path);
+        }
+
+        try {
+            return fs.realpathSync(path);
+        } catch (e) {
+            if (e instanceof Error && "code" in e && e["code"] === "ENOENT") {
+                throw new ErrnoENOENT(`No such file or directory - ${orig_path}`);
+            }
+
+            throw e;
+        }
     }
 
     list(path: string): string[] {
@@ -185,7 +248,7 @@ class NodeFileSystem implements IFileSystem {
     }
 }
 
-export const vmfs: IFileSystem = ( () => {
+export const vmfs: FileSystem = ( () => {
     if (isBrowser) {
         return new VirtualFileSystem();
     } else if (isNode) {

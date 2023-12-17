@@ -1,4 +1,4 @@
-import { RValue } from "./runtime";
+import { Callable, Qnil, RValue, init as initRuntime } from "./runtime";
 import { ExecutionContext } from "./execution_context";
 import { vmfs } from "./vmfs";
 import { Compiler } from "./compiler";
@@ -11,9 +11,12 @@ import { Onigmo, Regexp, init as regexp_init } from "./runtime/regexp";
 import * as fs from "fs"
 import { fileURLToPath } from "node:url";
 import { WASI } from "wasi";
+import { Kernel } from "./runtime/kernel";
 
 export async function init() {
     if (!ExecutionContext.current) {
+        await initRuntime();
+
         ExecutionContext.current = new ExecutionContext();
         Compiler.parse = await loadPrism();
 
@@ -25,6 +28,14 @@ export async function init() {
         wasi.initialize(onigmo);
 
         regexp_init(onigmo as unknown as Onigmo);
+    }
+}
+
+export async function deinit() {
+    for (const exit_handler of Kernel.exit_handlers) {
+        // self and args are wrong here, but they're wrong for all procs.
+        // We need to figure out bindings before this will make sense
+        exit_handler.get_data<Callable>().call(ExecutionContext.current, Qnil, []);
     }
 }
 

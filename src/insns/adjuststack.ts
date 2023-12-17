@@ -15,7 +15,7 @@ export default class AdjustStack extends Instruction {
         return null;
     }
 
-    number(): number {
+    length(): number {
         return 2;
     }
 

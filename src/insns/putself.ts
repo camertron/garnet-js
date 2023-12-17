@@ -3,7 +3,7 @@ import Instruction from "../instruction";
 
 export default class PutSelf extends Instruction {
     call(context: ExecutionContext): ExecutionResult {
-        context.stack.push(context.frame!.self);
+        context.push(context.frame!.self);
         return null;
     }
 

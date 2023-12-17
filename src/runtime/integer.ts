@@ -1,7 +1,37 @@
-import { Class, Integer, IntegerClass, Qfalse, Qtrue, RValue, Runtime, String, StringClass } from "../runtime";
+import { Class, FloatClass, IntegerClass, Qfalse, Qnil, Qtrue, RValue, Runtime, String } from "../runtime";
+
+export class Integer {
+    static INT2FIX0: RValue;
+    static INT2FIX1: RValue;
+    static INT2FIXN1: RValue;
+
+    static new(value: number): RValue {
+        return new RValue(IntegerClass, value);
+    }
+
+    static get(value: number): RValue {
+        if (value === 0) {
+            return Integer.INT2FIX0;
+        } else if (value === 1) {
+            return Integer.INT2FIX1;
+        } else if (value === -1) {
+            return Integer.INT2FIXN1;
+        } else {
+            return Integer.new(value);
+        }
+    }
+}
 
 export const defineIntegerBehaviorOn = (klass: Class) => {
+    Integer.INT2FIX0 = Integer.new(0);
+    Integer.INT2FIX1 = Integer.new(1);
+    Integer.INT2FIXN1 = Integer.new(-1);
+
     klass.define_native_method("inspect", (self: RValue): RValue => {
+        return String.new(self.get_data<number>().toString());
+    });
+
+    klass.define_native_method("to_s", (self: RValue): RValue => {
         return String.new(self.get_data<number>().toString());
     });
 
@@ -27,36 +57,39 @@ export const defineIntegerBehaviorOn = (klass: Class) => {
         return Integer.new(self.get_data<number>() + term.get_data<number>());
     });
 
-    klass.define_native_method("<", (self: RValue, args: RValue[]): RValue => {
-        const term = args[0];
-        Runtime.assert_type(term, IntegerClass);  // @TODO: handle floats, maybe Numeric?
+    klass.define_native_method("<=>", (self: RValue, args: RValue[]): RValue => {
+        const other = args[0];
 
-        if (self.get_data<number>() < term.get_data<number>()) {
-            return Qtrue;
-        } else {
-            return Qfalse;
+        if (other.klass === IntegerClass || other.klass === FloatClass) {
+            const other_num = other.get_data<number>();
+            const num = self.get_data<number>();
+
+            if (num < other_num) {
+                return Integer.get(-1);
+            } else if (num > other_num) {
+                return Integer.get(1);
+            } else {
+                return Integer.get(0);
+            }
         }
+
+        return Qnil;
     });
 
-    klass.define_native_method(">", (self: RValue, args: RValue[]): RValue => {
-        const term = args[0];
-        Runtime.assert_type(term, StringClass);  // @TODO: handle floats, maybe Numeric?
-
-        if (self.get_data<number>() > term.get_data<number>()) {
-            return Qtrue;
-        } else {
-            return Qfalse;
-        }
+    klass.define_native_method("to_i", (self: RValue): RValue => {
+        return self;
     });
 
-    klass.define_native_method("==", (self: RValue, args: RValue[]): RValue => {
-        const term = args[0];
-        Runtime.assert_type(term, IntegerClass);  // @TODO: handle floats, maybe Numeric?
+    klass.define_native_method("even?", (self: RValue): RValue => {
+        return self.get_data<number>() % 2 == 0 ? Qtrue : Qfalse;
+    });
 
-        if (self.get_data<number>() == term.get_data<number>()) {
-            return Qtrue;
-        } else {
-            return Qfalse;
-        }
+    klass.define_native_method("odd?", (self: RValue): RValue => {
+        return self.get_data<number>() % 2 == 1 ? Qtrue : Qfalse;
+    });
+
+    klass.define_native_method("size", (self: RValue): RValue => {
+        // all numbers in js are 64-bit floats
+        return Integer.get(8);
     });
 };

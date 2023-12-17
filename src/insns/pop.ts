@@ -3,7 +3,7 @@ import Instruction from "../instruction";
 
 export default class Pop extends Instruction {
     call(context: ExecutionContext): ExecutionResult {
-        context.stack.pop();
+        context.pop();
         return null;
     }
 

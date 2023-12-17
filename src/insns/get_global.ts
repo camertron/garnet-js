@@ -11,11 +11,11 @@ export default class GetGlobal extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        context.stack.push(context.globals[this.name]);
+        context.push(context.globals[this.name]);
         return null;
     }
 
-    number(): number {
+    length(): number {
         return 2;
     }
 

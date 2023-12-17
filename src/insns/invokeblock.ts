@@ -14,12 +14,12 @@ export default class InvokeBlock extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        const args = context.stack.splice(context.stack.length - this.calldata.argc, this.calldata.argc);
+        const args = context.popn(this.calldata.argc);
         const block = context.frame_yield()!.block;
 
         if (block) {
             const result = block.get_data<Callable>().call(context, Qnil, args);
-            context.stack.push(result);
+            context.push(result);
         } else {
             throw new LocalJumpError("no block given (yield)");
         }

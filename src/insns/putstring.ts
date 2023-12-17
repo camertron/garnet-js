@@ -12,7 +12,7 @@ export default class PutString extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        context.stack.push(this.string);
+        context.push(this.string);
         return null;
     }
 

@@ -12,9 +12,9 @@ export default class ObjToString extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        const receiver = context.stack.pop()!;
+        const receiver = context.pop()!;
         const result = context.call_method(this.calldata, receiver, []);
-        context.stack.push(result);
+        context.push(result);
         return null;
     }
 
@@ -26,7 +26,7 @@ export default class ObjToString extends Instruction {
         return 1;
     }
 
-    number(): number {
+    length(): number {
         return 2;
     }
 }

@@ -12,9 +12,9 @@ export default class OptSendWithoutBlock extends Instruction {
 
     call(context: ExecutionContext): ExecutionResult {
         const argc = this.call_data.argc + 1;
-        const [receiver, ...args] = context.stack.splice(context.stack.length - argc, argc);
+        const [receiver, ...args] = context.popn(argc);
         const result = context.call_method(this.call_data, receiver, args);
-        context.stack.push(result);
+        context.push(result);
         return null;
     }
 
@@ -26,7 +26,7 @@ export default class OptSendWithoutBlock extends Instruction {
         return 1;
     }
 
-    number(): number {
+    length(): number {
         return this.call_data.argc + 1;
     }
 }

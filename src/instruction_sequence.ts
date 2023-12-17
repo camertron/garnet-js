@@ -1,4 +1,5 @@
 import { BlockCallData, MethodCallData } from "./call_data";
+import { Frame } from "./frame";
 import AdjustStack from "./insns/adjuststack";
 import AnyToString from "./insns/any_to_string";
 import BranchIf from "./insns/branchif";
@@ -18,6 +19,7 @@ import GetInstanceVariable from "./insns/getinstancevariable";
 import GetLocal from "./insns/getlocal";
 import GetLocalWC0 from "./insns/getlocal_wc_0";
 import GetLocalWC1 from "./insns/getlocal_wc_1";
+import GetSpecial, { GetSpecialType } from "./insns/getspecial";
 import Intern from "./insns/intern";
 import InvokeBlock from "./insns/invokeblock";
 import InvokeSuper from "./insns/invokesuper";
@@ -25,6 +27,7 @@ import { Jump } from "./insns/jump";
 import Leave from "./insns/leave";
 import NewArray from "./insns/new_array";
 import NewHash from "./insns/newhash";
+import NewRange from "./insns/newrange";
 import ObjToString from "./insns/obj_to_string";
 import Once from "./insns/once";
 import Pop from "./insns/pop";
@@ -42,8 +45,11 @@ import SetInstanceVariable from "./insns/setinstancevariable";
 import SetLocal from "./insns/setlocal";
 import SetLocalWC0 from "./insns/setlocal_wc_0";
 import SetLocalWC1 from "./insns/setlocal_wc_1";
+import SetN from "./insns/setn";
 import Swap from "./insns/swap";
+import Throw, { ThrowType } from "./insns/throw";
 import TopN from "./insns/topn";
+import ToRegexp from "./insns/toregexp";
 import Instruction, { ValueType } from "./instruction";
 import { LocalTable, Lookup } from "./local_table";
 import { Options } from "./options";
@@ -154,18 +160,158 @@ class Stack {
     }
 }
 
+export class CatchTable {
+    public entries: CatchEntry[];
+
+    constructor() {
+        this.entries = [];
+    }
+
+    find_catch_entry<T extends CatchEntry>(type: new (...args: any[]) => T): T | null {
+        for (const catch_entry of this.entries) {
+            if (catch_entry instanceof type) {
+                return catch_entry;
+            }
+        }
+
+        return null;
+    }
+
+    catch_break(iseq: InstructionSequence | null, begin_label: Label, end_label: Label, cont_label: Label, restore_sp: number) {
+        this.entries.push(
+            new CatchBreak(
+                iseq,
+                begin_label,
+                end_label,
+                cont_label,
+                restore_sp
+            )
+        );
+    }
+
+    catch_ensure(iseq: InstructionSequence, begin_label: Label, end_label: Label, cont_label: Label, restore_sp: number) {
+        this.entries.push(
+            new CatchEnsure(
+                iseq,
+                begin_label,
+                end_label,
+                cont_label,
+                restore_sp
+            )
+        );
+    }
+
+    catch_next(begin_label: Label, end_label: Label, cont_label: Label, restore_sp: number) {
+        this.entries.push(
+            new CatchNext(
+                null,
+                begin_label,
+                end_label,
+                cont_label,
+                restore_sp
+            )
+        );
+    }
+
+    catch_redo(begin_label: Label, end_label: Label, cont_label: Label, restore_sp: number) {
+        this.entries.push(
+            new CatchRedo(
+                null,
+                begin_label,
+                end_label,
+                cont_label,
+                restore_sp
+            )
+        );
+    }
+
+    catch_rescue(iseq: InstructionSequence, begin_label: Label, end_label: Label, cont_label: Label, restore_sp: number) {
+        this.entries.push(
+            new CatchRescue(
+                iseq,
+                begin_label,
+                end_label,
+                cont_label,
+                restore_sp
+            )
+        );
+    }
+
+    catch_retry(begin_label: Label, end_label: Label, cont_label: Label, restore_sp: number) {
+        this.entries.push(
+            new CatchRetry(
+                null,
+                begin_label,
+                end_label,
+                cont_label,
+                restore_sp
+            )
+        );
+    }
+}
+
+export class CatchTableStack {
+    private elements: CatchTable[];
+
+    constructor() {
+        this.elements = [];
+    }
+
+    with_catch_table(callback: () => void) {
+        this.elements.push(new CatchTable());
+        callback();
+        this.elements.pop();
+    }
+
+    find_catch_entry<T extends CatchEntry>(...args: Parameters<typeof CatchTable.prototype.find_catch_entry<T>>): ReturnType<typeof CatchTable.prototype.find_catch_entry<T>> {
+        if (this.current) {
+            return this.current.find_catch_entry(...args);
+        } else {
+            return null;
+        }
+    }
+
+    catch_break(...args: Parameters<typeof CatchTable.prototype.catch_break>) {
+        this.current.catch_break(...args);
+    }
+
+    catch_ensure(...args: Parameters<typeof CatchTable.prototype.catch_ensure>) {
+        this.current.catch_ensure(...args);
+    }
+
+    catch_next(...args: Parameters<typeof CatchTable.prototype.catch_next>) {
+        this.current.catch_next(...args);
+    }
+
+    catch_redo(...args: Parameters<typeof CatchTable.prototype.catch_redo>) {
+        this.current.catch_redo(...args);
+    }
+
+    catch_rescue(...args: Parameters<typeof CatchTable.prototype.catch_rescue>) {
+        this.current.catch_rescue(...args);
+    }
+
+    catch_retry(...args: Parameters<typeof CatchTable.prototype.catch_retry>) {
+        this.current.catch_retry(...args);
+    }
+
+    private get current(): CatchTable {
+        return this.elements[this.elements.length - 1];
+    }
+}
+
 export class CatchEntry {
     public iseq: InstructionSequence | null;
     public begin_label: Label;
     public end_label: Label;
-    public exit_label: Label;
+    public cont_label: Label;
     public restore_sp: number;
 
-    constructor(iseq: InstructionSequence | null, begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
+    constructor(iseq: InstructionSequence | null, begin_label: Label, end_label: Label, cont_label: Label, restore_sp: number) {
         this.iseq = iseq;
         this.begin_label = begin_label;
         this.end_label = end_label;
-        this.exit_label = exit_label;
+        this.cont_label = cont_label;
         this.restore_sp = restore_sp;
     }
 }
@@ -189,12 +335,12 @@ export class CatchRetry extends CatchEntry {
 }
 
 type ArgumentOptions = {
-    lead_num: number,
+    lead_num: number | null,
     opt: Label[],
-    rest_start: number,
-    post_start: number,
-    post_num: number,
-    block_start: boolean
+    rest_start: number | null,
+    post_start: number | null,
+    post_num: number | null,
+    block_start: number | null;
 }
 
 export class InstructionSequence {
@@ -207,7 +353,7 @@ export class InstructionSequence {
 
     public argument_size: number;
     public argument_options: ArgumentOptions;
-    public catch_table: CatchEntry[];
+    public catch_table: CatchTable;
     public local_table: LocalTable;
     public inline_storages: any;
     public insns: InstructionList;
@@ -223,15 +369,15 @@ export class InstructionSequence {
         this.parent_iseq = parent_iseq;
 
         this.argument_size = 0;
-        this.catch_table = [];
+        this.catch_table = new CatchTable();
 
         this.argument_options = {
-            lead_num: 0,
+            lead_num: null,
             opt: [],
-            rest_start: 0,
-            post_start: 0,
-            post_num: 0,
-            block_start: false
+            rest_start: null,
+            post_start: null,
+            post_num: null,
+            block_start: null
         };
 
         this.local_table = new LocalTable();
@@ -333,6 +479,10 @@ export class InstructionSequence {
         this.push(new GetInstanceVariable(name, 0))
     }
 
+    getspecial(type: GetSpecialType, number: number) {
+        this.push(new GetSpecial(type, number));
+    }
+
     newarray(size: number) {
         this.push(new NewArray(size));
     }
@@ -413,6 +563,10 @@ export class InstructionSequence {
         this.push(new NewHash(length));
     }
 
+    newrange(exclude_end: boolean) {
+        this.push(new NewRange(exclude_end));
+    }
+
     swap() {
         this.push(new Swap());
     }
@@ -421,8 +575,20 @@ export class InstructionSequence {
         this.push(new TopN(count));
     }
 
+    setn(count: number) {
+        this.push(new SetN(count));
+    }
+
     invokeblock(calldata: BlockCallData) {
         this.push(new InvokeBlock(calldata))
+    }
+
+    invokesuper(calldata: MethodCallData, block_iseq: InstructionSequence | null) {
+        this.push(new InvokeSuper(calldata, block_iseq));
+    }
+
+    throw(type: ThrowType) {
+        this.push(new Throw(type));
     }
 
     push(value: any): any {
@@ -461,6 +627,10 @@ export class InstructionSequence {
 
     anytostring() {
         this.push(new AnyToString());
+    }
+
+    toregexp(options: string, size: number) {
+        this.push(new ToRegexp(options, size));
     }
 
     concatstrings(count: number) {
@@ -509,7 +679,7 @@ export class InstructionSequence {
     compile() {
         // @TODO: optimizations and specializations
 
-        this.catch_table.forEach((catch_entry) => {
+        this.catch_table.entries.forEach((catch_entry) => {
             if (!(catch_entry instanceof CatchBreak) && catch_entry.iseq) {
                 catch_entry.iseq.compile();
             }
@@ -520,98 +690,28 @@ export class InstructionSequence {
         this.insns.each((insn) => {
             if (insn instanceof Label) {
                 insn.patch(`label_${length}`);
+            } else if (typeof insn === 'number') {
+                // skip
             } else if (insn instanceof DefineClass) {
                 insn.iseq.compile();
-                length += insn.number();
+                length += insn.length();
             } else if (insn instanceof DefineMethod || insn instanceof DefineSMethod) {
                 insn.iseq.compile!()
-                length += insn.number();
+                length += insn.length();
             } else if (insn instanceof InvokeSuper || insn instanceof Send) {
                 if (insn.block_iseq) {
                     insn.block_iseq.compile();
                 }
 
-                length += insn.number();
+                length += insn.length();
             } else if (insn instanceof Once) {
                 insn.iseq.compile();
-                length += insn.number();
+                length += insn.length();
             } else {
-                length += insn.number();
+                length += insn.length();
             }
         });
 
         this.compiled_insns = this.insns.to_array();
-    }
-
-    catch_break(iseq: InstructionSequence, begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
-        this.catch_table.push(
-            new CatchBreak(
-                iseq,
-                begin_label,
-                end_label,
-                exit_label,
-                restore_sp
-            )
-        );
-    }
-
-    catch_ensure(iseq: InstructionSequence, begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
-        this.catch_table.push(
-            new CatchEnsure(
-                iseq,
-                begin_label,
-                end_label,
-                exit_label,
-                restore_sp
-            )
-        );
-    }
-
-    catch_next(begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
-        this.catch_table.push(
-            new CatchNext(
-                null,
-                begin_label,
-                end_label,
-                exit_label,
-                restore_sp
-            )
-        );
-    }
-
-    catch_redo(begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
-        this.catch_table.push(
-            new CatchRedo(
-                null,
-                begin_label,
-                end_label,
-                exit_label,
-                restore_sp
-            )
-        );
-    }
-
-    catch_rescue(iseq: InstructionSequence, begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
-        this.catch_table.push(
-            new CatchRescue(
-                iseq,
-                begin_label,
-                end_label,
-                exit_label,
-                restore_sp
-            )
-        );
-    }
-
-    catch_retry(begin_label: Label, end_label: Label, exit_label: Label, restore_sp: number) {
-        this.catch_table.push(
-            new CatchRetry(
-                null,
-                begin_label,
-                end_label,
-                exit_label,
-                restore_sp
-            )
-        );
     }
 }

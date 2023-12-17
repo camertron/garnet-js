@@ -3,10 +3,10 @@ import Instruction from "../instruction";
 
 export default class Swap extends Instruction {
     call(context: ExecutionContext): ExecutionResult {
-        const first = context.stack.pop()!;
-        const second = context.stack.pop()!;
-        context.stack.push(first);
-        context.stack.push(second);
+        const first = context.pop()!;
+        const second = context.pop()!;
+        context.push(first);
+        context.push(second);
         return null;
     }
 
@@ -14,7 +14,7 @@ export default class Swap extends Instruction {
         return 2;
     }
 
-    number(): number {
+    length(): number {
         return 2;
     }
 }

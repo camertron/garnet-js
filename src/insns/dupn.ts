@@ -12,11 +12,11 @@ export default class DupN extends Instruction {
 
     call(context: ExecutionContext): ExecutionResult {
         const values = context.popn(this.size);
-        context.stack.push(...values, ...values);
+        context.push(...values, ...values);
         return null;
     }
 
-    number(): number {
+    length(): number {
         return 2;
     }
 

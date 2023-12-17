@@ -13,7 +13,7 @@ export default class SetInstanceVariable extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        const value = context.stack.pop()!;
+        const value = context.pop()!;
         context.frame!.self.iv_set(this.name, value);
         return null;
     }

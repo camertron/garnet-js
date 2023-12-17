@@ -20,7 +20,7 @@ export default class PutSpecialObject extends Instruction {
     call(context: ExecutionContext): ExecutionResult {
         switch (this.type) {
             case SpecialObjectType.VMCORE:
-                context.stack.push(VMCore);
+                context.push(VMCore);
                 break;
 
             case SpecialObjectType.CBASE:
@@ -30,11 +30,11 @@ export default class PutSpecialObject extends Instruction {
                     value = value.get_data<Class>().get_singleton_class();
                 }
 
-                context.stack.push(value);
+                context.push(value);
                 break;
 
             case SpecialObjectType.CONST_BASE:
-                context.stack.push(context.const_base);
+                context.push(context.const_base);
                 break;
         }
 

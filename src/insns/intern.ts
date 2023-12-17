@@ -6,9 +6,9 @@ export default class Intern extends Instruction {
     private calldata_: MethodCallData;
 
     call(context: ExecutionContext): ExecutionResult {
-        const obj = context.stack.pop()!;
+        const obj = context.pop()!;
         const result = context.call_method(this.calldata, obj, []);
-        context.stack.push(result);
+        context.push(result);
         return null;
     }
 

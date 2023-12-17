@@ -23,7 +23,7 @@ export class Jump extends Instruction {
         return 1;
     }
 
-    number() {
+    length() {
         return 1;
     }
 

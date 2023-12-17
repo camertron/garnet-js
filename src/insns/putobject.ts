@@ -10,7 +10,7 @@ export default class PutObject extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        context.stack.push(Instruction.to_ruby(this.object));
+        context.push(Instruction.to_ruby(this.object));
         return null;
     }
 

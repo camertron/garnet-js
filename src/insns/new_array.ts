@@ -12,8 +12,8 @@ export default class NewArray extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        const elements = context.stack.splice(context.stack.length - this.size, this.size);
-        context.stack.push(Array.new(elements));
+        const elements = context.popn(this.size);
+        context.push(Array.new(elements));
         return null;
     }
 
@@ -25,7 +25,7 @@ export default class NewArray extends Instruction {
         return 1;
     }
 
-    number(): number {
+    length(): number {
         return 2;
     }
 }

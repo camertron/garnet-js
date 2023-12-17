@@ -38,11 +38,13 @@ export class BlockFrame extends Frame {
 
 export class MethodFrame extends Frame {
     public name: string;
+    public args: RValue[];
     public block?: RValue;
 
-    constructor(iseq: InstructionSequence, nesting: RValue[], parent: Frame, stack_index: number, self: RValue, name: string, block?: RValue) {
+    constructor(iseq: InstructionSequence, nesting: RValue[], parent: Frame, stack_index: number, self: RValue, name: string, args: RValue[], block?: RValue) {
         super(iseq, parent, stack_index, self, nesting);
         this.name = name;
+        this.args = args;
         this.block = block;
     }
 }

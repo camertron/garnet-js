@@ -19,7 +19,7 @@ export default class SetLocalWC1 extends Instruction {
         return 1;
     }
 
-    number(): number {
+    length(): number {
         return 2;
     }
 }

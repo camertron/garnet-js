@@ -12,7 +12,7 @@ export default class NewHash extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        const elements = context.stack.splice(context.stack.length - this.size, this.size);
+        const elements = context.popn(this.size);
         const hash_rvalue = Hash.new();
         const hash = hash_rvalue.get_data<Hash>();
 
@@ -20,7 +20,7 @@ export default class NewHash extends Instruction {
             hash.set(elements[i], elements[i + 1]);
         }
 
-        context.stack.push(hash_rvalue);
+        context.push(hash_rvalue);
         return null;
     }
 
@@ -32,7 +32,7 @@ export default class NewHash extends Instruction {
         return 1;
     }
 
-    number(): number {
+    length(): number {
         return 2;
     }
 }

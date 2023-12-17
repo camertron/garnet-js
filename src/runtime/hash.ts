@@ -1,4 +1,4 @@
-import { String, RValue, Object, Class, Hash } from "../runtime";
+import { String, RValue, Object, Class, Hash, Qtrue, Qfalse } from "../runtime";
 
 export const defineHashBehaviorOn = (klass: Class) => {
     klass.define_native_method("[]", (self: RValue, args: RValue[]): RValue => {
@@ -32,5 +32,14 @@ export const defineHashBehaviorOn = (klass: Class) => {
         }
 
         return String.new(`{${pairs.join(", ")}}`);
+    });
+
+    klass.define_native_method("compare_by_identity", (self: RValue, args: RValue[]): RValue => {
+        self.get_data<Hash>().compare_by_identity = true;
+        return self;
+    });
+
+    klass.define_native_method("compare_by_identity?", (self: RValue, args: RValue[]): RValue => {
+        return self.get_data<Hash>().compare_by_identity ? Qtrue : Qfalse;
     });
 };

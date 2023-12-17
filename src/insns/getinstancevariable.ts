@@ -12,7 +12,7 @@ export default class GetInstanceVariable extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        context.stack.push(
+        context.push(
             context.frame!.self.iv_get(this.name)
         );
 

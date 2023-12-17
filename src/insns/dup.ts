@@ -3,9 +3,9 @@ import Instruction from "../instruction";
 
 export default class Dup extends Instruction {
     call(context: ExecutionContext): ExecutionResult {
-        const value = context.stack.pop()!;
-        context.stack.push(value);
-        context.stack.push(value);
+        const value = context.pop()!;
+        context.push(value);
+        context.push(value);
         return null;
     }
 

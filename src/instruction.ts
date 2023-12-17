@@ -1,6 +1,6 @@
 import { ExecutionContext, ExecutionResult } from "./execution_context";
 import { Float, Qfalse, Qnil, Qtrue, Runtime, RValue, String } from "./runtime";
-import { Integer } from "./runtime";
+import { Integer } from "./runtime/integer";
 
 export type ValueType = {
     value: any,
@@ -62,7 +62,7 @@ export default abstract class Instruction {
     // This returns the size of the instruction in terms of the number of slots
     // it occupies in the instruction sequence. Effectively this is 1 plus the
     // number of operands.
-    number() {
+    length() {
         return 0;
     }
 

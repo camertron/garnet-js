@@ -12,7 +12,11 @@ export default class BranchIf extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        const condition = context.stack.pop()!;
+        const condition = context.pop()!;
+
+        if (!condition) {
+            debugger;
+        }
 
         if (condition && condition.is_truthy()) {
             return context.jump(this.label);

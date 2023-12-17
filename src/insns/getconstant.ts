@@ -17,8 +17,8 @@ export default class GetConstant extends Instruction {
     // and allow_nil (first stack value) is Qtrue, constants are searched in
     // the current scope. Otherwise, get constant under klass class or module."
     call(context: ExecutionContext): ExecutionResult {
-        const allow_nil = context.stack.pop()!.get_data<boolean>();
-        let parent = context.stack.pop();
+        const allow_nil = context.pop()!.get_data<boolean>();
+        let parent = context.pop();
 
         if (parent == Qnil && !allow_nil) {
             throw new NameError(`uninitialized constant ${this.name}`);
@@ -42,7 +42,7 @@ export default class GetConstant extends Instruction {
             throw new NameError(`uninitialized constant ${this.name}`);
         }
 
-        context.stack.push(constant);
+        context.push(constant);
         return null;
     }
 
@@ -54,7 +54,7 @@ export default class GetConstant extends Instruction {
         return 1;
     }
 
-    number(): number {
+    length(): number {
         return 2;
     }
 }

@@ -12,9 +12,9 @@ export default class ConcatStrings extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        const strings = context.stack.splice(context.stack.length - this.count, this.count);
+        const strings = context.popn(this.count);
         const joined = strings.map((str) => str.get_data<string>()).join("");
-        context.stack.push(String.new(joined));
+        context.push(String.new(joined));
         return null;
     }
 
@@ -26,7 +26,7 @@ export default class ConcatStrings extends Instruction {
         return 1;
     }
 
-    number(): number {
+    length(): number {
         return 2;
     }
 }

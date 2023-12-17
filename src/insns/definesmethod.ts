@@ -1,7 +1,7 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { Class } from "../runtime";
+import { Module } from "../runtime";
 
 export default class DefineSMethod extends Instruction {
     public name: string;
@@ -15,14 +15,14 @@ export default class DefineSMethod extends Instruction {
 
     call(context: ExecutionContext): ExecutionResult {
         context.define_method(
-            context.frame!.self.klass.get_data<Class>().get_singleton_class(),
+            context.frame!.self.get_data<Module>().get_singleton_class(),
             this.name,
             this.iseq
         );
         return null;
     }
 
-    number(): number {
+    length(): number {
         return 3;
     }
 }

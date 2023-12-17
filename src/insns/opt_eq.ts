@@ -13,7 +13,7 @@ export default class OptEq extends Instruction {
 
     call(context: ExecutionContext): ExecutionResult {
         const argc = this.call_data.argc + 1;
-        const [receiver, ...args] = context.stack.splice(context.stack.length - argc, argc);
+        const [receiver, ...args] = context.popn(argc);
 
         // This is supposed to be equivalent to MRI's "fast path" for comparing ints/floats.
         // @TODO: do the same thing for floats
@@ -24,13 +24,13 @@ export default class OptEq extends Instruction {
             (receiver_class == StringClass && arg0_class == StringClass) ||
             (receiver_class == SymbolClass && arg0_class == SymbolClass)) {
             if (receiver.get_data<number | string>() == args[0].get_data<number | string>()) {
-                context.stack.push(Qtrue);
+                context.push(Qtrue);
             } else {
-                context.stack.push(Qfalse);
+                context.push(Qfalse);
             }
         } else {
             const result = context.call_method(this.call_data, receiver, args);
-            context.stack.push(result);
+            context.push(result);
         }
 
         return null;
@@ -44,7 +44,7 @@ export default class OptEq extends Instruction {
         return 1;
     }
 
-    number(): number {
+    length(): number {
         return this.call_data.argc + 1;
     }
 }
