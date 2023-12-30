@@ -1,6 +1,6 @@
 import { argv } from "process";
 import * as YARV from "../src/yarv";
-import { ExecutionContext, Runtime, vmfs } from "../src/yarv";
+import { ExecutionContext, Runtime, vmfs, Array, String } from "../src/yarv";
 import path from "path";
 import fs from "fs";
 import { Dir } from "../src/runtime/dir";
@@ -9,6 +9,7 @@ await YARV.init();
 
 let code: string | null = null;
 let code_path: string = "<code>";
+let script_argv: string[] = [];
 
 ExecutionContext.current.push_onto_load_path(process.env.PWD!);
 Dir.setwd(process.env.PWD!);
@@ -38,11 +39,22 @@ for (let i = 0; i < argv.length; i ++) {
         ExecutionContext.current.push_onto_load_path(dir);
 
         i ++;
+    } else if (argv[i] === "--") {
+        script_argv = argv.splice(i + 1);
+        argv.pop(); // remove "--"
+        break;
     }
 }
 
+Runtime.constants["ARGV"] = Array.new(
+    script_argv.map((arg) => {
+        return String.new(arg);
+    })
+);
+
 if (!code) {
     code_path = argv[argv.length - 1];
+    ExecutionContext.current.globals["$0"] = String.new(code_path);
 
     if (fs.existsSync(code_path)) {
         code = fs.readFileSync(code_path).toString('utf8');
@@ -53,6 +65,5 @@ if (!code) {
     process.exit(0);
 }
 
-YARV.evaluate(code, code_path);
-
+await YARV.evaluate(code, code_path);
 await YARV.deinit();

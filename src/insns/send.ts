@@ -2,7 +2,8 @@ import { MethodCallData, CallDataFlag } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { NativeCallable, Proc, RValue } from "../runtime";
+import { NativeCallable, RValue, SymbolClass } from "../runtime";
+import { Proc } from "../runtime/proc";
 
 export default class Send extends Instruction {
     public call_data: MethodCallData;
@@ -18,12 +19,7 @@ export default class Send extends Instruction {
         let block = undefined;
 
         if (this.block_iseq) {
-            const iseq = this.block_iseq;
-            const frame = context.frame!;
-
-            block = Proc.new(new NativeCallable((self: RValue, args: RValue[]): RValue => {
-                return context.run_block_frame(iseq, frame, args);
-            }));
+            block = Proc.from_iseq(context, this.block_iseq);
         } else if (this.call_data.has_flag(CallDataFlag.ARGS_BLOCKARG)) {
             block = context.pop();
         }

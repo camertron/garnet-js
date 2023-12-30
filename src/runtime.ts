@@ -1,19 +1,21 @@
 import { InstructionSequence } from "./instruction_sequence";
 import { Compiler } from "./compiler";
-import { LoadError, NoMethodError, NotImplementedError } from "./errors";
+import { LoadError, NotImplementedError } from "./errors";
 import { ExecutionContext } from "./execution_context";
 import { defineArrayBehaviorOn } from "./runtime/array";
 import { Integer, defineIntegerBehaviorOn } from "./runtime/integer";
+import { Object } from "./runtime/object";
 import { defineSymbolBehaviorOn } from "./runtime/symbol";
 import { defineStringBehaviorOn } from "./runtime/string";
 import { Dir } from "./runtime/dir";
 import { vmfs } from "./vmfs";
-import { defineProcBehaviorOn } from "./runtime/proc";
+import { Proc, defineProcBehaviorOn } from "./runtime/proc";
 import { defineHashBehaviorOn } from "./runtime/hash";
 import { isNode } from "./env";
 import { defineFloatBehaviorOn } from "./runtime/float";
 import { defineModuleBehaviorOn } from "./runtime/module";
-import { init as kernelInit } from "./runtime/kernel";
+import { Kernel, init as kernelInit } from "./runtime/kernel";
+import { init as objectInit } from "./runtime/object";
 import { init as errorInit } from "./errors";
 import { init as processInit } from "./runtime/process";
 import { init as envInit } from "./runtime/env";
@@ -24,6 +26,9 @@ import { init as numericInit } from "./runtime/numeric";
 import { init as rb_config_init } from "./stdlib/rbconfig"
 import { init as enumerableInit } from "./runtime/enumerable";
 import { init as rangeInit } from "./runtime/range";
+import { Binding, init as bindingInit } from "./runtime/binding";
+import { init as signalInit } from "./runtime/signal";
+import { init as timeInit } from "./stdlib/time";
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
@@ -146,10 +151,6 @@ export class Runtime {
     private static each_ancestor(mod: RValue, cb: (ancestor: RValue) => boolean): boolean {
         const module = mod.get_data<Module>();
 
-        if (module.prepends === undefined) {
-            debugger;
-        }
-
         for (let prepended_module of module.prepends) {
             if (!cb(prepended_module)) {
                 return false;
@@ -184,24 +185,49 @@ export class Runtime {
     static assert_type(obj: RValue, type: Module): void;
     static assert_type(obj: RValue, type: RValue): void;
     static assert_type(obj: RValue, type: Module | RValue) {
-        const module = (() => {
-            if (type instanceof Module) {
-                return type;
-            } else {
-                return type.get_data<Module>();
+        if (type instanceof Module) {
+            if (obj.klass.get_data<Module>() !== type) {
+                throw new TypeError(`no implicit conversion of ${obj.klass.get_data<Module>().name} into ${type.name}`);
             }
-        })();
-
-        if (obj.klass.get_data<Module>() != module) {
-            throw new TypeError(`no implicit conversion of ${module.name} into ${obj.klass.get_data<Module>().name}`);
+        } else {
+            if (!Kernel.is_a(obj, type)) {
+                throw new TypeError(`no implicit conversion of ${obj.klass.get_data<Module>().name} into ${type.get_data<Module>().name}`);
+            }
         }
     }
 
     static require(path: string): boolean {
-        console.log(path);
+        console.log(`Require ${path}`);
         const ec = ExecutionContext.current;
         const loaded_features = ec.globals['$"'].get_data<Array>().elements;
-        const full_path = this.find_on_load_path(path);
+        const full_path = this.find_on_load_path(path) || path;
+
+        // required files are only evaluated once
+        for (const loaded_feature of loaded_features) {
+            if (loaded_feature.get_data<string>() === full_path) {
+                return false;
+            }
+        }
+
+        if (this.native_extensions[full_path]) {
+            this.load_native_extension(full_path);
+        } else {
+            if (!full_path) {
+                throw new LoadError(`cannot load such file -- ${path}`);
+            }
+
+            this.load(full_path);
+        }
+
+        loaded_features.push(String.new(full_path));
+
+        return true;
+    }
+
+    static load(path: string): boolean {
+        console.log(`Load ${path}`);
+        const ec = ExecutionContext.current;
+        const full_path = vmfs.is_relative(path) ? this.find_on_load_path(path, false) : path;
 
         if (!full_path) {
             if (this.native_extensions[path]) {
@@ -211,30 +237,22 @@ export class Runtime {
             throw new LoadError(`cannot load such file -- ${path}`);
         }
 
-        // required files are only evaluated once
-        for (const loaded_feature of loaded_features) {
-            if (loaded_feature.get_data<string>() == full_path) {
-                return false;
-            }
-        }
-
         const code = vmfs.read(full_path);
         const insns = Compiler.compile_string(code.toString(), full_path);
-        ec.run_top_frame(insns);
-
-        loaded_features.push(String.new(full_path));
+        ec.run_top_frame(insns, ec.stack_len);
 
         return true;
     }
 
-    private static find_on_load_path(path: string): string | null {
+    private static find_on_load_path(path: string, assume_extension: boolean = true): string | null {
         const ec = ExecutionContext.current;
         const load_paths = ec.globals["$:"].get_data<Array>().elements;
 
         for(let load_path of load_paths) {
-            const full_path = vmfs.join_paths(load_path.get_data<string>(), `${path}.rb`);
+            let full_path = vmfs.join_paths(load_path.get_data<string>(), path);
+            if (!assume_extension) full_path = `${full_path}.rb`;
 
-            if (vmfs.path_exists(full_path)) {
+            if (vmfs.is_file(full_path)) {
                 return full_path;
             }
         }
@@ -274,8 +292,8 @@ export abstract class Callable {
 }
 
 export class InterpretedCallable extends Callable {
-    private name: string;
-    private iseq: InstructionSequence;
+    public name: string;
+    public iseq: InstructionSequence;
 
     constructor(name: string, iseq: InstructionSequence, visibility: Visibility) {
         super();
@@ -446,6 +464,8 @@ export class RValue {
             return this.ivars.get(name)!;
         }
 
+
+
         return Qnil;
     }
 
@@ -577,16 +597,20 @@ export const VMCoreClass = Runtime.define_class("VMCore", ObjectClass, (klass: C
 export const VMCore = new RValue(VMCoreClass);
 
 NilClass.get_data<Class>().tap( (klass: Class) => {
-    klass.define_native_method("inspect", (self: RValue): RValue => {
+    klass.define_native_method("inspect", (_self: RValue): RValue => {
         return String.new("nil");
     });
 
-    klass.define_native_method("to_i", (self: RValue): RValue => {
+    klass.define_native_method("to_i", (_self: RValue): RValue => {
         return Integer.get(0);
     });
 
-    klass.define_native_method("any?", (self: RValue): RValue => {
+    klass.define_native_method("any?", (_self: RValue): RValue => {
         return Qfalse;
+    });
+
+    klass.define_native_method("nil?", (_self: RValue): RValue => {
+        return Qtrue;
     });
 });
 
@@ -632,57 +656,6 @@ export class String {
     }
 }
 
-export class Object {
-    static send(self: RValue, method_name: string, args: RValue[] = [], block?: RValue | Callable): RValue {
-        let method = null;
-
-        if (!self.methods) {
-            debugger;
-        }
-
-        if (self.methods[method_name]) {
-            method = self.methods[method_name];
-        } else if (self.klass == ClassClass || self.klass == ModuleClass) {
-            method = Object.find_method_under(self.get_data<Class>().get_singleton_class(), method_name);
-        } else {
-            method = Object.find_method_under(self.klass, method_name);
-        }
-
-        if (block instanceof Callable) {
-            block = Proc.new(block)
-        }
-
-        if (method) {
-            return method.call(ExecutionContext.current, self, args, block);
-        } else {
-            const inspect_str = Object.send(self, "inspect").get_data<string>();
-            throw new NoMethodError(`undefined method \`${method_name}' for ${inspect_str}`)
-        }
-    }
-
-    static find_method_under(mod: RValue, method_name: string): Callable | null {
-        let found_method = null;
-
-        Runtime.each_unique_ancestor(mod, (ancestor: RValue): boolean => {
-            const method = ancestor.get_data<Class>().methods[method_name];
-
-            if (method) {
-                found_method = method;
-                return false; // exit early from each_unique_ancestor()
-            }
-
-            return true;
-        });
-
-        return found_method;
-    }
-
-    static object_id_to_str(object_id: number): string {
-        const id_str = object_id.toString(16).padStart(16, "0");
-        return `0x${id_str}`;
-    }
-}
-
 (ClassClass.get_data<Class>()).tap( (klass: Class) => {
     // Apparently `allocate' and `new' are... instance methods? Go figure.
     klass.define_native_method("allocate", (self: RValue): RValue => {
@@ -724,44 +697,24 @@ export class Object {
     });
 });
 
-(ObjectClass.get_data<Class>()).tap( (klass: Class) => {
-    klass.include(KernelModule);
-
-    // NOTE: send should actually be defined by the Kernel module
-    klass.define_native_singleton_method("send", (self: RValue, args: RValue[]): RValue => {
-        const method_name = args[0];
-        Runtime.assert_type(method_name, StringClass);
-        return Object.send(self.klass.get_data<Class>().get_singleton_class(), method_name.get_data<string>(), args);
-    });
-
-    klass.define_native_method("send", (self: RValue, args: RValue[]) => {
-        const method_name = args[0];
-        Runtime.assert_type(method_name, StringClass);
-        return Object.send(self, method_name.get_data<string>(), args);
-    });
-
-    klass.define_native_method("inspect", (self: RValue): RValue => {
-        const class_name = self.klass.get_data<Class>().name;
-        const name = class_name ? class_name : "Class";
-        let parts = [`${name}:${Object.object_id_to_str(self.object_id)}`];
-
-        if (self.ivars) {
-            for (let ivar_name in self.ivars.keys()) {
-                const ivar = self.iv_get(ivar_name);
-                const inspect_str = Object.send(ivar, "inspect").get_data<string>();
-                parts.push(`${ivar_name}=${inspect_str}`)
-            }
-        }
-
-        return String.new(`#<${parts.join(" ")}>`)
-    });
-
-    klass.alias_method("to_s", "inspect");
-});
-
 (BasicObjectClass.get_data<Class>()).tap( (klass: Class) => {
     klass.define_native_method("initialize", (_self: RValue): RValue => {
         return Qnil;
+    });
+
+    klass.define_native_method("==", (self: RValue, args: RValue[]): RValue => {
+        return self.object_id == args[0].object_id ? Qtrue : Qfalse;
+    });
+
+    klass.define_native_method("!=", (self: RValue, args: RValue[]): RValue => {
+        return self.object_id != args[0].object_id ? Qtrue : Qfalse;
+    });
+
+    klass.define_native_method("instance_exec", (self: RValue, args: RValue[], block?: RValue): RValue => {
+        const context = ExecutionContext.current;
+        const proc = block!.get_data<Proc>();
+        const binding = proc.binding.with_self(self);
+        return proc.with_binding(binding).call(ExecutionContext.current, args);
     });
 });
 
@@ -782,12 +735,16 @@ defineFloatBehaviorOn(FloatClass.get_data<Class>());
 
 defineSymbolBehaviorOn(SymbolClass.get_data<Class>());
 
-export type ConsoleFn = (...data: any[]) => void;
+export interface IO {
+    puts(val: string): void;
+    write(val: string): void;
+}
 
-export class IO {
+export type ConsoleFn = (...data: string[]) => void;
+export class BrowserIO implements IO {
     // this is all kinds of wrong but it's fine for now
     static new(console_fn: ConsoleFn): RValue {
-        return new RValue(IOClass, new IO(console_fn));
+        return new RValue(IOClass, new BrowserIO(console_fn));
     }
 
     private console_fn: ConsoleFn;
@@ -796,8 +753,33 @@ export class IO {
         this.console_fn = console_fn;
     }
 
-    puts(val: any) {
+    puts(val: string): void {
         this.console_fn(val);
+    }
+
+    write(val: string): void {
+        this.console_fn(val);
+    }
+}
+
+export class NodeIO implements IO {
+    private stream: NodeJS.WriteStream;
+
+    static new(stream: NodeJS.WriteStream) {
+        return new RValue(IOClass, new NodeIO(stream));
+    }
+
+    constructor(stream: NodeJS.WriteStream) {
+        this.stream = stream;
+    }
+
+    puts(val: string): void {
+        this.stream.write(val);
+        this.stream.write("\n");
+    }
+
+    write(val: string): void {
+        this.stream.write(val);
     }
 }
 
@@ -807,11 +789,28 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
         const io = self.get_data<IO>();
         io.puts(Object.send(val, "to_s").get_data<string>());
         return Qnil;
-    })
+    });
+
+    klass.define_native_method("print", (self: RValue, args: RValue[]): RValue => {
+        const val = args[0];
+        const io = self.get_data<IO>();
+        io.write(Object.send(val, "to_s").get_data<string>());
+        return Qnil;
+    });
+
+    klass.define_native_method("flush", (self: RValue): RValue => {
+        // @TODO: what needs to be done here?
+        return self;
+    });
+
+    klass.define_native_method("tty?", (self: RValue): RValue => {
+        // @TODO: what needs to be done here?
+        return Qtrue;
+    });
 });
 
-export const STDOUT = Runtime.constants["STDOUT"] = IO.new(console.log);
-export const STDERR = Runtime.constants["STDERR"] = IO.new(console.error);
+export const STDOUT = Runtime.constants["STDOUT"] = isNode ? BrowserIO.new(console.log) : NodeIO.new(process.stdout);
+export const STDERR = Runtime.constants["STDERR"] = isNode ? BrowserIO.new(console.error) : NodeIO.new(process.stderr);
 
 export class Array {
     static new(arr?: RValue[]): RValue {
@@ -885,12 +884,6 @@ export class Hash {
 
 defineHashBehaviorOn(HashClass.get_data<Class>());
 
-export class Proc {
-    static new(callable: Callable): RValue {
-        return new RValue(ProcClass, callable);
-    }
-}
-
 defineProcBehaviorOn(ProcClass.get_data<Class>());
 
 export const init = async () => {
@@ -902,8 +895,12 @@ export const init = async () => {
     comparableInit();
     numericInit();
     await kernelInit();
+    objectInit();
     enumerableInit();
     rangeInit();
+    bindingInit();
+    signalInit();
+    timeInit();
 
     defineArrayBehaviorOn(ArrayClass.get_data<Class>());
 
@@ -913,7 +910,8 @@ export const init = async () => {
             if (arch === "x64") arch = "x86_64";
 
             const platform = process.platform;
-            const release = (await import("os")).release().split(".")[0];
+            // const release = (await import("os")).release().split(".")[0];
+            const release = "foo";
 
             return String.new(`${arch}-${platform}${release}`);
         } else {
@@ -947,6 +945,10 @@ export const init = async () => {
             return String.new(`${browser}-${platform}`);
         }
     })();
+
+    Runtime.constants["RUBY_DESCRIPTION"] = String.new(
+        `YARV-JS ${Runtime.constants["RUBY_VERSION"].get_data<string>()} [${Runtime.constants["RUBY_PLATFORM"].get_data<string>()}]`
+    );
 }
 
 if (isNode) {

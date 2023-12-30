@@ -717,8 +717,11 @@ export class Compiler {
     private visit_multi_write_node(node: MultiWriteNode, used: boolean) {
         this.visit(node.value, true);
         if (used) this.iseq.dup();
-        this.iseq.expandarray(node.lefts.length, node.rest ? ExpandArrayFlag.SPLAT_FLAG : 0);
-        this.visit_all(node.lefts, true);
+
+        if (node.lefts.length > 0) {
+            this.iseq.expandarray(node.lefts.length, node.rest ? ExpandArrayFlag.SPLAT_FLAG : 0);
+            this.visit_all(node.lefts, true);
+        }
 
         let flags = 0;
 
@@ -730,7 +733,9 @@ export class Compiler {
             flags |= ExpandArrayFlag.POSTARG_FLAG;
         }
 
-        this.iseq.expandarray(node.rights.length, flags);
+        if (node.rights.length > 0) {
+            this.iseq.expandarray(node.rights.length, flags);
+        }
 
         if (node.rest) {
             const splat_expr = (node.rest as SplatNode).expression;
@@ -903,7 +908,9 @@ export class Compiler {
     }
 
     private visit_splat_node(node: SplatNode, used: boolean) {
-        // no-op
+        if (node.expression) {
+            this.visit(node.expression, used);
+        }
     }
 
     private visit_block_parameter_node(node: BlockParameterNode, used: boolean) {

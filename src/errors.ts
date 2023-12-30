@@ -1,13 +1,36 @@
-import { Class, Module, ObjectClass, RValue, Runtime, String } from "./runtime";
+import { Array, ArrayClass, Class, Module, ObjectClass, Qnil, Qtrue, RValue, Runtime, String } from "./runtime";
 
 export const init = () => {
     const ExceptionClass = Runtime.define_class("Exception", ObjectClass, (klass: Class) => {
+        klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
+            self.iv_set("@message", args[0] || Qnil);
+            return Qnil;
+        });
+
         klass.define_native_method("message", (self: RValue): RValue => {
-            if (!self.iv_exists("message")) {
-                self.iv_set("message", String.new(self.get_data<Error>().message));
+            if (!self.iv_exists("@message")) {
+                self.iv_set("@message", String.new(self.get_data<Error>().message));
             }
 
-            return self.iv_get("message");
+            return self.iv_get("@message");
+        });
+
+        klass.define_native_method("full_message", (self: RValue): RValue => {
+            const backtrace = self.iv_get("@__ruby_backtrace").get_data<Array>().elements;
+            const message = self.iv_exists("@message") ? self.iv_get("@message").get_data<string>() : null;
+            const lines = [`${backtrace[0].get_data<string>()}: ${message} (${self.klass.get_data<Class>().name})`];
+
+            for (let i = 1; i < backtrace.length; i ++) {
+                lines.push(`    ${backtrace[i].get_data<string>()}`);
+            }
+
+            return String.new(lines.join("\n"));
+        });
+
+        klass.define_native_method("set_backtrace", (self: RValue, args: RValue[]): RValue => {
+            Runtime.assert_type(args[0], ArrayClass);
+            self.iv_set("@__ruby_backtrace", args[0]);
+            return Qnil;
         });
     });
 
@@ -27,6 +50,26 @@ export const init = () => {
     const SystemCallErrorClass = Runtime.define_class("SystemCallError", StandardErrorClass);
     const ErrnoModule = Runtime.define_module("Errno");
     const ErrnoENOENTClass = Runtime.define_class_under(ErrnoModule, "ENOENT", SystemCallErrorClass);
+
+    const SystemExitClass = Runtime.define_class("SystemExit", ExceptionClass, (klass: Class) => {
+        klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
+            self.iv_set("@status", args[0] || Qtrue);
+            self.iv_set("@message", args[0] || Qnil);
+            return Qnil;
+        });
+    });
+}
+
+export class NativeError extends Error {
+    public original_error: Error;
+    public ruby_backtrace: string[];
+
+    constructor(original_error: Error, ruby_backtrace: string[]) {
+        super(original_error.message);
+
+        this.original_error = original_error;
+        this.ruby_backtrace = ruby_backtrace;
+    }
 }
 
 export abstract class RubyError extends Error {
@@ -181,5 +224,22 @@ export class ErrnoENOENT extends RubyError {
 
     get ruby_class() {
         return ErrnoENOENT.ruby_class ||= Runtime.constants["Errno"].get_data<Module>().constants["ENOENT"];
+    }
+}
+
+export class SystemExit extends RubyError {
+    private static ruby_class: RValue | null;
+
+    public status: number;
+
+    constructor(status: number, message: string) {
+        super(message);
+
+        this.status = status;
+        this.name = "SystemExit";
+    }
+
+    get ruby_class() {
+        return SystemExit.ruby_class ||= Runtime.constants["SystemExit"];
     }
 }

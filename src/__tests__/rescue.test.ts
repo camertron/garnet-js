@@ -33,7 +33,7 @@ beforeAll(() => {
 // });
 
 describe("begin / rescue / end", () => {
-    test("rescues named exceptions", () => {
+    test("rescues named exceptions", async () => {
         const code = `
             begin
                 require "foo"
@@ -45,12 +45,12 @@ describe("begin / rescue / end", () => {
             outcome
         `;
 
-        const result = YARV.evaluate(code);
+        const result = await YARV.evaluate(code);
         expect(result.klass).toBe(SymbolClass);
         expect(result.get_data<string>()).toEqual("handled");
     });
 
-    test("runs the appropriate rescue clause", () => {
+    test("runs the appropriate rescue clause", async () => {
         const code = `
             handled_name_error = false
             handled_load_error = false
@@ -66,13 +66,13 @@ describe("begin / rescue / end", () => {
             [handled_name_error, handled_load_error]
         `;
 
-        const result = YARV.evaluate(code);
+        const result = await YARV.evaluate(code);
         expect(result.klass).toBe(ArrayClass);
         const results = result.get_data<RubyArray>().elements.map((val) => val.get_data<boolean>());
         expect(results).toEqual([false, true]);
     });
 
-    test("rescues exceptions that inherit from a named base", () => {
+    test("rescues exceptions that inherit from a named base", async () => {
         const code = `
             begin
                 require "foo"
@@ -84,12 +84,12 @@ describe("begin / rescue / end", () => {
             outcome
         `;
 
-        const result = YARV.evaluate(code);
+        const result = await YARV.evaluate(code);
         expect(result.klass).toBe(SymbolClass);
         expect(result.get_data<string>()).toEqual("handled");
     });
 
-    test("does not execute else when an error is raised", () => {
+    test("does not execute else when an error is raised", async () => {
         const code = `
             begin
                 require "foo"
@@ -101,12 +101,12 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        const result = YARV.evaluate(code);
+        const result = await YARV.evaluate(code);
         expect(result.klass).toBe(SymbolClass);
         expect(result.get_data<string>()).toEqual("handled");
     });
 
-    test("returns a value from the begin clause", () => {
+    test("returns a value from the begin clause", async () => {
         const code = `
             begin
                 :no_error
@@ -115,12 +115,12 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        const result = YARV.evaluate(code);
+        const result = await YARV.evaluate(code);
         expect(result.klass).toBe(SymbolClass);
         expect(result.get_data<string>()).toEqual("no_error");
     });
 
-    test("returns a value from the rescue clause", () => {
+    test("returns a value from the rescue clause", async () => {
         const code = `
             begin
                 require "foo"
@@ -130,12 +130,12 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        const result = YARV.evaluate(code);
+        const result = await YARV.evaluate(code);
         expect(result.klass).toBe(SymbolClass);
         expect(result.get_data<string>()).toEqual("handled");
     });
 
-    test("returns a value from the else clause", () => {
+    test("returns a value from the else clause", async () => {
         const code = `
             begin
                 :began
@@ -146,12 +146,12 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        const result = YARV.evaluate(code);
+        const result = await YARV.evaluate(code);
         expect(result.klass).toBe(SymbolClass);
         expect(result.get_data<string>()).toEqual("no_error");
     });
 
-    test("supports rescuing with expressions", () => {
+    test("supports rescuing with expressions", async () => {
         const code = `
             err_class = LoadError
 
@@ -163,7 +163,7 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        const result = YARV.evaluate(code);
+        const result = await YARV.evaluate(code);
         expect(result.klass).toBe(SymbolClass);
         expect(result.get_data<string>()).toEqual("handled");
     });
@@ -194,7 +194,7 @@ describe("begin / rescue / end", () => {
         expect(() => YARV.evaluate(code)).toThrow(LoadError);
     });
 
-    test("runs the ensure clause on error", () => {
+    test("runs the ensure clause on error", async () => {
         const code = `
             ensure_reached = true
 
@@ -209,11 +209,11 @@ describe("begin / rescue / end", () => {
             ensure_reached
         `;
 
-        const result = YARV.evaluate(code);
+        const result = await YARV.evaluate(code);
         expect(result.klass).toBe(TrueClass);
     });
 
-    test("runs the ensure clause on else", () => {
+    test("runs the ensure clause on else", async () => {
         const code = `
             ensure_reached = true
 
@@ -227,11 +227,11 @@ describe("begin / rescue / end", () => {
             ensure_reached
         `;
 
-        const result = YARV.evaluate(code);
+        const result = await YARV.evaluate(code);
         expect(result.klass).toBe(TrueClass);
     });
 
-    test("runs the ensure clause when error is unhandled", () => {
+    test("runs the ensure clause when error is unhandled", async () => {
         const code = `
             ensure_reached = true
 
@@ -247,11 +247,11 @@ describe("begin / rescue / end", () => {
             ensure_reached
         `;
 
-        const result = YARV.evaluate(code);
+        const result = await YARV.evaluate(code);
         expect(result.klass).toBe(TrueClass);
     });
 
-    test("provides the error as a local", () => {
+    test("provides the error as a local", async () => {
         const code = `
             begin
                 require "foo"
@@ -260,7 +260,7 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        const result = YARV.evaluate(code);
+        const result = await YARV.evaluate(code);
         expect(result.klass).toBe(StringClass);
         expect(result.get_data<string>()).toEqual("cannot load such file -- foo");
     });

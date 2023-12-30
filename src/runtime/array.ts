@@ -1,5 +1,7 @@
 import { ExecutionContext } from "../execution_context";
-import { Array, ArrayClass, Class, IntegerClass, Object, Qfalse, Qnil, Qtrue, RValue, Runtime, String, StringClass } from "../runtime";
+import { Array, ArrayClass, Class, IntegerClass, Qfalse, Qnil, Qtrue, RValue, Runtime, String, StringClass } from "../runtime";
+import { Integer } from "./integer";
+import { Object } from "./object";
 
 export const defineArrayBehaviorOn = (klass: Class) => {
     klass.include(Runtime.constants["Enumerable"]);
@@ -89,8 +91,55 @@ export const defineArrayBehaviorOn = (klass: Class) => {
         return self.get_data<Array>().elements.pop() || Qnil;
     });
 
+    klass.define_native_method("shift", (self: RValue, args: RValue[]): RValue => {
+        let count = 1;
+
+        if (args.length > 0) {
+            Runtime.assert_type(args[0], IntegerClass);
+            count = args[0].get_data<number>();
+        }
+
+        const elements = self.get_data<Array>().elements;
+
+        // a count of 0 should return an empty array
+        if (count === 1) {
+            return elements.shift() || Qnil;
+        } else {
+            return Array.new(elements.splice(0, count));
+        }
+    });
+
     klass.define_native_method("unshift", (self: RValue, args: RValue[]): RValue => {
         self.get_data<Array>().elements.unshift(...args);
         return self;
+    });
+
+    klass.define_native_method("+", (self: RValue, args: RValue[]): RValue => {
+        Runtime.assert_type(args[0], ArrayClass);
+        return Array.new(self.get_data<Array>().elements.concat(args[0].get_data<Array>().elements));
+    });
+
+    klass.define_native_method("<<", (self: RValue, args: RValue[]): RValue => {
+        self.get_data<Array>().elements.push(args[0]);
+        return self;
+    });
+
+    klass.define_native_method("size", (self: RValue): RValue => {
+        return Integer.get(self.get_data<Array>().elements.length);
+    });
+
+    klass.define_native_method("dup", (self: RValue): RValue => {
+        return Array.new([...self.get_data<Array>().elements]);
+    });
+
+    klass.define_native_method("concat", (self: RValue, args: RValue[]): RValue => {
+        args.forEach((arg) => Runtime.assert_type(arg, ArrayClass));
+        const elements = self.get_data<Array>().elements;
+        args.forEach((arg) => elements.push(...arg.get_data<Array>().elements));
+        return self;
+    });
+
+    klass.define_native_method("empty?", (self: RValue): RValue => {
+        return self.get_data<Array>().elements.length === 0 ? Qtrue : Qfalse;
     });
 };

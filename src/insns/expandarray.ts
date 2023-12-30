@@ -48,7 +48,9 @@ export default class ExpandArray extends Instruction {
                 }
             }
 
-            for (let i = 0; i < Math.min(this.size, obj_data.length); i ++) {
+            const times = Math.min(this.size, obj_data.length);
+
+            for (let i = 0; i < times; i ++) {
                 values.push(obj_data.pop()!);
             }
 
@@ -59,8 +61,9 @@ export default class ExpandArray extends Instruction {
             values.forEach((item) => context.push(item));
         } else {
             const values = [];
+            const times = Math.min(this.size, obj_data.length)
 
-            for (let i = 0; i < Math.min(this.size, obj_data.length); i ++) {
+            for (let i = 0; i < times; i ++) {
                 values.push(obj_data.shift());
             }
 

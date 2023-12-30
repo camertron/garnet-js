@@ -1,9 +1,11 @@
-import { MethodCallData } from "./call_data";
-import { LocalJumpError, RubyError } from "./errors";
+import { CallData, MethodCallData } from "./call_data";
+import { LocalJumpError, NativeError, RubyError } from "./errors";
 import { BlockFrame, ClassFrame, Frame, MethodFrame, RescueFrame, TopFrame } from "./frame";
 import Instruction from "./instruction";
 import { CatchBreak, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
-import { Array as RubyArray, ModuleClass, Class, ClassClass, Object, RValue, String, STDOUT, IO, Qnil } from "./runtime";
+import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, String, STDOUT, IO, Qnil, STDERR, Qfalse } from "./runtime";
+import { Binding } from "./runtime/binding";
+import { Object } from "./runtime/object";
 
 export type ExecutionResult = JumpResult | LeaveResult | null;
 
@@ -25,12 +27,10 @@ export class LeaveResult {
 
 class ThrownError extends Error {
     public value: RValue;
-    public backtrace: string[];
 
-    constructor(value: RValue, backtrace: string[]) {
+    constructor(value: RValue) {
         super("This error was thrown by the Ruby VM.");
         this.value = value;
-        this.backtrace = backtrace;
     }
 }
 
@@ -49,7 +49,7 @@ export class ExecutionContext {
     static current: ExecutionContext;
 
     // The system stack that tracks values through the execution of the program.
-    private stack: RValue[];
+    public stack: RValue[];
 
     // The global variables accessible to the program. These mirror the runtime
     // global variables if they have not been overridden.
@@ -58,6 +58,9 @@ export class ExecutionContext {
     // The current frame.
     public frame: Frame | null;
 
+    // Call data for the current method, block, proc, or lambda being executed
+    public call_data: CallData;
+
     constructor() {
         this.stack = [];
 
@@ -65,6 +68,8 @@ export class ExecutionContext {
             '$:': RubyArray.new(),  // load path
             '$"': RubyArray.new(),  // loaded features
             '$,': Qnil,             // field separator for print and Array#join
+            '$stdout': STDOUT,
+            '$stderr': STDERR,
         };
     }
 
@@ -111,6 +116,11 @@ export class ExecutionContext {
         // Finally we can execute the instructions one at a time. If they return
         // jumps or leaves we will handle those appropriately.
         while (true) {
+            if (this.globals["$cameron"] && this.globals["$cameron"].is_truthy()) {
+                this.globals["$cameron"] = Qfalse;
+                debugger;
+            }
+
             const insn = frame.iseq.compiled_insns[frame.pc];
 
             switch (insn.constructor) {
@@ -133,6 +143,12 @@ export class ExecutionContext {
 
                     try {
                         result = (insn as Instruction).call(this);
+
+                        // @TODO: remove me
+                        // @ts-ignore
+                        if (this.stack.includes(undefined)) {
+                            debugger;
+                        }
                     } catch (error) {
                         if (error instanceof ReturnError) {
                             let method_frame: Frame = this.frame;
@@ -147,7 +163,7 @@ export class ExecutionContext {
                             }
 
                             this.stack.splice(method_frame.stack_index);
-                            this.frame = method_frame;
+                            this.frame = previous || method_frame.parent; // implicit Leave
 
                             throw error;
                         } else if (error instanceof BreakError) {
@@ -165,7 +181,8 @@ export class ExecutionContext {
                             this.frame = frame;
 
                             frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.cont_label);
-                            this.stack.push(result = error.value);
+                            result = error.value;
+                            this.stack.push(result);
                         } else if (error instanceof NextError) {
                             if (frame.iseq.type != "block") {
                                 throw new Error(`Expected frame type to be 'block', was '${frame.iseq.type}' instead`);
@@ -202,7 +219,13 @@ export class ExecutionContext {
                                 this.stack.push(result);
                             } else {
                                 // re-raise javascript errors
-                                throw error;
+                                if (error instanceof RubyError || error instanceof NativeError) {
+                                    throw error
+                                } else if (error instanceof Error) {
+                                    throw new NativeError(error, this.create_backtrace());
+                                } else {
+                                    throw error;
+                                }
                             }
                         }
                     }
@@ -236,6 +259,12 @@ export class ExecutionContext {
         }
 
         return backtrace;
+    }
+
+    create_backtrace_rvalue(): RValue {
+        const backtrace = this.create_backtrace();
+        const lines = backtrace.map(line => String.new(line));
+        return RubyArray.new(lines);
     }
 
     static print_backtrace(e: any) {
@@ -273,14 +302,29 @@ export class ExecutionContext {
       return current;
     }
 
-    run_top_frame(iseq: InstructionSequence): RValue {
-        return this.run_frame(new TopFrame(iseq));
+    run_top_frame(iseq: InstructionSequence, stack_index?: number): RValue {
+        return this.run_frame(new TopFrame(iseq, stack_index));
     }
 
-    run_block_frame(iseq: InstructionSequence, frame: Frame, args: RValue[]): RValue {
-        return this.run_frame(new BlockFrame(iseq, frame, this.stack.length), () => {
-            return this.setup_arguments(iseq, args, null);
+    run_block_frame(iseq: InstructionSequence, binding: Binding, args: RValue[]): RValue {
+        const original_stack = this.stack;
+
+        return this.with_stack(binding.stack, () => {
+            return this.run_frame(new BlockFrame(iseq, binding, original_stack), () => {
+                return this.setup_arguments(iseq, args, null);
+            });
         });
+    }
+
+    private with_stack(stack: RValue[], cb: () => RValue): RValue {
+        const old_stack = this.stack;
+        this.stack = stack;
+
+        try {
+            return cb();
+        } finally {
+            this.stack = old_stack;
+        }
     }
 
     run_class_frame(iseq: InstructionSequence, klass: RValue): RValue {
@@ -338,26 +382,12 @@ export class ExecutionContext {
         return null;
     }
 
-    private frame_at(depth: number): Frame | null {
-        let current: Frame = this.frame!;
-
-        for (let i = 0; i < depth; i ++) {
-            if (!current.parent) {
-                return null;
-            }
-
-            current = current.parent;
-        }
-
-        return current;
-    }
-
     local_get(index: number, depth: number): RValue {
-        return this.stack[this.frame_at(depth)!.stack_index + index];
+        return this.frame!.local_get(this, index, depth);
     }
 
     local_set(index: number, depth: number, value: RValue) {
-        this.stack[this.frame_at(depth)!.stack_index + index] = value;
+        this.frame!.local_set(this, index, depth, value);
     }
 
     get const_base() {
@@ -409,8 +439,8 @@ export class ExecutionContext {
 
         // If there is a splat argument, then we'll set that up here. It will
         // grab up all of the remaining positional arguments.
-        if (iseq.argument_options.rest_start != null && iseq.argument_options.rest_start > 0) {
-            if (iseq.argument_options.post_start != null && iseq.argument_options.post_start > 0) {
+        if (iseq.argument_options.rest_start != null) {
+            if (iseq.argument_options.post_start != null) {
                 const length = locals.length - (iseq.argument_options.post_num || 0);
                 this.local_set(local_index, 0, RubyArray.new(locals.splice(0, length)));
                 // locals = locals.slice(length);
@@ -496,6 +526,7 @@ export class ExecutionContext {
 
     peek(): RValue {
         return this.stack[this.stack.length - 1];
+        // return this.stack.get(this.stack.length - 1);
     }
 
     get stack_len(): number {
@@ -508,10 +539,12 @@ export class ExecutionContext {
 
     topn(n: number): RValue {
         return this.stack[this.stack_len - n - 1];
+        // return this.stack.get(this.stack_len - n - 1);
     }
 
     setn(n: number, value: RValue): void {
         this.stack[this.stack_len - n - 1] = value;
+        // this.stack.set(this.stack_len - n - 1, value);
     }
 
     jump(label: Label): JumpResult {
@@ -520,5 +553,15 @@ export class ExecutionContext {
 
     leave() {
         return new LeaveResult(this.stack.pop()!);
+    }
+
+    get_binding(): Binding {
+        return new Binding(
+            this.frame!.self,
+            this.frame!.nesting,
+            [...this.stack],
+            this.frame!,
+            this.stack_len
+        );
     }
 }

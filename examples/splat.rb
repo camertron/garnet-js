@@ -1,10 +1,9 @@
-def foo(required, optional = nil, *rest, post)
-  {
-    required: required,
-    optional: optional,
-    rest: rest,
-    post: post
-  }
+def foo2(*args)
+  puts args.inspect
 end
 
-puts foo("required", nil, "post").inspect
+def foo(*args)
+  foo2(*args)
+end
+
+foo("god", "rest", "ye", "merry", "gentlemen")

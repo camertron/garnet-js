@@ -17,7 +17,7 @@ export default class Once extends Instruction {
     call(context: ExecutionContext): ExecutionResult {
         if (this.executed) return null;
 
-        context.push(context.run_block_frame(this.iseq, context.frame!, []));
+        context.push(context.run_block_frame(this.iseq, context.get_binding(), []));
         this.executed = true;
 
         return null;

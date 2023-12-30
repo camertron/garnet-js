@@ -1,5 +1,6 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
+import { Qnil } from "../runtime";
 
 export default class GetGlobal extends Instruction {
     public name: string;
@@ -11,7 +12,7 @@ export default class GetGlobal extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        context.push(context.globals[this.name]);
+        context.push(context.globals[this.name] || Qnil);
         return null;
     }
 

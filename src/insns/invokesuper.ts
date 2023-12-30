@@ -4,16 +4,18 @@ import { ExecutionContext, ExecutionResult } from "../execution_context";
 import { MethodFrame } from "../frame";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { Class, NativeCallable, Object, Proc, RValue, Runtime } from "../runtime";
+import { Class } from "../runtime";
+import { Object } from "../runtime/object";
+import { Proc } from "../runtime/proc";
 
 export default class InvokeSuper extends Instruction {
-    public calldata: MethodCallData;
+    public call_data: MethodCallData;
     public block_iseq: InstructionSequence | null;
 
-    constructor(calldata: MethodCallData, block_iseq: InstructionSequence | null) {
+    constructor(call_data: MethodCallData, block_iseq: InstructionSequence | null) {
         super();
 
-        this.calldata = calldata;
+        this.call_data = call_data;
         this.block_iseq = block_iseq;
     }
 
@@ -27,12 +29,8 @@ export default class InvokeSuper extends Instruction {
             let block = undefined;
 
             if (this.block_iseq) {
-                const iseq = this.block_iseq;
-
-                block = Proc.new(new NativeCallable((self: RValue, args: RValue[], block?: RValue): RValue => {
-                    return context.run_block_frame(iseq, context.frame!, args);
-                }));
-            } else if (this.calldata.has_flag(CallDataFlag.ARGS_BLOCKARG)) {
+                block = Proc.from_iseq(context, this.block_iseq);
+            } else if (this.call_data.has_flag(CallDataFlag.ARGS_BLOCKARG)) {
                 block = context.pop();
             }
 
@@ -52,8 +50,8 @@ export default class InvokeSuper extends Instruction {
     }
 
     pops(): number {
-        const argb = (this.calldata.has_flag(CallDataFlag.ARGS_BLOCKARG) ? 1 : 0);
-        return argb + this.calldata.argc + 1;
+        const argb = (this.call_data.has_flag(CallDataFlag.ARGS_BLOCKARG) ? 1 : 0);
+        return argb + this.call_data.argc + 1;
     }
 
     pushes(): number {

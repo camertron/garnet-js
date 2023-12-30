@@ -1,5 +1,6 @@
 import { ArgumentError, NoMethodError } from "../errors";
-import { Module, Object, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime"
+import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime"
+import { Object } from "./object";
 
 export const spaceship_compare = (x: RValue, y: RValue): number | null => {
     try {

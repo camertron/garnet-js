@@ -1,7 +1,9 @@
 import { isNode } from "../env";
-import { ArgumentError, RubyError, RuntimeError, TypeError } from "../errors";
-import { Array, Module, Object, Qfalse, Qnil, Qtrue, RValue, StringClass, String, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, ArrayClass } from "../runtime";
+import { ArgumentError, NotImplementedError, RubyError, RuntimeError, SystemExit, TypeError } from "../errors";
+import { ExecutionContext } from "../execution_context";
+import { Array, Module, Qfalse, Qnil, Qtrue, RValue, StringClass, String, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, ArrayClass, InterpretedCallable, Callable, HashClass, SymbolClass } from "../runtime";
 import { Integer } from "./integer";
+import { Object } from "./object";
 
 const kernel_puts = (_self: RValue, args: RValue[]): RValue => {
     for (let arg of args) {
@@ -33,9 +35,13 @@ export class Kernel {
 export const init = async () => {
     const mod = KernelModule.get_data<Module>();
     let child_process: unknown;
+    let kexec: (executable: string, args?: string[]) => never;
 
     if (isNode) {
-        child_process = await import("child_process");
+        // child_process = await import("child_process");
+
+        // @ts-ignore
+        kexec = (await import("@gongt/kexec")).default;
     }
 
     mod.define_native_method("puts", kernel_puts);
@@ -45,6 +51,12 @@ export const init = async () => {
         const path = args[0];
         Runtime.assert_type(path, StringClass);
         return Runtime.require(path.get_data<string>()) ? Qtrue : Qfalse;
+    });
+
+    mod.define_native_method("load", (_self: RValue, args: RValue[]): RValue => {
+        const path = args[0];
+        Runtime.assert_type(path, StringClass);
+        return Runtime.load(path.get_data<string>()) ? Qtrue : Qfalse;
     });
 
     mod.define_native_method("===", (self: RValue, args: RValue[]): RValue => {
@@ -76,8 +88,17 @@ export const init = async () => {
     });
 
     mod.define_native_method("raise", (_self: RValue, args: RValue[]): RValue => {
-        const error = args[0].get_data<RubyError>();
-        throw error;
+        let instance;
+
+        if (args[0].klass === ClassClass) {
+            instance = Object.send(args[0], "new", [args[1] || Qnil]);
+        } else {
+            instance = args[0];
+        }
+
+        Object.send(instance, "set_backtrace", [ExecutionContext.current.create_backtrace_rvalue()]);
+
+        throw instance;
     });
 
     mod.define_native_method("respond_to?", (self: RValue, args: RValue[]): RValue => {
@@ -139,5 +160,95 @@ export const init = async () => {
 
     mod.define_native_method("instance_variable_get", (self: RValue, args: RValue[]): RValue => {
         return self.iv_get(Object.send(args[0], "to_s").get_data<string>());
+    });
+
+    mod.define_native_method("lambda", (self: RValue, args: RValue[], block?: RValue): RValue => {
+        if (!block) {
+            throw new ArgumentError("tried to create a Proc object without a block");
+        }
+
+        return block;
+    });
+
+    mod.define_native_method("object_id", (self: RValue): RValue => {
+        return Integer.get(self.object_id);
+    });
+
+    mod.define_native_method("instance_variable_set", (self: RValue, args: RValue[]): RValue => {
+        const first_arg = args[0] || Qnil;
+
+        if (first_arg.klass === StringClass || first_arg.klass === SymbolClass) {
+            const ivar_name = first_arg.get_data<string>();
+            self.iv_set(ivar_name, args[1]);
+            return args[1];
+        } else {
+            throw new TypeError(`${Object.send(args[1], "inspect").get_data<string>()} is not a symbol nor a string`)
+        }
+    });
+
+    mod.define_native_method("instance_variable_get", (self: RValue, args: RValue[]): RValue => {
+        const first_arg = args[0] || Qnil;
+
+        if (first_arg.klass === StringClass || first_arg.klass === SymbolClass) {
+            const ivar_name = first_arg.get_data<string>();
+            return self.iv_get(ivar_name);
+        } else {
+            throw new TypeError(`${Object.send(args[1], "inspect").get_data<string>()} is not a symbol nor a string`)
+        }
+    });
+
+    mod.define_native_method("exit", (self: RValue, args: RValue[]): RValue => {
+        let status = 0;
+        let message = null;
+
+        if (args.length > 0) {
+            Runtime.assert_type(args[0], IntegerClass);
+            status = args[0].get_data<number>();
+        }
+
+        if (args.length > 1) {
+            // ugh wtf
+            message = args[0].get_data<any>();
+        }
+
+        throw new SystemExit(status, message);
+    });
+
+    mod.define_native_method("abort", (self: RValue, args: RValue[]): RValue => {
+        const msg = args.length > 0 ? args[0].get_data<any>() : null;
+        throw new SystemExit(1, msg);
+    });
+
+    mod.define_native_method("exec", (self: RValue, args: RValue[]): RValue => {
+        if (!isNode) {
+            throw new RuntimeError("Kernel#exec is only supported in nodejs");
+        }
+
+        const first_arg = args[0] || Qnil;
+
+        if (first_arg.klass === StringClass) {
+            if (args[1]) {
+                if (args[1].klass === ArrayClass) {
+                    const elems = args[1].get_data<Array>().elements;
+                    elems.forEach((elem) => Runtime.assert_type(elem, StringClass));
+                    const elem_strings = elems.map((elem) => elem.get_data<string>());
+                    kexec(first_arg.get_data<string>(), elem_strings);
+                } else {
+                    throw new NotImplementedError(`unexpected ${first_arg.get_data<Class>().name} passed as the first argument to Kernel#exec`);
+                }
+            } else {
+                kexec(first_arg.get_data<string>());
+            }
+        } else if (first_arg.klass === HashClass) {
+            throw new NotImplementedError("passing a hash as the first argument to Kernel#exec is not yet supported");
+        } else if (first_arg.klass === ArrayClass) {
+            const elems = args[0].get_data<Array>().elements;
+            elems.forEach((elem) => Runtime.assert_type(elem, StringClass));
+            const elem_strings = elems.map((elem) => elem.get_data<string>());
+            console.log(elem_strings);
+            kexec(elem_strings.join(" "));
+        } else {
+            throw new ArgumentError(`unexpected ${first_arg.klass.get_data<Class>().name} passed as the first argument to Kernel#exec`);
+        }
     });
 };

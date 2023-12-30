@@ -1,7 +1,8 @@
 import { NotImplementedError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Class, ModuleClass, Object, Qnil, RValue, Runtime } from "../runtime";
+import { Class, ModuleClass, Qnil, RValue, Runtime } from "../runtime";
+import { Object } from "../runtime/object";
 
 export enum DefinedType {
     NIL,

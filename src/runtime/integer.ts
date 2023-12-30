@@ -1,4 +1,4 @@
-import { Class, FloatClass, IntegerClass, Qfalse, Qnil, Qtrue, RValue, Runtime, String } from "../runtime";
+import { Class, Float, FloatClass, IntegerClass, NumericClass, Qfalse, Qnil, Qtrue, RValue, Runtime, String } from "../runtime";
 
 export class Integer {
     static INT2FIX0: RValue;
@@ -45,9 +45,22 @@ export const defineIntegerBehaviorOn = (klass: Class) => {
     // definition is here for the sake of completeness.
     klass.define_native_method("*", (self: RValue, args: RValue[]): RValue => {
         const multiplier = args[0];
-        Runtime.assert_type(multiplier, IntegerClass)  // @TODO: handle floats, maybe Numeric?
+        Runtime.assert_type(multiplier, IntegerClass);  // @TODO: handle floats, maybe Numeric?
 
         return Integer.new(self.get_data<number>() * multiplier.get_data<number>());
+    });
+
+    klass.define_native_method("/", (self: RValue, args: RValue[]): RValue => {
+        const divisor = args[0];
+        Runtime.assert_type(divisor, NumericClass);
+
+        const result = self.get_data<number>() / divisor.get_data<number>();
+
+        if (divisor.klass === FloatClass) {
+            return Float.new(result);
+        } else {
+            return Integer.get(Math.floor(result));
+        }
     });
 
     klass.define_native_method("+", (self: RValue, args: RValue[]): RValue => {
@@ -55,6 +68,26 @@ export const defineIntegerBehaviorOn = (klass: Class) => {
         Runtime.assert_type(term, IntegerClass);  // @TODO: handle floats, maybe Numeric?
 
         return Integer.new(self.get_data<number>() + term.get_data<number>());
+    });
+
+    klass.define_native_method("-", (self: RValue, args: RValue[]): RValue => {
+        const term = args[0];
+        Runtime.assert_type(term, IntegerClass);  // @TODO: handle floats, maybe Numeric?
+
+        return Integer.new(self.get_data<number>() - term.get_data<number>());
+    });
+
+    klass.define_native_method("%", (self: RValue, args: RValue[]): RValue => {
+        const divisor = args[0];
+        Runtime.assert_type(divisor, NumericClass);
+
+        const result = self.get_data<number>() % divisor.get_data<number>();
+
+        if (divisor.klass === FloatClass) {
+            return Float.new(result);
+        } else {
+            return Integer.get(result);
+        }
     });
 
     klass.define_native_method("<=>", (self: RValue, args: RValue[]): RValue => {

@@ -1,6 +1,7 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Object, Class, StringClass, String } from "../runtime";
+import { Class, StringClass, String } from "../runtime";
+import { Object } from "../runtime/object";
 
 export default class AnyToString extends Instruction {
     call(context: ExecutionContext): ExecutionResult {

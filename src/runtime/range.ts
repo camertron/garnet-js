@@ -1,4 +1,4 @@
-import { Class, Object, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
+import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { spaceship_compare } from "./comparable";
 
 export class Range {

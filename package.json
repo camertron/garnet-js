@@ -29,6 +29,7 @@
     "example": "node -r @swc-node/register ./test.ts"
   },
   "dependencies": {
+    "@gongt/kexec": "^3.0.0",
     "@ruby/prism": "link:/Users/camertron/workspace/ruby/prism/javascript/"
   },
   "devDependencies": {

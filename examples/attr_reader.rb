@@ -1,9 +1,12 @@
 class Foo
-  attr_reader :foo
+  attr_accessor :foo
 
   def initialize(foo)
     @foo = foo
   end
 end
 
-puts Foo.new("foo").foo
+f = Foo.new("foo")
+puts f.foo
+f.foo = "bar"
+puts f.foo

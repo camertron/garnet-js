@@ -56,4 +56,8 @@ export class BlockCallData extends CallData {
         this.flag = flag;
         this.kw_arg = kw_arg;
     }
+
+    static create(argc: number = 0, flags: number = CallDataFlag.ARGS_SIMPLE, kw_arg: string[] | null = null) {
+        return new BlockCallData(argc, flags, kw_arg);
+    }
 }

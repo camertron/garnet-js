@@ -162,5 +162,20 @@ export const init = () => {
             const path = args[0].get_data<string>();
             return vmfs.path_exists(path) ? Qtrue : Qfalse;
         });
+
+        /* Returns all components of the filename given in file_name except the last one (after first
+         * stripping trailing separators). The filename can be formed using both File::SEPARATOR and
+         * File::ALT_SEPARATOR as the separator when File::ALT_SEPARATOR is not nil.
+         */
+        klass.define_native_singleton_method("dirname", (_self: RValue, args: RValue[]): RValue => {
+            Runtime.assert_type(args[0], StringClass);
+            const parts = vmfs.split_path(args[0].get_data<string>());
+
+            while (parts.length > 0 && parts[parts.length - 1].length === 0) {
+                parts.pop();
+            }
+
+            return String.new(vmfs.join_paths(...parts));
+        });
     });
 };

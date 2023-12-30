@@ -1,7 +1,8 @@
 import { NotImplementedError } from "../errors";
 import { BreakError, ExecutionContext, ExecutionResult, NextError, ReturnError } from "../execution_context";
 import Instruction from "../instruction";
-import { NilClass, Runtime, Object } from "../runtime";
+import { NilClass, Runtime } from "../runtime";
+import { Object } from "../runtime/object";
 
 export enum ThrowType {
     NONE = 0x0,
@@ -43,13 +44,13 @@ export default class Throw extends Instruction {
                 break;
 
             case ThrowType.RETURN:
-                throw new ReturnError(value, context.create_backtrace());
+                throw new ReturnError(value);
 
             case ThrowType.BREAK:
-                throw new BreakError(value, context.create_backtrace());
+                throw new BreakError(value);
 
             case ThrowType.NEXT:
-                throw new NextError(value, context.create_backtrace());
+                throw new NextError(value);
 
             default:
                 throw new NotImplementedError(`Unknown throw kind ${state}`);

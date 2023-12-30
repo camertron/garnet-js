@@ -1,4 +1,5 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
+import { Frame } from "../frame";
 import Instruction from "../instruction";
 
 export default class SetLocal extends Instruction {

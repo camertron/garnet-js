@@ -1,5 +1,7 @@
+import { ExecutionContext } from "./execution_context";
 import { InstructionSequence } from "./instruction_sequence";
 import { RValue, ObjectClass, Main } from "./runtime";
+import { Binding } from "./runtime/binding";
 
 export class Frame {
     public iseq: InstructionSequence;
@@ -22,17 +24,55 @@ export class Frame {
         this.line = iseq.line;
         this.pc = 0;
     }
+
+    local_get(context: ExecutionContext, index: number, depth: number): RValue {
+        return context.stack[this.frame_at(context, depth)!.stack_index + index];
+    }
+
+    local_set(context: ExecutionContext, index: number, depth: number, value: RValue) {
+        context.stack[this.frame_at(context, depth)!.stack_index + index] = value;
+    }
+
+    protected frame_at(context: ExecutionContext, depth: number): Frame | null {
+        let current: Frame = context.frame!;
+
+        for (let i = 0; i < depth; i ++) {
+            if (!current.parent) {
+                return null;
+            }
+
+            current = current.parent;
+        }
+
+        return current;
+    }
 }
 
 export class TopFrame extends Frame {
-    constructor(iseq: InstructionSequence) {
-        super(iseq, null, 0, Main, [ObjectClass])
+    constructor(iseq: InstructionSequence, stack_index: number = 0) {
+        super(iseq, null, stack_index, Main, [ObjectClass]);
     }
 }
 
 export class BlockFrame extends Frame {
-    constructor(iseq: InstructionSequence, parent: Frame, stack_index: number) {
-        super(iseq, parent, stack_index, parent.self, parent.nesting);
+    private binding: Binding;
+    private original_stack: RValue[];
+
+    constructor(iseq: InstructionSequence, binding: Binding, original_stack: RValue[]) {
+        super(iseq, binding.parent_frame, binding.stack_index, binding.self, binding.nesting);
+
+        this.binding = binding;
+        this.original_stack = original_stack;
+    }
+
+    local_set(context: ExecutionContext, index: number, depth: number, value: RValue) {
+        const stack_index = this.frame_at(context, depth)!.stack_index + index;
+        this.binding.stack[stack_index] = value;
+
+        // The following code sets a local variable outside the context of the block.
+        if (depth > 0 && this.binding.parent_frame == context.frame?.parent) {
+            this.original_stack[stack_index] = value;
+        }
     }
 }
 

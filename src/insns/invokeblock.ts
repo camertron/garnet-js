@@ -3,6 +3,7 @@ import { LocalJumpError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Callable, Qnil } from "../runtime";
+import { Proc } from "../runtime/proc";
 
 export default class InvokeBlock extends Instruction {
     public calldata: BlockCallData;
@@ -18,7 +19,7 @@ export default class InvokeBlock extends Instruction {
         const block = context.frame_yield()!.block;
 
         if (block) {
-            const result = block.get_data<Callable>().call(context, Qnil, args);
+            const result = block.get_data<Proc>().call(context, args);
             context.push(result);
         } else {
             throw new LocalJumpError("no block given (yield)");

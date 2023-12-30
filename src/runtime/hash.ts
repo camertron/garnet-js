@@ -1,4 +1,5 @@
-import { String, RValue, Object, Class, Hash, Qtrue, Qfalse } from "../runtime";
+import { String, RValue, Class, Hash, Qtrue, Qfalse } from "../runtime";
+import { Object } from "./object";
 
 export const defineHashBehaviorOn = (klass: Class) => {
     klass.define_native_method("[]", (self: RValue, args: RValue[]): RValue => {

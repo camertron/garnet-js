@@ -1,6 +1,7 @@
 import { NameError } from "../errors";
-import { Array, String, Object, Module, ModuleClass, RValue, Runtime, SymbolClass, Visibility, Qnil, StringClass, Class, Qtrue, Qfalse, NativeCallable, ClassClass } from "../runtime";
+import { Array, String, Module, ModuleClass, RValue, Runtime, SymbolClass, Visibility, Qnil, StringClass, Class, Qtrue, Qfalse, NativeCallable, ClassClass } from "../runtime";
 import { Kernel } from "./kernel";
+import { Object } from "./object";
 
 export const defineModuleBehaviorOn = (mod: Module) => {
     mod.define_native_method("inspect", (self: RValue): RValue => {
@@ -130,17 +131,16 @@ export const defineModuleBehaviorOn = (mod: Module) => {
 
 const define_attr_reader_on = (mod: RValue, name: string): string => {
     mod.get_data<Module>().methods[name] = new NativeCallable((self: RValue, args: RValue[]): RValue => {
-        self.iv_set(`@${name}`, args[0]);
-        return args[0];
+        return self.iv_get(`@${name}`);
     });
 
     return name;
 }
 
 const define_attr_writer_on = (mod: RValue, name: string): string => {
-    name = `${name}=`;
+    const mtd_name = `${name}=`;
 
-    mod.get_data<Module>().methods[name] = new NativeCallable((self: RValue, args: RValue[]): RValue => {
+    mod.get_data<Module>().methods[mtd_name] = new NativeCallable((self: RValue, args: RValue[]): RValue => {
         self.iv_set(`@${name}`, args[0]);
         return args[0];
     });

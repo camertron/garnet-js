@@ -1,9 +1,11 @@
 import { ArgumentError, NotImplementedError } from "../errors";
-import { Array as RubyArray, Class, Qnil, RValue, StringClass, String, IntegerClass, Runtime, Float, Object, ArrayClass, Qtrue, Qfalse, RegexpClass } from "../runtime";
+import { Array as RubyArray, Class, Qnil, RValue, StringClass, String, IntegerClass, Runtime, Float, Qtrue, Qfalse, RegexpClass, NumericClass } from "../runtime";
 import { hash_string } from "../util/string_utils";
 import { Integer } from "./integer";
 import { Regexp } from "./regexp";
 import { Range } from "./range";
+import { Object } from "./object";
+import { ExecutionContext } from "../execution_context";
 
 export const defineStringBehaviorOn = (klass: Class) => {
     klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
@@ -32,7 +34,7 @@ export const defineStringBehaviorOn = (klass: Class) => {
 
     klass.define_native_method("*", (self: RValue, args: RValue[]): RValue => {
         const multiplier = args[0];
-        Runtime.assert_type(multiplier, IntegerClass);  // @TODO: handle floats (yes, you can multiply strings by floats, oh ruby)
+        Runtime.assert_type(multiplier, NumericClass);  // @TODO: handle floats (yes, you can multiply strings by floats, oh ruby)
         return String.new(self.get_data<string>().repeat(multiplier.get_data<number>()));
     });
 
@@ -100,24 +102,28 @@ export const defineStringBehaviorOn = (klass: Class) => {
         "((?:[ #+-0*]|\\d+\\$)+)?" +  // Flag. Any of space, #, +, -, 0, *, or n$ meaning nth argument.
         "(-?\\d+)?" +                 // Width. Possibly negative integer.
         "(\\.\\d)?" +                 // Precision. A dot followed by a non-negative integer.
-        "([bBdiuoxX])"                // Type specifier.
+        "([bBdiuoxXaAeEfgGcps])"      // Type specifier.
     );
 
     const printf_re = new RegExp(printf_pattern, "g");
 
-    const left_pad = (str: string, pad_char: string, length: number): string => {
+    const right_pad = (str: string, pad_char: string, length: number): string => {
         if (str.length >= length) return str;
         const leading = pad_char.repeat(length - str.length);
         return `${leading}${str}`;
     }
 
-    const right_pad = (str: string, pad_char: string, length: number): string => {
+    const left_pad = (str: string, pad_char: string, length: number): string => {
         if (str.length >= length) return str;
         const trailing = pad_char.repeat(length - str.length);
         return `${str}${trailing}`;
     }
 
     const format_int = (idx: number, self: RValue, args: RValue[], flags: string, orig_width: string, precision: number): string => {
+        if (idx >= args.length) {
+            throw new ArgumentError("too few arguments");
+        }
+
         let width;
 
         if (flags.indexOf("*") > -1) {
@@ -140,7 +146,7 @@ export const defineStringBehaviorOn = (klass: Class) => {
         }
 
         if (result.length < precision) {
-            result = left_pad(result, "0", precision);
+            result = right_pad(result, "0", precision);
         }
 
         if (result.length >= width) {
@@ -154,9 +160,9 @@ export const defineStringBehaviorOn = (klass: Class) => {
         }
 
         if (flags.indexOf("-") > -1) {
-            return right_pad(result, pad_char, width);
-        } else {
             return left_pad(result, pad_char, width);
+        } else {
+            return right_pad(result, pad_char, width);
         }
     }
 
@@ -164,28 +170,41 @@ export const defineStringBehaviorOn = (klass: Class) => {
         const pattern = self.get_data<string>();
         const chunks = [];
         let last_pos = 0;
+        let idx = 0;
 
         args = Object.send(self, "Array", args).get_data<RubyArray>().elements;
 
-        Array.from(pattern.matchAll(printf_re)).forEach((match, idx) => {
-            if (idx >= args.length) {
-                throw new ArgumentError("too few arguments");
-            }
-
+        Array.from(pattern.matchAll(printf_re)).forEach((match) => {
             const cur_pos = match.index!
 
             if (cur_pos > last_pos) {
                 chunks.push(pattern.slice(last_pos, cur_pos));
             }
 
-            const [_, flags, width, precision_field, type] = match;
+            const [_, flags_field, width, precision_field, type] = match;
             const precision = precision_field && precision_field.length > 0 ? parseInt(precision_field.slice(1)) : 0;
+            const flags = flags_field || "";
 
             switch (type) {
                 case "d":
                 case "i":
                 case "u":
                     chunks.push(format_int(idx, self, args, flags, width, precision));
+                    idx ++;
+                    break;
+
+                case "s":
+                    chunks.push(Object.send(args[idx], "to_s").get_data<string>());
+                    idx ++;
+                    break;
+
+                case "p":
+                    chunks.push(Object.send(args[idx], "inspect").get_data<string>());
+                    idx ++;
+                    break;
+
+                case "%":
+                    chunks.push("%");
                     break;
 
                 default:
@@ -199,13 +218,28 @@ export const defineStringBehaviorOn = (klass: Class) => {
             chunks.push(pattern.slice(last_pos));
         }
 
-        return String.new(chunks.join(""));
+        const result = chunks.join("").replace("%%", "%");
+        return String.new(result);
     });
 
     klass.define_native_method("==", (self: RValue, args: RValue[]): RValue => {
-        Runtime.assert_type(args[0], StringClass);
+        if (args[0].klass != StringClass) {
+            return Qfalse;
+        }
 
         if (self.get_data<string>() === args[0].get_data<string>()) {
+            return Qtrue;
+        } else {
+            return Qfalse;
+        }
+    });
+
+    klass.define_native_method("!=", (self: RValue, args: RValue[]): RValue => {
+        if (args[0].klass != StringClass) {
+            return Qtrue;
+        }
+
+        if (self.get_data<string>() !== args[0].get_data<string>()) {
             return Qtrue;
         } else {
             return Qfalse;
@@ -219,6 +253,10 @@ export const defineStringBehaviorOn = (klass: Class) => {
 
     klass.define_native_method("empty?", (self: RValue): RValue => {
         return self.get_data<string>().length === 0 ? Qtrue : Qfalse;
+    });
+
+    klass.define_native_method("size", (self: RValue): RValue => {
+        return Integer.get(self.get_data<string>().length);
     });
 
     klass.define_native_method("[]", (self: RValue, args: RValue[]): RValue => {
@@ -274,6 +312,71 @@ export const defineStringBehaviorOn = (klass: Class) => {
                     return Qnil;
                 }
             }
+        }
+    });
+
+    klass.define_native_method("[]=", (self: RValue, args: RValue[]): RValue => {
+        const data = self.get_data<string>();
+
+        // @TODO: implement all the other ways this function can be called (see [] above)
+        Runtime.assert_type(args[0], IntegerClass);
+        Runtime.assert_type(args[1], IntegerClass);
+        Runtime.assert_type(args[2], StringClass);
+
+        const start = args[0].get_data<number>();
+        const length = args[1].get_data<number>();
+        const replacement = args[2].get_data<string>();
+
+        self.data = `${data.slice(0, start)}${replacement}${data.slice(start + length)}`;
+        return args[2];
+    });
+
+    klass.define_native_method("ljust", (self: RValue, args: RValue[]): RValue => {
+        const data = self.get_data<string>();
+        Runtime.assert_type(args[0], IntegerClass);
+        const size = args[0].get_data<number>();
+
+        let pad_str;
+
+        if (args.length > 1) {
+            Runtime.assert_type(StringClass, args[1]);
+            pad_str = args[1].get_data<string>();
+        } else {
+            pad_str = " ";
+        }
+
+        return String.new(left_pad(data, pad_str, size));
+    });
+
+    klass.define_native_method("dup", (self: RValue): RValue => {
+        return String.new(self.get_data<string>());
+    });
+
+    klass.define_native_method("start_with?", (self: RValue, args: RValue[]): RValue => {
+        Runtime.assert_type(args[0] || Qnil, StringClass);
+
+        const data = self.get_data<string>();
+        const search_str = args[0].get_data<string>();
+
+        return data.startsWith(search_str) ? Qtrue : Qfalse;
+    });
+
+    klass.define_native_method("end_with?", (self: RValue, args: RValue[]): RValue => {
+        Runtime.assert_type(args[0] || Qnil, StringClass);
+
+        const data = self.get_data<string>();
+        const search_str = args[0].get_data<string>();
+
+        return data.endsWith(search_str) ? Qtrue : Qfalse;
+    });
+
+    klass.define_native_method("=~", (self: RValue, args: RValue[]): RValue => {
+        if (args[0].klass === RegexpClass) {
+            const regexp = args[0].get_data<Regexp>();
+            const result = regexp.search(self.get_data<string>());
+            return result ? Integer.get(result) : Qnil;
+        } else {
+            return Object.send(args[0], "=~", [self]);
         }
     });
 };
