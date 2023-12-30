@@ -1,0 +1,6 @@
+require_relative "../../spec_helper"
+require_relative 'shared/name'
+
+describe "Encoding#name" do
+  it_behaves_like :encoding_name, :name
+end
