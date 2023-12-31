@@ -25,7 +25,7 @@ export default class InvokeSuper extends Instruction {
         const method_frame = (context.frame! as MethodFrame);
 
         if (superclass) {
-            const method = Object.find_method_under(superclass, method_frame.name);
+            const method = Object.find_method_under(superclass, method_frame.call_data.mid);
             let block = undefined;
 
             if (this.block_iseq) {
@@ -35,14 +35,14 @@ export default class InvokeSuper extends Instruction {
             }
 
             if (method) {
-                const result = method.call(context, self, method_frame.args, block);
+                const result = method.call(context, self, method_frame.args, block, this.call_data);
                 context.push(result);
                 return null;
             }
         }
 
         const inspect_str = Object.send(self, "inspect").get_data<string>();
-        throw new NoMethodError(`super: no superclass method \`${method_frame.name}' for ${inspect_str}`)
+        throw new NoMethodError(`super: no superclass method \`${method_frame.call_data.mid}' for ${inspect_str}`)
     }
 
     length(): number {

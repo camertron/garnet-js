@@ -1,3 +1,4 @@
+import { BlockCallData } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
@@ -17,7 +18,7 @@ export default class Once extends Instruction {
     call(context: ExecutionContext): ExecutionResult {
         if (this.executed) return null;
 
-        context.push(context.run_block_frame(this.iseq, context.get_binding(), []));
+        context.push(context.run_block_frame(BlockCallData.create(0), this.iseq, context.get_binding(), []));
         this.executed = true;
 
         return null;

@@ -1,5 +1,6 @@
+import { BlockCallData } from "../call_data";
 import { ExecutionContext } from "../execution_context";
-import { Frame } from "../frame";
+import { BlockFrame } from "../frame";
 import { InstructionSequence } from "../instruction_sequence";
 import { RValue, Class, ProcClass, NativeMethod } from "../runtime";
 import { Binding } from "./binding";
@@ -17,7 +18,7 @@ export abstract class Proc {
         return new RValue(ProcClass, new InterpretedProc(iseq, binding));
     }
 
-    abstract call(context: ExecutionContext, args: RValue[]): RValue;
+    abstract call(context: ExecutionContext, args: RValue[], call_data?: BlockCallData): RValue;
     abstract with_binding(new_binding: Binding): Proc;
 }
 
@@ -32,7 +33,7 @@ export class NativeProc extends Proc {
         this.binding = binding;
     }
 
-    call(_context: ExecutionContext, args: RValue[]): RValue {
+    call(_context: ExecutionContext, args: RValue[], _call_data?: BlockCallData): RValue {
         return this.callable(this.binding.self, args);
     }
 
@@ -52,8 +53,9 @@ export class InterpretedProc extends Proc {
         this.binding = binding;
     }
 
-    call(context: ExecutionContext, args: RValue[]): RValue {
-        return context.run_block_frame(this.iseq, this.binding, args);
+    call(context: ExecutionContext, args: RValue[], call_data?: BlockCallData): RValue {
+        call_data ||= BlockCallData.create(args.length);
+        return context.run_block_frame(call_data, this.iseq, this.binding, args);
     }
 
     with_binding(new_binding: Binding): InterpretedProc {
@@ -63,7 +65,8 @@ export class InterpretedProc extends Proc {
 
 export const defineProcBehaviorOn = (klass: Class) => {
     klass.define_native_method("call", (self: RValue, args: RValue[]): RValue => {
-        return self.get_data<Proc>().call(ExecutionContext.current, args);
+        const ec = ExecutionContext.current
+        return self.get_data<Proc>().call(ec, args, (ec.frame as BlockFrame).call_data);
     });
 
     klass.alias_method("[]", "call");

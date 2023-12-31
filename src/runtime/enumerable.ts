@@ -1,3 +1,4 @@
+import { BlockCallData } from "../call_data";
 import { BreakError, ExecutionContext } from "../execution_context";
 import { Module, Qnil, RValue, Runtime, NativeCallable, Callable, Array, Qfalse, Qtrue } from "../runtime"
 import { Object } from "./object";

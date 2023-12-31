@@ -559,6 +559,10 @@ export class Compiler {
 
             node.arguments_.arguments_.forEach((argument) => {
                 switch (argument.constructor.name) {
+                    case "SplatNode":
+                        flags |= CallDataFlag.ARGS_SPLAT;
+                        break;
+
                     case "ForwardingArgumentsNode":
                         flags |= CallDataFlag.ARGS_SPLAT;
                         flags |= CallDataFlag.ARGS_BLOCKARG;

@@ -2,6 +2,7 @@ import { MethodCallData } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Array, ArrayClass, Qnil, Qtrue, RValue, Runtime } from "../runtime";
+import { Object } from "../runtime/object"
 
 export enum ExpandArrayFlag {
     SPLAT_FLAG = 0x01,
@@ -26,8 +27,8 @@ export default class ExpandArray extends Instruction {
             if (object.klass == ArrayClass) {
                 // dup
                 return new RValue(ArrayClass, new Array([...object.get_data<Array>().elements]));
-            } else if (context.call_method(MethodCallData.create("respond_to?", 1), object, [Runtime.intern("to_ary"), Qtrue]).is_truthy()) {
-                return context.call_method(MethodCallData.create("to_ary", 0), object, []);
+            } else if (Object.send(object, "respond_to?", [Runtime.intern("to_ary"), Qtrue]).is_truthy()) {
+                return Object.send(object, "to_ary");
             } else {
                 return Array.new([object]);
             }

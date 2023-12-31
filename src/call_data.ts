@@ -49,6 +49,16 @@ export class BlockCallData extends CallData {
     public flag: number;
     public kw_arg: any;
 
+    private static _empty: BlockCallData;
+
+    static empty(): BlockCallData {
+        if (!this._empty) {
+            this._empty = BlockCallData.create(0);
+        }
+
+        return this._empty;
+    }
+
     constructor(argc: number, flag: number, kw_arg: string[] | null) {
         super();
 

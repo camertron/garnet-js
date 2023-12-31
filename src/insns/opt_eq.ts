@@ -2,6 +2,7 @@ import { MethodCallData } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { IntegerClass, Qfalse, Qtrue, StringClass, SymbolClass } from "../runtime";
+import { Object } from "../runtime/object"
 
 export default class OptEq extends Instruction {
     public call_data: MethodCallData;
@@ -29,7 +30,7 @@ export default class OptEq extends Instruction {
                 context.push(Qfalse);
             }
         } else {
-            const result = context.call_method(this.call_data, receiver, args);
+            const result = Object.send(receiver, this.call_data, args);
             context.push(result);
         }
 

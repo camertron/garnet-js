@@ -1,6 +1,7 @@
 import { MethodCallData } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
+import { Object } from "../runtime/object"
 
 export default class ObjToString extends Instruction {
     public calldata: MethodCallData;
@@ -13,7 +14,7 @@ export default class ObjToString extends Instruction {
 
     call(context: ExecutionContext): ExecutionResult {
         const receiver = context.pop()!;
-        const result = context.call_method(this.calldata, receiver, []);
+        const result = Object.send(receiver, this.calldata);
         context.push(result);
         return null;
     }

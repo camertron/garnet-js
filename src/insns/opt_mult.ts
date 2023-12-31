@@ -3,6 +3,7 @@ import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { IntegerClass } from "../runtime";
 import { Integer } from "../runtime/integer";
+import { Object } from "../runtime/object"
 
 export default class OptMult extends Instruction {
     public call_data: MethodCallData;
@@ -23,7 +24,7 @@ export default class OptMult extends Instruction {
                 Integer.new(receiver.get_data<number>() * args[0].get_data<number>())
             );
         } else {
-            const result = context.call_method(this.call_data, receiver, args);
+            const result = Object.send(receiver, this.call_data, args);
             context.push(result);
         }
 

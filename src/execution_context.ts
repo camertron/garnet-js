@@ -1,11 +1,10 @@
-import { CallData, MethodCallData } from "./call_data";
+import { BlockCallData, CallData, MethodCallData } from "./call_data";
 import { LocalJumpError, NativeError, RubyError } from "./errors";
 import { BlockFrame, ClassFrame, Frame, MethodFrame, RescueFrame, TopFrame } from "./frame";
 import Instruction from "./instruction";
 import { CatchBreak, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
 import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, String, STDOUT, IO, Qnil, STDERR, Qfalse } from "./runtime";
 import { Binding } from "./runtime/binding";
-import { Object } from "./runtime/object";
 
 export type ExecutionResult = JumpResult | LeaveResult | null;
 
@@ -75,10 +74,6 @@ export class ExecutionContext {
 
     push_onto_load_path(path: string) {
         this.globals["$:"].get_data<RubyArray>().elements.push(String.new(path));
-    }
-
-    call_method(call_data: MethodCallData, receiver: RValue, args: RValue[], block?: RValue): RValue {
-        return Object.send(receiver, call_data.mid, args, block);
     }
 
     // This returns the instruction sequence object that is currently being
@@ -306,12 +301,12 @@ export class ExecutionContext {
         return this.run_frame(new TopFrame(iseq, stack_index));
     }
 
-    run_block_frame(iseq: InstructionSequence, binding: Binding, args: RValue[]): RValue {
+    run_block_frame(call_data: BlockCallData, iseq: InstructionSequence, binding: Binding, args: RValue[]): RValue {
         const original_stack = this.stack;
 
         return this.with_stack(binding.stack, () => {
-            return this.run_frame(new BlockFrame(iseq, binding, original_stack), () => {
-                return this.setup_arguments(iseq, args, null);
+            return this.run_frame(new BlockFrame(call_data, iseq, binding, original_stack), () => {
+                return this.setup_arguments(call_data, iseq, args, null);
             });
         });
     }
@@ -331,21 +326,21 @@ export class ExecutionContext {
         return this.run_frame(new ClassFrame(iseq, this.frame!, this.stack.length, klass));
     }
 
-    run_method_frame(name: string, nesting: RValue[], iseq: InstructionSequence, self: RValue, args: RValue[], block?: RValue): RValue {
+    run_method_frame(call_data: MethodCallData, nesting: RValue[], iseq: InstructionSequence, self: RValue, args: RValue[], block?: RValue): RValue {
         const method_frame = new MethodFrame(
             iseq,
             nesting,
             this.frame!,
             this.stack.length,
             self,
-            name,
+            call_data,
             args,
             block
         );
 
         try {
             return this.run_frame(method_frame, () => {
-                return this.setup_arguments(iseq, args, block);
+                return this.setup_arguments(call_data, iseq, args, block);
             });
         } catch (e) {
             if (e instanceof ReturnError) {
@@ -394,7 +389,12 @@ export class ExecutionContext {
         return this.frame!.nesting![this.frame!.nesting.length - 1];
     }
 
-    private setup_arguments(iseq: InstructionSequence, args: RValue[], block?: RValue | null): Label | null {
+    private setup_arguments(call_data: CallData, iseq: InstructionSequence, args: RValue[], block?: RValue | null): Label | null {
+        // @ts-ignore
+        if (call_data.mid === "exception") {
+            debugger;
+        }
+
         let locals = [...args];
         let local_index = 0;
         let start_label: Label | null = null;

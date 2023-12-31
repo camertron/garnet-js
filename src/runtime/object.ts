@@ -1,10 +1,21 @@
+import { MethodCallData } from "../call_data";
 import { NoMethodError } from "../errors";
 import { ExecutionContext } from "../execution_context";
 import { Callable, Class, ClassClass, KernelModule, ModuleClass, ObjectClass, RValue, Runtime, StringClass, String, SymbolClass } from "../runtime";
 
 export class Object {
-    static send(self: RValue, method_name: string, args: RValue[] = [], block?: RValue): RValue {
+    static send(self: RValue, call_data_: MethodCallData | string, args: RValue[] = [], block?: RValue): RValue {
         let method = null;
+        let method_name: string;
+        let call_data: MethodCallData | undefined;
+
+        if (call_data_ instanceof MethodCallData) {
+            method_name = call_data_.mid;
+            call_data = call_data_;
+        } else {
+            method_name = call_data_;
+            call_data = undefined;
+        }
 
         if (!self?.methods) {
             debugger;
@@ -19,7 +30,13 @@ export class Object {
         }
 
         if (method) {
-            return method.call(ExecutionContext.current, self, args, block);
+            return method.call(
+                ExecutionContext.current,
+                self,
+                args,
+                block,
+                call_data
+            );
         } else {
             const inspect_str = Object.send(self, "inspect").get_data<string>();
             throw new NoMethodError(`undefined method \`${method_name}' for ${inspect_str}`)
@@ -60,11 +77,16 @@ export const init = () => {
             return Object.send(self.klass.get_data<Class>().get_singleton_class(), method_name.get_data<string>(), args);
         });
 
-        klass.define_native_method("send", (self: RValue, args: RValue[]) => {
+        klass.define_native_method("send", (self: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData) => {
             const method_name = args[0];
 
             if (method_name.klass === StringClass || method_name.klass === SymbolClass) {
-                return Object.send(self, method_name.get_data<string>(), args.slice(1));
+                if (call_data) {
+                    const new_call_data = MethodCallData.create(method_name.get_data<string>(), call_data.argc - 1, call_data.flag, call_data.kw_arg);
+                    return Object.send(self, new_call_data, args.slice(1), block);
+                } else {
+                    return Object.send(self, method_name.get_data<string>(), args.slice(1), block);
+                }
             } else {
                 throw new TypeError(`${Object.send(method_name, "inspect").get_data<string>()} is not a symbol nor a string`);
             }

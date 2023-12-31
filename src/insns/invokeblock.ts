@@ -6,20 +6,20 @@ import { Callable, Qnil } from "../runtime";
 import { Proc } from "../runtime/proc";
 
 export default class InvokeBlock extends Instruction {
-    public calldata: BlockCallData;
+    public call_data: BlockCallData;
 
-    constructor(calldata: BlockCallData) {
+    constructor(call_data: BlockCallData) {
         super();
 
-        this.calldata = calldata;
+        this.call_data = call_data;
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        const args = context.popn(this.calldata.argc);
+        const args = context.popn(this.call_data.argc);
         const block = context.frame_yield()!.block;
 
         if (block) {
-            const result = block.get_data<Proc>().call(context, args);
+            const result = block.get_data<Proc>().call(context, args, this.call_data);
             context.push(result);
         } else {
             throw new LocalJumpError("no block given (yield)");
@@ -37,6 +37,6 @@ export default class InvokeBlock extends Instruction {
     }
 
     pops(): number {
-        return this.calldata.argc;
+        return this.call_data.argc;
     }
 }

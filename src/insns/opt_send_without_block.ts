@@ -1,6 +1,7 @@
 import { MethodCallData } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
+import { Object } from "../runtime/object"
 
 export default class OptSendWithoutBlock extends Instruction {
     public call_data: MethodCallData;
@@ -13,7 +14,7 @@ export default class OptSendWithoutBlock extends Instruction {
     call(context: ExecutionContext): ExecutionResult {
         const argc = this.call_data.argc + 1;
         const [receiver, ...args] = context.popn(argc);
-        const result = context.call_method(this.call_data, receiver, args);
+        const result = Object.send(receiver, this.call_data, args);
         context.push(result);
         return null;
     }

@@ -1,3 +1,4 @@
+import { BlockCallData, MethodCallData } from "./call_data";
 import { ExecutionContext } from "./execution_context";
 import { InstructionSequence } from "./instruction_sequence";
 import { RValue, ObjectClass, Main } from "./runtime";
@@ -55,12 +56,14 @@ export class TopFrame extends Frame {
 }
 
 export class BlockFrame extends Frame {
+    public call_data: BlockCallData;
     private binding: Binding;
     private original_stack: RValue[];
 
-    constructor(iseq: InstructionSequence, binding: Binding, original_stack: RValue[]) {
+    constructor(call_data: BlockCallData, iseq: InstructionSequence, binding: Binding, original_stack: RValue[]) {
         super(iseq, binding.parent_frame, binding.stack_index, binding.self, binding.nesting);
 
+        this.call_data = call_data;
         this.binding = binding;
         this.original_stack = original_stack;
     }
@@ -77,13 +80,13 @@ export class BlockFrame extends Frame {
 }
 
 export class MethodFrame extends Frame {
-    public name: string;
+    public call_data: MethodCallData;
     public args: RValue[];
     public block?: RValue;
 
-    constructor(iseq: InstructionSequence, nesting: RValue[], parent: Frame, stack_index: number, self: RValue, name: string, args: RValue[], block?: RValue) {
+    constructor(iseq: InstructionSequence, nesting: RValue[], parent: Frame, stack_index: number, self: RValue, call_data: MethodCallData, args: RValue[], block?: RValue) {
         super(iseq, parent, stack_index, self, nesting);
-        this.name = name;
+        this.call_data = call_data;
         this.args = args;
         this.block = block;
     }

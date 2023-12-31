@@ -26,14 +26,15 @@ import { init as numericInit } from "./runtime/numeric";
 import { init as rb_config_init } from "./stdlib/rbconfig"
 import { init as enumerableInit } from "./runtime/enumerable";
 import { init as rangeInit } from "./runtime/range";
-import { Binding, init as bindingInit } from "./runtime/binding";
+import { init as bindingInit } from "./runtime/binding";
 import { init as signalInit } from "./runtime/signal";
 import { init as timeInit } from "./stdlib/time";
+import { CallData, MethodCallData } from "./call_data";
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
 
-export type NativeMethod = (self: RValue, args: RValue[], block?: RValue) => RValue;
+export type NativeMethod = (self: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData) => RValue;
 
 // used as the type for keys of the symbols weak map
 type SymbolType = {
@@ -288,7 +289,7 @@ export enum Visibility {
 export abstract class Callable {
     public visibility: Visibility;
 
-    abstract call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue): RValue;
+    abstract call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue, call_data?: CallData): RValue;
 }
 
 export class InterpretedCallable extends Callable {
@@ -303,8 +304,9 @@ export class InterpretedCallable extends Callable {
         this.visibility = visibility;
     }
 
-    call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue): RValue {
-        return context.run_method_frame(this.name, context.frame!.nesting, this.iseq, receiver, args, block);
+    call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData): RValue {
+        call_data ||= MethodCallData.create(this.name, args.length);
+        return context.run_method_frame(call_data, context.frame!.nesting, this.iseq, receiver, args, block);
     }
 }
 
@@ -318,8 +320,8 @@ export class NativeCallable extends Callable {
         this.visibility = visibility;
     }
 
-    call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue): RValue {
-        return this.method(receiver, args, block);
+    call(_context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData): RValue {
+        return this.method(receiver, args, block, call_data);
     }
 }
 
@@ -677,7 +679,9 @@ export class String {
                 return String.new(klass.name);
             } else {
                 // once we figure out how to call super(), replace this hackery
-                return ObjectClass.get_data<Class>().methods["inspect"].call(ExecutionContext.current, self, []);
+                return ObjectClass.get_data<Class>().methods["inspect"].call(
+                    ExecutionContext.current, self, []
+                );
             }
         }
     });

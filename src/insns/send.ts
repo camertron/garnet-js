@@ -2,7 +2,7 @@ import { MethodCallData, CallDataFlag } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { NativeCallable, RValue, SymbolClass } from "../runtime";
+import { Object } from "../runtime/object"
 import { Proc } from "../runtime/proc";
 
 export default class Send extends Instruction {
@@ -27,7 +27,11 @@ export default class Send extends Instruction {
         const argc = this.call_data.argc + 1;
         const [receiver, ...args] = context.popn(argc);
 
-        const result = context.call_method(this.call_data, receiver, args, block);
+        if (this.call_data.mid === "send" && args.length > 0 && args[0].data === "exception") {
+            debugger;
+        }
+
+        const result = Object.send(receiver, this.call_data, args, block);
         context.push(result);
         return null;
     }
