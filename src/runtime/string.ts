@@ -29,7 +29,11 @@ export const defineStringBehaviorOn = (klass: Class) => {
 
     klass.define_native_method("inspect", (self: RValue): RValue => {
         const str = self.get_data<string>();
-        return String.new(`"${str.replace(/\"/g, "\\\"")}"`);
+        const escaped_str = str
+            .replace(/\"/g, "\\\"")
+            .replace(/\r/g, "\\r")
+            .replace(/\n/g, "\\n");
+        return String.new(escaped_str);
     });
 
     klass.define_native_method("*", (self: RValue, args: RValue[]): RValue => {
@@ -193,6 +197,12 @@ export const defineStringBehaviorOn = (klass: Class) => {
                     idx ++;
                     break;
 
+                case "f":
+                    // @TODO: flesh this out
+                    chunks.push(args[idx].get_data<number>().toString());
+                    idx ++;
+                    break;
+
                 case "s":
                     chunks.push(Object.send(args[idx], "to_s").get_data<string>());
                     idx ++;
@@ -258,6 +268,8 @@ export const defineStringBehaviorOn = (klass: Class) => {
     klass.define_native_method("size", (self: RValue): RValue => {
         return Integer.get(self.get_data<string>().length);
     });
+
+    klass.alias_method("length", "size");
 
     klass.define_native_method("[]", (self: RValue, args: RValue[]): RValue => {
         const data = self.get_data<string>();
@@ -377,6 +389,52 @@ export const defineStringBehaviorOn = (klass: Class) => {
             return result ? Integer.get(result) : Qnil;
         } else {
             return Object.send(args[0], "=~", [self]);
+        }
+    });
+
+    klass.define_native_method("concat", (self: RValue, args: RValue[]): RValue => {
+        const strings = [];
+
+        for (const arg of args) {
+            Runtime.assert_type(args[0], StringClass);
+            strings.push(arg.get_data<string>());
+        }
+
+        self.data = self.get_data<string>() + strings.join("");
+        return self;
+    });
+
+    klass.define_native_method("include?", (self: RValue, args: RValue[]): RValue => {
+        Runtime.assert_type(args[0], StringClass);
+        return self.get_data<string>().indexOf(args[0].get_data<string>()) > -1 ? Qtrue : Qfalse;
+    });
+
+    const chomp_re_map: {[key: string]: RegExp} = {
+        /* When line_sep is "\n", removes the last one or two characters if they are "\r", "\n",
+         * or "\r\n" (but not "\n\r")
+         */
+        "\n": /\r?\n?$/,
+
+        /* When line_sep is '' (an empty string), removes multiple trailing occurrences of "\n"
+         * or "\r\n" (but not "\r" or "\n\r")
+         */
+        "": /(?:\n|\r\n)*$/
+    };
+
+    klass.define_native_method("chomp", (self: RValue, args: RValue[]): RValue => {
+        const data = self.get_data<string>();
+        const line_sep = args[0] || ExecutionContext.current.globals["$/"];
+        const line_sep_str = line_sep.get_data<string>();
+        const remove_re = chomp_re_map[line_sep_str];
+
+        if (remove_re) {
+            return String.new(data.replace(remove_re, ""));
+        } else {
+            if (data.endsWith(line_sep_str)) {
+                return String.new(data.slice(0, data.length - line_sep_str.length));
+            } else {
+                return String.new(data);
+            }
         }
     });
 };

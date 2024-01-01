@@ -45,9 +45,15 @@ export const defineIntegerBehaviorOn = (klass: Class) => {
     // definition is here for the sake of completeness.
     klass.define_native_method("*", (self: RValue, args: RValue[]): RValue => {
         const multiplier = args[0];
-        Runtime.assert_type(multiplier, IntegerClass);  // @TODO: handle floats, maybe Numeric?
+        Runtime.assert_type(multiplier, NumericClass);
 
-        return Integer.new(self.get_data<number>() * multiplier.get_data<number>());
+        const result = self.get_data<number>() * multiplier.get_data<number>();
+
+        if (multiplier.klass === FloatClass) {
+            return Float.new(result);
+        } else {
+            return Integer.get(Math.floor(result));
+        }
     });
 
     klass.define_native_method("/", (self: RValue, args: RValue[]): RValue => {
@@ -65,16 +71,28 @@ export const defineIntegerBehaviorOn = (klass: Class) => {
 
     klass.define_native_method("+", (self: RValue, args: RValue[]): RValue => {
         const term = args[0];
-        Runtime.assert_type(term, IntegerClass);  // @TODO: handle floats, maybe Numeric?
+        Runtime.assert_type(term, NumericClass);
 
-        return Integer.new(self.get_data<number>() + term.get_data<number>());
+        const result = self.get_data<number>() + term.get_data<number>();
+
+        if (term.klass === FloatClass) {
+            return Float.new(result);
+        } else {
+            return Integer.get(Math.floor(result));
+        }
     });
 
     klass.define_native_method("-", (self: RValue, args: RValue[]): RValue => {
         const term = args[0];
-        Runtime.assert_type(term, IntegerClass);  // @TODO: handle floats, maybe Numeric?
+        Runtime.assert_type(term, NumericClass);
 
-        return Integer.new(self.get_data<number>() - term.get_data<number>());
+        const result = self.get_data<number>() - term.get_data<number>();
+
+        if (term.klass === FloatClass) {
+            return Float.new(result);
+        } else {
+            return Integer.get(Math.floor(result));
+        }
     });
 
     klass.define_native_method("%", (self: RValue, args: RValue[]): RValue => {

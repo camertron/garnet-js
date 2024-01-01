@@ -1,3 +1,4 @@
+import { CallDataFlag, MethodCallData } from "../call_data";
 import { ExecutionContext } from "../execution_context";
 import { Array, ArrayClass, Class, IntegerClass, Qfalse, Qnil, Qtrue, RValue, Runtime, String, StringClass } from "../runtime";
 import { Integer } from "./integer";
@@ -20,7 +21,7 @@ export const defineArrayBehaviorOn = (klass: Class) => {
         if (block) {
             const elements = self.get_data<Array>().elements;
 
-            for (let element of elements) {
+            for (const element of elements) {
                 Object.send(block, "call", [element]);
             }
         } else {
@@ -28,6 +29,56 @@ export const defineArrayBehaviorOn = (klass: Class) => {
         }
 
         return self;
+    });
+
+    klass.define_native_method("index", (self: RValue, args: RValue[], block?: RValue): RValue => {
+        const elements = self.get_data<Array>().elements;
+
+        if (block) {
+            for (let i = 0; i < elements.length; i ++) {
+                if (Object.send(block, "call", [elements[i]]).is_truthy()) {
+                    return Integer.get(i);
+                }
+            }
+        } else {
+            if (args.length > 0) {
+                for (let i = 0; i < elements.length; i ++) {
+                    if (Object.send(args[0], "==", [elements[i]]).is_truthy()) {
+                        return Integer.get(i);
+                    }
+                }
+            } else {
+                // @TODO: return an Enumerator
+            }
+        }
+
+        return Qnil;
+    });
+
+    klass.define_native_method("all?", (self: RValue, args: RValue[], block?: RValue): RValue => {
+        const elements = self.get_data<Array>().elements;
+
+        if (args.length > 0) {
+            for (const element of elements) {
+                if (!Object.send(element, "===", [args[0]]).is_truthy()) {
+                    return Qfalse;
+                }
+            }
+        } else if (block) {
+            for (const element of elements) {
+                if (!Object.send(block, "call", [element]).is_truthy()) {
+                    return Qfalse;
+                }
+            }
+        } else {
+            for (const element of elements) {
+                if (!element.is_truthy()) {
+                    return Qfalse;
+                }
+            }
+        }
+
+        return Qtrue;
     });
 
     klass.define_native_method("[]", (self: RValue, args: RValue[], block?: RValue): RValue => {
@@ -109,8 +160,21 @@ export const defineArrayBehaviorOn = (klass: Class) => {
         }
     });
 
-    klass.define_native_method("unshift", (self: RValue, args: RValue[]): RValue => {
-        self.get_data<Array>().elements.unshift(...args);
+    klass.define_native_method("unshift", (self: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData): RValue => {
+        const elements = self.get_data<Array>().elements;
+
+        if (call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
+            for (const arg of args) {
+                if (arg.klass === ArrayClass) {
+                    elements.unshift(...arg.get_data<Array>().elements);
+                } else {
+                    elements.unshift(arg);
+                }
+            }
+        } else {
+            elements.unshift(...args);
+        }
+
         return self;
     });
 
@@ -121,6 +185,22 @@ export const defineArrayBehaviorOn = (klass: Class) => {
 
     klass.define_native_method("<<", (self: RValue, args: RValue[]): RValue => {
         self.get_data<Array>().elements.push(args[0]);
+        return self;
+    });
+
+    klass.define_native_method("push", (self: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData): RValue => {
+        const elements = self.get_data<Array>().elements;
+
+        // this is wrong but I don't know how to fix it, since I need to know which args are splatted
+        // but that info is not available right now. We'll need to capture more info in CallData.
+        if (call_data && call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
+            for (const arg of args) {
+                elements.push(...arg.get_data<Array>().elements);
+            }
+        } else {
+            elements.push(...args);
+        }
+
         return self;
     });
 
@@ -141,5 +221,23 @@ export const defineArrayBehaviorOn = (klass: Class) => {
 
     klass.define_native_method("empty?", (self: RValue): RValue => {
         return self.get_data<Array>().elements.length === 0 ? Qtrue : Qfalse;
+    });
+
+    klass.define_native_method("clear", (self: RValue): RValue => {
+        const elements = self.get_data<Array>().elements;
+        elements.splice(0, elements.length);
+        return self;
+    });
+
+    klass.define_native_method("compact", (self: RValue): RValue => {
+        const result: RValue[] = [];
+
+        for (const element of self.get_data<Array>().elements) {
+            if (element !== Qnil) {
+                result.push(element);
+            }
+        }
+
+        return Array.new(result);
     });
 };

@@ -12,6 +12,7 @@ import { vmfs } from "./vmfs";
 import { Proc, defineProcBehaviorOn } from "./runtime/proc";
 import { defineHashBehaviorOn } from "./runtime/hash";
 import { isNode } from "./env";
+import { CallData, MethodCallData } from "./call_data";
 import { defineFloatBehaviorOn } from "./runtime/float";
 import { defineModuleBehaviorOn } from "./runtime/module";
 import { Kernel, init as kernelInit } from "./runtime/kernel";
@@ -29,7 +30,8 @@ import { init as rangeInit } from "./runtime/range";
 import { init as bindingInit } from "./runtime/binding";
 import { init as signalInit } from "./runtime/signal";
 import { init as timeInit } from "./stdlib/time";
-import { CallData, MethodCallData } from "./call_data";
+import { init as threadInit } from './stdlib/thread';
+
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
@@ -223,6 +225,19 @@ export class Runtime {
         loaded_features.push(String.new(full_path));
 
         return true;
+    }
+
+    static require_relative(path: string, requiring_path: string) {
+        console.log(`Require relative ${path}`);
+
+        let require_path = path;
+
+        if (vmfs.is_relative(path)) {
+            require_path = vmfs.join_paths(vmfs.dirname(requiring_path), path);
+            require_path = `${require_path}.rb`
+        }
+
+        return this.require(require_path);
     }
 
     static load(path: string): boolean {
@@ -710,6 +725,10 @@ export class String {
         return self.object_id == args[0].object_id ? Qtrue : Qfalse;
     });
 
+    klass.define_native_method("equal?", (self: RValue, args: RValue[]): RValue => {
+        return self.object_id == args[0].object_id ? Qtrue : Qfalse;
+    });
+
     klass.define_native_method("!=", (self: RValue, args: RValue[]): RValue => {
         return self.object_id != args[0].object_id ? Qtrue : Qfalse;
     });
@@ -832,60 +851,6 @@ export class Array {
     }
 }
 
-export class Hash {
-    static new(): RValue {
-        return new RValue(HashClass, new Hash());
-    }
-
-    // maps hash codes to key objects
-    public keys: Map<number, RValue>;
-
-    // maps hash codes to value objects
-    public values: Map<number, RValue>;
-
-    public compare_by_identity: boolean = false;
-
-    constructor() {
-        this.keys = new Map();
-        this.values = new Map();
-    }
-
-    get(key: RValue): RValue {
-        const hash_code = this.get_hash_code(key);
-
-        if (this.keys.has(hash_code)) {
-            return this.values.get(hash_code)!;
-        }
-
-        return Qnil;
-    }
-
-    set(key: RValue, value: RValue): RValue {
-        const hash_code = this.get_hash_code(key);
-        this.keys.set(hash_code, key);
-        this.values.set(hash_code, value);
-        return value;
-    }
-
-    has(key: RValue): RValue {
-        const hash_code = this.get_hash_code(key);
-
-        if (this.keys.has(hash_code)) {
-            return Qtrue;
-        } else {
-            return Qfalse;
-        }
-    }
-
-    private get_hash_code(obj: RValue): number {
-        if (this.compare_by_identity) {
-            return obj.object_id;
-        } else {
-            return Object.send(obj, "hash").get_data<number>();
-        }
-    }
-}
-
 defineHashBehaviorOn(HashClass.get_data<Class>());
 
 defineProcBehaviorOn(ProcClass.get_data<Class>());
@@ -905,6 +870,7 @@ export const init = async () => {
     bindingInit();
     signalInit();
     timeInit();
+    threadInit();
 
     defineArrayBehaviorOn(ArrayClass.get_data<Class>());
 

@@ -1,4 +1,5 @@
-import { Hash, Module, Runtime, String } from "../runtime"
+import { Module, Runtime, String } from "../runtime"
+import { Hash } from "../runtime/hash";
 
 export const init = () => {
     const config_rvalue = Hash.new();

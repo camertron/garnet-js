@@ -1,9 +1,9 @@
-import { BlockCallData, CallData, MethodCallData } from "./call_data";
+import { BlockCallData, CallData, CallDataFlag, MethodCallData } from "./call_data";
 import { LocalJumpError, NativeError, RubyError } from "./errors";
 import { BlockFrame, ClassFrame, Frame, MethodFrame, RescueFrame, TopFrame } from "./frame";
 import Instruction from "./instruction";
 import { CatchBreak, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
-import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, String, STDOUT, IO, Qnil, STDERR, Qfalse } from "./runtime";
+import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, String, STDOUT, IO, Qnil, STDERR, Qfalse, ArrayClass } from "./runtime";
 import { Binding } from "./runtime/binding";
 
 export type ExecutionResult = JumpResult | LeaveResult | null;
@@ -67,6 +67,7 @@ export class ExecutionContext {
             '$:': RubyArray.new(),  // load path
             '$"': RubyArray.new(),  // loaded features
             '$,': Qnil,             // field separator for print and Array#join
+            '$/': String.new("\n"), // line separator
             '$stdout': STDOUT,
             '$stderr': STDERR,
         };
@@ -111,10 +112,10 @@ export class ExecutionContext {
         // Finally we can execute the instructions one at a time. If they return
         // jumps or leaves we will handle those appropriately.
         while (true) {
-            if (this.globals["$cameron"] && this.globals["$cameron"].is_truthy()) {
-                this.globals["$cameron"] = Qfalse;
-                debugger;
-            }
+            // if (this.globals["$cameron"] && this.globals["$cameron"].is_truthy()) {
+            //     this.globals["$cameron"] = Qfalse;
+            //     debugger;
+            // }
 
             const insn = frame.iseq.compiled_insns[frame.pc];
 
@@ -390,14 +391,20 @@ export class ExecutionContext {
     }
 
     private setup_arguments(call_data: CallData, iseq: InstructionSequence, args: RValue[], block?: RValue | null): Label | null {
-        // @ts-ignore
-        if (call_data.mid === "exception") {
-            debugger;
-        }
-
         let locals = [...args];
         let local_index = 0;
         let start_label: Label | null = null;
+
+        if (call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
+            locals = locals.flatMap((elem) => {
+                // @TODO: we should probably check for respond_to?(:to_ary) here
+                if (elem.klass === ArrayClass) {
+                    return elem.get_data<RubyArray>().elements;
+                } else {
+                    return elem;
+                }
+            })
+        }
 
         const post_num = iseq.argument_options.post_num || 0;
 

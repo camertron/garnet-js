@@ -35,7 +35,16 @@ export default class InvokeSuper extends Instruction {
             }
 
             if (method) {
-                const result = method.call(context, self, method_frame.args, block, this.call_data);
+                let call_data;
+
+                // bare super call, meaning use same call_data as origial callsite to forward args
+                if (this.call_data.has_flag(CallDataFlag.ZSUPER)) {
+                    call_data = (context.frame as MethodFrame).call_data;
+                } else {
+                    call_data = this.call_data;
+                }
+
+                const result = method.call(context, self, method_frame.args, block, call_data);
                 context.push(result);
                 return null;
             }

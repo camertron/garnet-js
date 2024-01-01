@@ -1,5 +1,6 @@
 import { isNode } from "../env";
-import { Hash, NativeCallable, ObjectClass, Qnil, RValue, Runtime, String, StringClass } from "../runtime"
+import { NativeCallable, ObjectClass, Qnil, RValue, Runtime, String, StringClass } from "../runtime"
+import { Hash } from "./hash";
 
 let inited = false;
 

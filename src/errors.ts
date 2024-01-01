@@ -32,6 +32,10 @@ export const init = () => {
             self.iv_set("@__ruby_backtrace", args[0]);
             return Qnil;
         });
+
+        klass.define_native_method("backtrace", (self: RValue): RValue => {
+            return self.iv_get("@__ruby_backtrace");
+        });
     });
 
     const StandardErrorClass = Runtime.define_class("StandardError", ExceptionClass);

@@ -9,4 +9,9 @@ export const defineFloatBehaviorOn = (klass: Class) => {
         Runtime.assert_type(args[0], NumericClass);
         return Float.new(self.get_data<number>() / args[0].get_data<number>());
     });
+
+    klass.define_native_method("-", (self: RValue, args: RValue[]): RValue => {
+        Runtime.assert_type(args[0], NumericClass);
+        return Float.new(self.get_data<number>() - args[0].get_data<number>());
+    });
 };

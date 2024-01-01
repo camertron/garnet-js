@@ -1,6 +1,6 @@
-import { BlockCallData } from "../call_data";
+import { ArgumentError } from "../errors";
 import { BreakError, ExecutionContext } from "../execution_context";
-import { Module, Qnil, RValue, Runtime, NativeCallable, Callable, Array, Qfalse, Qtrue } from "../runtime"
+import { Module, Qnil, RValue, Runtime, Array, Qfalse, Qtrue } from "../runtime"
 import { Object } from "./object";
 import { Proc } from "./proc";
 
@@ -78,6 +78,72 @@ export const init = () => {
                     throw e;
                 }
             }
+        });
+
+        mod.define_native_method("partition", (self: RValue, _args: RValue[], block?: RValue): RValue => {
+            if (block) {
+                const proc = block.get_data<Proc>();
+                const truthy_array: RValue[] = [];
+                const falsey_array: RValue[] = [];
+
+                Object.send(self, "each", [], Proc.from_native_fn(ExecutionContext.current, (_self: RValue, args: RValue[]): RValue => {
+                    const key = proc.call(ExecutionContext.current, args);
+
+                    if (key.is_truthy()) {
+                        truthy_array.push(args[0]);
+                    } else {
+                        falsey_array.push(args[0]);
+                    }
+
+                    return Qnil;
+                }));
+
+                return Array.new([Array.new(truthy_array), Array.new(falsey_array)]);
+            } else {
+                // @TODO: return an Enumerator
+                return Qnil;
+            }
+        });
+
+        mod.define_native_method("inject", (self: RValue, args: RValue[], block?: RValue): RValue => {
+            let initial_operand: RValue | null = null;
+            let symbol: RValue | null = null;
+            let proc: Proc | null = null;
+
+            if (block) {
+                proc = block.get_data<Proc>();
+
+                if (args.length > 0) {
+                    initial_operand = args[0];
+                }
+            } else {
+                if (args.length === 1) {
+                    symbol = args[0]
+                } else if (args.length > 1) {
+                    initial_operand = args[0];
+                    symbol = args[1];
+                } else {
+                    return Qnil;
+                }
+            }
+
+            let memo: RValue | null = initial_operand;
+
+            Object.send(self, "each", [], Proc.from_native_fn(ExecutionContext.current, (_self: RValue, args: RValue[]): RValue => {
+                if (memo) {
+                    if (proc) {
+                        memo = proc.call(ExecutionContext.current, [memo, args[0]]);
+                    } else {
+                        memo = Object.send(memo, symbol!.get_data<string>(), [args[0]]);
+                    }
+                } else {
+                    memo = args[0];
+                }
+
+                return Qnil;
+            }));
+
+            return memo || Qnil;
         });
     });
 };

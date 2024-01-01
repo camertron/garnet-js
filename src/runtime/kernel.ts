@@ -1,7 +1,8 @@
 import { isNode } from "../env";
 import { ArgumentError, NotImplementedError, RubyError, RuntimeError, SystemExit, TypeError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Array, Module, Qfalse, Qnil, Qtrue, RValue, StringClass, String, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, ArrayClass, InterpretedCallable, Callable, HashClass, SymbolClass } from "../runtime";
+import { Array, Module, Qfalse, Qnil, Qtrue, RValue, StringClass, String, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, ArrayClass, InterpretedCallable, Callable, HashClass, SymbolClass, FloatClass } from "../runtime";
+import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
 
@@ -41,7 +42,7 @@ export const init = async () => {
         // child_process = await import("child_process");
 
         // @ts-ignore
-        kexec = (await import("@gongt/kexec")).default;
+        // kexec = (await import("@gongt/kexec")).default;
     }
 
     mod.define_native_method("puts", kernel_puts);
@@ -51,6 +52,12 @@ export const init = async () => {
         const path = args[0];
         Runtime.assert_type(path, StringClass);
         return Runtime.require(path.get_data<string>()) ? Qtrue : Qfalse;
+    });
+
+    mod.define_native_method("require_relative", (_self: RValue, args: RValue[]): RValue => {
+        const path = args[0];
+        Runtime.assert_type(path, StringClass);
+        return Runtime.require_relative(path.get_data<string>(), ExecutionContext.current.frame!.iseq.file) ? Qtrue : Qfalse;
     });
 
     mod.define_native_method("load", (_self: RValue, args: RValue[]): RValue => {
@@ -90,10 +97,17 @@ export const init = async () => {
     mod.define_native_method("raise", (_self: RValue, args: RValue[]): RValue => {
         let instance;
 
-        if (args[0].klass === ClassClass) {
-            instance = Object.send(args[0], "new", [args[1] || Qnil]);
-        } else {
-            instance = args[0];
+        switch (args[0].klass) {
+            case ClassClass:
+                instance = Object.send(args[0], "new", [args[1] || Qnil]);
+                break;
+
+            case StringClass:
+                instance = Object.send(Runtime.constants["RuntimeError"], "new", [args[0]]);
+                break;
+
+            default:
+                instance = args[0];
         }
 
         Object.send(instance, "set_backtrace", [ExecutionContext.current.create_backtrace_rvalue()]);
@@ -132,14 +146,21 @@ export const init = async () => {
     });
 
     mod.define_native_method("Integer", (self: RValue, args: RValue[]): RValue => {
-        if (args[0].klass == IntegerClass) {
-            return args[0];
-        } else if (args[0].klass == StringClass) {
-            const str = args[0].get_data<string>();
+        switch (args[0].klass) {
+            case IntegerClass:
+                return args[0];
 
-            if (str.match(/^\d+$/)) {
-                return Integer.get(parseInt(str));
-            }
+            case FloatClass:
+                return Integer.get(Math.floor(args[0].get_data<number>()));
+
+            case StringClass:
+                const str = args[0].get_data<string>();
+
+                if (str.match(/^\d+$/)) {
+                    return Integer.get(parseInt(str));
+                }
+
+                break;
         }
 
         const arg_str = Object.send(args[0], "inspect").get_data<string>();
@@ -250,5 +271,13 @@ export const init = async () => {
         } else {
             throw new ArgumentError(`unexpected ${first_arg.klass.get_data<Class>().name} passed as the first argument to Kernel#exec`);
         }
+    });
+
+    mod.define_native_method("__dir__", (self: RValue, args: RValue[]): RValue => {
+        return String.new(vmfs.dirname(ExecutionContext.current.frame!.iseq.file));
+    });
+
+    mod.define_native_method("nil?", (self: RValue): RValue => {
+        return self === Qnil ? Qtrue : Qfalse;
     });
 };
