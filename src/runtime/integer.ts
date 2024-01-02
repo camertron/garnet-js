@@ -1,4 +1,5 @@
 import { Class, Float, FloatClass, IntegerClass, NumericClass, Qfalse, Qnil, Qtrue, RValue, Runtime, String } from "../runtime";
+import { obj_id_hash } from "../util/object_id";
 
 export class Integer {
     static INT2FIX0: RValue;
@@ -36,9 +37,7 @@ export const defineIntegerBehaviorOn = (klass: Class) => {
     });
 
     klass.define_native_method("hash", (self: RValue): RValue => {
-        // Ruby hashes the object ID for fixnums. We should eventually do the same.
-        // https://github.com/ruby/ruby/blob/6e46bf1e54e7fe83dc80e49394d980b71321b6f0/hash.c#L171
-        return self;
+        return Integer.get(obj_id_hash(self.get_data<number>()));
     });
 
     // Normally multiplication of two ints/floats is handled by the opt_mult instruction. This

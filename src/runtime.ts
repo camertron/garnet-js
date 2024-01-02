@@ -1,6 +1,6 @@
 import { InstructionSequence } from "./instruction_sequence";
 import { Compiler } from "./compiler";
-import { LoadError, NotImplementedError } from "./errors";
+import { LoadError, NoMethodError, NotImplementedError } from "./errors";
 import { ExecutionContext } from "./execution_context";
 import { defineArrayBehaviorOn } from "./runtime/array";
 import { Integer, defineIntegerBehaviorOn } from "./runtime/integer";
@@ -12,7 +12,7 @@ import { vmfs } from "./vmfs";
 import { Proc, defineProcBehaviorOn } from "./runtime/proc";
 import { defineHashBehaviorOn } from "./runtime/hash";
 import { isNode } from "./env";
-import { CallData, MethodCallData } from "./call_data";
+import { CallData, CallDataFlag, MethodCallData } from "./call_data";
 import { defineFloatBehaviorOn } from "./runtime/float";
 import { defineModuleBehaviorOn } from "./runtime/module";
 import { Kernel, init as kernelInit } from "./runtime/kernel";
@@ -31,6 +31,7 @@ import { init as bindingInit } from "./runtime/binding";
 import { init as signalInit } from "./runtime/signal";
 import { init as timeInit } from "./stdlib/time";
 import { init as threadInit } from './stdlib/thread';
+import { obj_id_hash } from "./util/object_id";
 
 
 type ModuleDefinitionCallback = (module: Module) => void;
@@ -200,7 +201,7 @@ export class Runtime {
     }
 
     static require(path: string): boolean {
-        console.log(`Require ${path}`);
+        // console.log(`Require ${path}`);
         const ec = ExecutionContext.current;
         const loaded_features = ec.globals['$"'].get_data<Array>().elements;
         const full_path = this.find_on_load_path(path) || path;
@@ -228,7 +229,7 @@ export class Runtime {
     }
 
     static require_relative(path: string, requiring_path: string) {
-        console.log(`Require relative ${path}`);
+        // console.log(`Require relative ${path}`);
 
         let require_path = path;
 
@@ -241,7 +242,7 @@ export class Runtime {
     }
 
     static load(path: string): boolean {
-        console.log(`Load ${path}`);
+        // console.log(`Load ${path}`);
         const ec = ExecutionContext.current;
         const full_path = vmfs.is_relative(path) ? this.find_on_load_path(path, false) : path;
 
@@ -622,6 +623,10 @@ NilClass.get_data<Class>().tap( (klass: Class) => {
         return Integer.get(0);
     });
 
+    klass.define_native_method("to_s", (_self: RValue): RValue => {
+        return String.new("");
+    });
+
     klass.define_native_method("any?", (_self: RValue): RValue => {
         return Qfalse;
     });
@@ -647,6 +652,14 @@ TrueClass.get_data<Class>().tap( (klass: Class) => {
     klass.define_native_method("!", (_self: RValue): RValue => {
         return Qfalse;
     });
+
+    klass.define_native_method("hash", (self: RValue): RValue => {
+        if (!self.iv_exists("@__hash")) {
+            self.iv_set("@__hash", Integer.get(obj_id_hash(self.object_id)));
+        }
+
+        return self.iv_get("@__hash");
+    });
 });
 
 FalseClass.get_data<Class>().tap( (klass: Class) => {
@@ -664,6 +677,14 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
 
     klass.define_native_method("!", (_self: RValue): RValue => {
         return Qtrue;
+    });
+
+    klass.define_native_method("hash", (self: RValue): RValue => {
+        if (!self.iv_exists("@__hash")) {
+            self.iv_set("@__hash", Integer.get(obj_id_hash(self.object_id)));
+        }
+
+        return self.iv_get("@__hash");
     });
 });
 
@@ -739,6 +760,36 @@ export class String {
         const binding = proc.binding.with_self(self);
         return proc.with_binding(binding).call(ExecutionContext.current, args);
     });
+
+    klass.define_native_method("method_missing", (self: RValue, args: RValue[]): RValue => {
+        // this is kinda broken until I can figure out how to inspect objects with cycles; for now,
+        // just print out self's type
+
+        // const inspect_str = Object.send(self, "inspect").get_data<string>();
+        // throw new NoMethodError(`undefined method \`${method_name}' for ${inspect_str}`);
+        const method_name = args[0].get_data<string>();
+        throw new NoMethodError(`undefined method \`${method_name}' for ${self.klass.get_data<Class>().name}`);
+    });
+
+    klass.define_native_method("__send__", (self: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData): RValue => {
+        Runtime.assert_type(args[0], StringClass);
+        let send_call_data;
+
+        if (call_data) {
+            send_call_data = MethodCallData.create(
+                args[0].get_data<string>(), call_data.argc - 1, call_data.flag, call_data.kw_arg
+            );
+        } else {
+            let flags = CallDataFlag.ARGS_SIMPLE;
+            if (block) flags |= CallDataFlag.ARGS_BLOCKARG;
+
+            send_call_data = MethodCallData.create(
+                args[0].get_data<string>(), args.length - 1, flags
+            );
+        }
+
+        return Object.send(self, send_call_data, args, block);
+    });
 });
 
 defineStringBehaviorOn(StringClass.get_data<Class>());
@@ -807,17 +858,35 @@ export class NodeIO implements IO {
 }
 
 export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) => {
-    klass.define_native_method("puts", (self: RValue, args: RValue[]): RValue => {
-        const val = args[0];
+    klass.define_native_method("puts", (self: RValue, args: RValue[], _block?: RValue, call_data?: MethodCallData): RValue => {
         const io = self.get_data<IO>();
-        io.puts(Object.send(val, "to_s").get_data<string>());
+
+        for (const arg of args) {
+            if (arg.klass === ArrayClass && call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
+                for (const elem of arg.get_data<Array>().elements) {
+                    io.puts(Object.send(elem, "to_s").get_data<string>());
+                }
+            } else {
+                io.puts(Object.send(arg, "to_s").get_data<string>());
+            }
+        }
+
         return Qnil;
     });
 
-    klass.define_native_method("print", (self: RValue, args: RValue[]): RValue => {
-        const val = args[0];
+    klass.define_native_method("print", (self: RValue, args: RValue[], _block?: RValue, call_data?: MethodCallData): RValue => {
         const io = self.get_data<IO>();
-        io.write(Object.send(val, "to_s").get_data<string>());
+
+        for (const arg of args) {
+            if (arg.klass === ArrayClass && call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
+                for (const elem of arg.get_data<Array>().elements) {
+                    io.write(Object.send(elem, "to_s").get_data<string>());
+                }
+            } else {
+                io.write(Object.send(arg, "to_s").get_data<string>());
+            }
+        }
+
         return Qnil;
     });
 
@@ -832,8 +901,8 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
     });
 });
 
-export const STDOUT = Runtime.constants["STDOUT"] = isNode ? BrowserIO.new(console.log) : NodeIO.new(process.stdout);
-export const STDERR = Runtime.constants["STDERR"] = isNode ? BrowserIO.new(console.error) : NodeIO.new(process.stderr);
+export const STDOUT = Runtime.constants["STDOUT"] = isNode ? NodeIO.new(process.stdout) : BrowserIO.new(console.log);
+export const STDERR = Runtime.constants["STDERR"] = isNode ? NodeIO.new(process.stderr) : BrowserIO.new(console.error);
 
 export class Array {
     static new(arr?: RValue[]): RValue {

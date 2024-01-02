@@ -112,10 +112,10 @@ export class ExecutionContext {
         // Finally we can execute the instructions one at a time. If they return
         // jumps or leaves we will handle those appropriately.
         while (true) {
-            // if (this.globals["$cameron"] && this.globals["$cameron"].is_truthy()) {
-            //     this.globals["$cameron"] = Qfalse;
-            //     debugger;
-            // }
+            if (this.globals["$cameron"] && this.globals["$cameron"].is_truthy()) {
+                this.globals["$cameron"] = Qfalse;
+                debugger;
+            }
 
             const insn = frame.iseq.compiled_insns[frame.pc];
 
@@ -546,12 +546,10 @@ export class ExecutionContext {
 
     topn(n: number): RValue {
         return this.stack[this.stack_len - n - 1];
-        // return this.stack.get(this.stack_len - n - 1);
     }
 
     setn(n: number, value: RValue): void {
         this.stack[this.stack_len - n - 1] = value;
-        // this.stack.set(this.stack_len - n - 1, value);
     }
 
     jump(label: Label): JumpResult {

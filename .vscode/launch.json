@@ -12,7 +12,7 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "command": "PATH=./bin:$PATH RUBY_EXE=bin/ruby bin/ruby -I /Users/camertron/workspace/ruby/mspec/lib -C ruby/spec /Users/camertron/workspace/ruby/mspec/bin/mspec-run -- core/string/concat_spec.rb"
+            "command": "PATH=./bin:$PATH RUBY_EXE=bin/ruby bin/ruby -I /Users/camertron/workspace/ruby/mspec/lib -C ruby/spec /Users/camertron/workspace/ruby/mspec/bin/mspec-run -- core/string/concat_spec.rb core/string/empty_spec.rb"
             // "command": "PATH=./bin:$PATH RUBY_EXE=bin/ruby bin/ruby -I /Users/camertron/workspace/ruby/mspec/lib -C ruby/spec /Users/camertron/workspace/ruby/mspec/bin/mspec -- run -h"
             // "command": "npx tsx ${workspaceFolder}/tester2.ts"
         }

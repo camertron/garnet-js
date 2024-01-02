@@ -1456,11 +1456,26 @@ export class Compiler {
     }
 
     private visit_keyword_hash_node(node: KeywordHashNode, used: boolean) {
-        (node.elements as AssocSplatNode[]).forEach((element) => {
-            if (element.value) {
-                this.visit(element.value, used);
+        if (node.elements.length > 0) {
+            if (node.elements[0].constructor.name === "AssocSplatNode") {
+                const splat_node = node.elements[0] as AssocSplatNode;
+                if (splat_node.value) this.visit(splat_node.value, true);
+            } else if (node.elements[0].constructor.name === "AssocNode") {
+                (node.elements as AssocNode[]).forEach((element) => {
+                    this.visit(element.key, true);
+
+                    if (element.value) {
+                        this.visit(element.value, true);
+                    } else {
+                        // I _think_ we're supposed to find a local here with the same name as
+                        // the key, but not sure
+                        this.iseq.putnil();
+                    }
+                });
+
+                this.iseq.newhash(node.elements.length);
             }
-        });
+        }
     }
 
     private visit_instance_variable_or_write_node(node: InstanceVariableOrWriteNode, used: boolean) {
@@ -1693,6 +1708,9 @@ export class Compiler {
         this.iseq.pop();
 
         this.visit(node.value, true);
+
+        // copy the new value above our args so it can be returned
+        this.iseq.setn(1 + arg_size);
 
         // +1 for assigned value, the last argument
         // this.iseq.opt_aset(MethodCallData.create("[]=", arg_size + 1, CallDataFlag.FCALL, null));

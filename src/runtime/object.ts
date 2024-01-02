@@ -1,10 +1,10 @@
-import { MethodCallData } from "../call_data";
+import { CallDataFlag, MethodCallData } from "../call_data";
 import { NoMethodError } from "../errors";
 import { ExecutionContext } from "../execution_context";
 import { Callable, Class, ClassClass, KernelModule, ModuleClass, ObjectClass, RValue, Runtime, StringClass, String, SymbolClass } from "../runtime";
 
 export class Object {
-    static send(self: RValue, call_data_: MethodCallData | string, args: RValue[] = [], block?: RValue): RValue {
+    static send(receiver: RValue, call_data_: MethodCallData | string, args: RValue[] = [], block?: RValue): RValue {
         let method = null;
         let method_name: string;
         let call_data: MethodCallData | undefined;
@@ -17,29 +17,40 @@ export class Object {
             call_data = undefined;
         }
 
-        if (!self?.methods) {
+        if (!receiver?.methods) {
             debugger;
         }
 
-        if (self.methods[method_name]) {
-            method = self.methods[method_name];
-        } else if (self.klass == ClassClass || self.klass == ModuleClass) {
-            method = Object.find_method_under(self.get_data<Class>().get_singleton_class(), method_name);
+        if (receiver.methods[method_name]) {
+            method = receiver.methods[method_name];
+        } else if (receiver.klass == ClassClass || receiver.klass == ModuleClass) {
+            method = Object.find_method_under(receiver.get_data<Class>().get_singleton_class(), method_name);
         } else {
-            method = Object.find_method_under(self.klass, method_name);
+            method = Object.find_method_under(receiver.klass, method_name);
         }
 
         if (method) {
             return method.call(
                 ExecutionContext.current,
-                self,
+                receiver,
                 args,
                 block,
                 call_data
             );
         } else {
-            const inspect_str = Object.send(self, "inspect").get_data<string>();
-            throw new NoMethodError(`undefined method \`${method_name}' for ${inspect_str}`)
+            let method_missing_call_data;
+
+            if (call_data) {
+                method_missing_call_data = MethodCallData.create(
+                    "method_missing", call_data.argc + 1, call_data.flag, call_data.kw_arg
+                );
+            } else {
+                let flags = CallDataFlag.ARGS_SIMPLE;
+                if (block) flags |= CallDataFlag.ARGS_BLOCKARG;
+                method_missing_call_data = MethodCallData.create("method_missing", args.length + 1, flags);
+            }
+
+            return Object.send(receiver, method_missing_call_data, [String.new(method_name), ...args], block);
         }
     }
 

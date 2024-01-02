@@ -32,6 +32,13 @@ export const defineModuleBehaviorOn = (mod: Module) => {
         return self;
     });
 
+    mod.define_native_method("prepend", (self: RValue, args: RValue[]): RValue => {
+        const mod_to_prepend = args[0];
+        Runtime.assert_type(mod_to_prepend, ModuleClass);
+        self.get_data<Module>().prepend(mod_to_prepend);
+        return self;
+    });
+
     mod.define_native_method("public", (self: RValue, args: RValue[]): RValue => {
         if (args.length === 0) {
             self.get_data<Module>().default_visibility = Visibility.public;
