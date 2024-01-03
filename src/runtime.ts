@@ -450,6 +450,7 @@ export class RValue {
     public ivars: Map<string, RValue>;
     public data: any;
     public object_id: number;
+    public frozen: boolean;
 
     // methods defined only on the instance
     public methods: {[key: string]: Callable} = {};
@@ -458,6 +459,7 @@ export class RValue {
         this.klass = klass;
         this.data = data;
         this.object_id = next_object_id;
+        this.frozen = false;
         next_object_id ++;
     }
 
@@ -482,8 +484,6 @@ export class RValue {
             return this.ivars.get(name)!;
         }
 
-
-
         return Qnil;
     }
 
@@ -497,6 +497,14 @@ export class RValue {
 
     is_truthy() {
         return this != Qfalse && this.klass != NilClass;
+    }
+
+    is_frozen(): boolean {
+        return this.frozen;
+    }
+
+    freeze() {
+        this.frozen = true;
     }
 }
 
@@ -632,6 +640,10 @@ NilClass.get_data<Class>().tap( (klass: Class) => {
     });
 
     klass.define_native_method("nil?", (_self: RValue): RValue => {
+        return Qtrue;
+    });
+
+    klass.define_native_method("!", (_self: RValue): RValue => {
         return Qtrue;
     });
 });

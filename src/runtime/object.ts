@@ -1,7 +1,7 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
-import { NoMethodError } from "../errors";
+import { FrozenError, NoMethodError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Callable, Class, ClassClass, KernelModule, ModuleClass, ObjectClass, RValue, Runtime, StringClass, String, SymbolClass } from "../runtime";
+import { Callable, Class, ClassClass, KernelModule, ModuleClass, ObjectClass, RValue, Runtime, StringClass, String, SymbolClass, Qtrue, Qfalse } from "../runtime";
 
 export class Object {
     static send(receiver: RValue, call_data_: MethodCallData | string, args: RValue[] = [], block?: RValue): RValue {
@@ -54,6 +54,10 @@ export class Object {
         }
     }
 
+    static respond_to(mod: RValue, method_name: string): boolean {
+        return this.find_method_under(mod, method_name) ? true : false;
+    }
+
     static find_method_under(mod: RValue, method_name: string): Callable | null {
         let found_method = null;
 
@@ -74,6 +78,13 @@ export class Object {
     static object_id_to_str(object_id: number): string {
         const id_str = object_id.toString(16).padStart(16, "0");
         return `0x${id_str}`;
+    }
+
+    static check_frozen(obj: RValue) {
+        if (obj.is_frozen()) {
+            const inspect_str = Object.send(obj, "inspect");
+            throw new FrozenError(`can't modify frozen ${obj.klass.get_data<Class>().name}: ${inspect_str}`);
+        }
     }
 }
 
@@ -120,5 +131,36 @@ export const init = () => {
         });
 
         klass.alias_method("to_s", "inspect");
+
+        klass.define_native_method("dup", (self: RValue): RValue => {
+            const copy = new RValue(self.klass);
+
+            for (const [key, value] of self.ivars) {
+                copy.iv_set(key, value);
+            }
+
+            return copy;
+        });
+
+        // default impl that just returns the object
+        klass.define_native_method("initialize_copy", (self: RValue, args: RValue[]): RValue => {
+            const copy = args[0];
+            if (self === copy) return copy;
+
+            if (copy.klass != self.klass) {
+                throw new TypeError("initialize_copy should take same class object")
+            }
+
+            return copy;
+        });
+
+        klass.define_native_method("freeze", (self: RValue): RValue => {
+            self.freeze();
+            return self;
+        });
+
+        klass.define_native_method("frozen?", (self: RValue): RValue => {
+            return self.is_frozen() ? Qtrue : Qfalse;
+        });
     });
 };

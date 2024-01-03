@@ -27,6 +27,8 @@ export const defineStringBehaviorOn = (klass: Class) => {
         return self;
     });
 
+    klass.alias_method("to_str", "to_s");
+
     klass.define_native_method("inspect", (self: RValue): RValue => {
         const str = self.get_data<string>();
         const escaped_str = str
@@ -364,6 +366,14 @@ export const defineStringBehaviorOn = (klass: Class) => {
         return String.new(self.get_data<string>());
     });
 
+    klass.define_native_method("replace", (self: RValue, args: RValue[]): RValue => {
+        Runtime.assert_type(args[0], StringClass);
+        self.data = args[0].get_data<string>();
+        return self;
+    });
+
+    klass.alias_method("initialize_copy", "replace");
+
     klass.define_native_method("start_with?", (self: RValue, args: RValue[]): RValue => {
         Runtime.assert_type(args[0] || Qnil, StringClass);
 
@@ -393,11 +403,16 @@ export const defineStringBehaviorOn = (klass: Class) => {
     });
 
     klass.define_native_method("concat", (self: RValue, args: RValue[]): RValue => {
+        Object.check_frozen(self);
+
         const strings = [];
 
         for (const arg of args) {
-            Runtime.assert_type(args[0], StringClass);
-            strings.push(arg.get_data<string>());
+            if (args[0].klass === StringClass) {
+                strings.push(arg.get_data<string>());
+            } else {
+                strings.push(Object.send(arg, "to_str").get_data<string>());
+            }
         }
 
         self.data = self.get_data<string>() + strings.join("");

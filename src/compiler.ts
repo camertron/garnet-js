@@ -1473,7 +1473,7 @@ export class Compiler {
                     }
                 });
 
-                this.iseq.newhash(node.elements.length);
+                this.iseq.newhash(node.elements.length * 2);
             }
         }
     }

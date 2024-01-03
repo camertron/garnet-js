@@ -94,6 +94,13 @@ export const init = async () => {
         }
     });
 
+    mod.define_native_method("instance_of?", (self: RValue, args: RValue[]): RValue => {
+        Runtime.assert_type(args[0], ClassClass);
+        return self.klass === args[0] ? Qtrue : Qfalse;
+    });
+
+    mod.alias_method("kind_of?", "instance_of?");
+
     mod.define_native_method("raise", (_self: RValue, args: RValue[]): RValue => {
         let instance;
 
@@ -195,6 +202,8 @@ export const init = async () => {
         return Integer.get(self.object_id);
     });
 
+    mod.alias_method("__id__", "object_id");
+
     mod.define_native_method("instance_variable_set", (self: RValue, args: RValue[]): RValue => {
         const first_arg = args[0] || Qnil;
 
@@ -279,5 +288,13 @@ export const init = async () => {
 
     mod.define_native_method("nil?", (self: RValue): RValue => {
         return self === Qnil ? Qtrue : Qfalse;
+    });
+
+    mod.define_native_method("singleton_class", (self: RValue): RValue => {
+        if (self.klass === ClassClass) {
+            return self.get_data<Class>().get_singleton_class();
+        } else {
+            return self.klass.get_data<Class>().get_singleton_class();
+        }
     });
 };

@@ -23,4 +23,8 @@ export const defineSymbolBehaviorOn = (klass: Class) => {
     klass.define_native_method("to_s", (self: RValue): RValue => {
         return String.new(self.get_data<string>());
     });
+
+    klass.define_native_method("to_sym", (self: RValue): RValue => {
+        return self;
+    });
 };

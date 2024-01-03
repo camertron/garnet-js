@@ -1,5 +1,5 @@
 import { ExecutionContext } from "../execution_context";
-import { String, RValue, Class, Qtrue, Qfalse, Qnil, HashClass, ProcClass, Array } from "../runtime";
+import { String, RValue, Class, Qtrue, Qfalse, Qnil, HashClass, ProcClass, Runtime, Array as RubyArray } from "../runtime";
 import { Object } from "./object";
 import { Proc } from "./proc";
 
@@ -59,6 +59,14 @@ export class Hash {
         }
     }
 
+    replace(other: Hash) {
+        this.default_value = other.default_value;
+        this.default_proc = other.default_proc;
+        this.compare_by_identity = other.compare_by_identity;
+        this.keys = new Map(other.keys);
+        this.values = new Map(other.values);
+    }
+
     private get_hash_code(obj: RValue): number {
         if (this.compare_by_identity) {
             return obj.object_id;
@@ -113,6 +121,8 @@ export const defineHashBehaviorOn = (klass: Class) => {
         return hash.has(key);
     });
 
+    klass.alias_method("key?", "include?");
+
     klass.define_native_method("inspect", (self: RValue): RValue => {
         const hash = self.get_data<Hash>();
         const pairs: string[] = [];
@@ -150,5 +160,30 @@ export const defineHashBehaviorOn = (klass: Class) => {
             // @TODO: return an Enumerator
             return Qnil;
         }
+    });
+
+    klass.define_native_method("dup", (self: RValue): RValue => {
+        const copy = new Hash();
+        copy.replace(self.get_data<Hash>());
+        return new RValue(HashClass, copy);
+    });
+
+    klass.define_native_method("replace", (self: RValue, args: RValue[]): RValue => {
+        Runtime.assert_type(args[0], HashClass);
+        const other = args[0].get_data<Hash>();
+        self.get_data<Hash>().replace(other);
+        return self;
+    });
+
+    klass.alias_method("initialize_copy", "replace");
+
+    klass.define_native_method("keys", (self: RValue): RValue => {
+        const keys = Array.from(self.get_data<Hash>().keys.values());
+        return RubyArray.new(keys);
+    });
+
+    klass.define_native_method("values", (self: RValue): RValue => {
+        const keys = Array.from(self.get_data<Hash>().values.values());
+        return RubyArray.new(keys);
     });
 };

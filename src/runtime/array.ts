@@ -240,4 +240,17 @@ export const defineArrayBehaviorOn = (klass: Class) => {
 
         return Array.new(result);
     });
+
+    klass.define_native_method("dup", (self: RValue): RValue => {
+        return Array.new([...self.get_data<Array>().elements]);
+    });
+
+    klass.define_native_method("replace", (self: RValue, args: RValue[]): RValue => {
+        Runtime.assert_type(args[0], ArrayClass);
+        const other = args[0];
+        self.get_data<Array>().elements = [...other.get_data<Array>().elements];
+        return self;
+    });
+
+    klass.alias_method("initialize_copy", "replace");
 };
