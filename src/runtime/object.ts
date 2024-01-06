@@ -1,7 +1,7 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
-import { FrozenError, NoMethodError } from "../errors";
+import { ArgumentError, FrozenError, NoMethodError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Callable, Class, ClassClass, KernelModule, ModuleClass, ObjectClass, RValue, Runtime, StringClass, String, SymbolClass, Qtrue, Qfalse } from "../runtime";
+import { Callable, Class, ClassClass, KernelModule, ModuleClass, ObjectClass, RValue, Runtime, StringClass, String, SymbolClass, Qtrue, Qfalse, ProcClass, Qnil } from "../runtime";
 
 export class Object {
     static send(receiver: RValue, call_data_: MethodCallData | string, args: RValue[] = [], block?: RValue): RValue {
@@ -17,12 +17,12 @@ export class Object {
             call_data = undefined;
         }
 
-        if (!receiver?.methods) {
+        if (receiver === Qnil && method_name === "<<") {
             debugger;
         }
 
-        if (receiver.methods[method_name]) {
-            method = receiver.methods[method_name];
+        if (receiver.has_singleton_class() && receiver.get_singleton_class().get_data<Class>().methods[method_name]) {
+            method = receiver.get_singleton_class().get_data<Class>().methods[method_name];
         } else if (receiver.klass == ClassClass || receiver.klass == ModuleClass) {
             method = Object.find_method_under(receiver.get_data<Class>().get_singleton_class(), method_name);
         } else {
@@ -54,8 +54,8 @@ export class Object {
         }
     }
 
-    static respond_to(mod: RValue, method_name: string): boolean {
-        return this.find_method_under(mod, method_name) ? true : false;
+    static respond_to(obj: RValue, method_name: string): boolean {
+        return this.find_method_under(obj.klass, method_name) ? true : false;
     }
 
     static find_method_under(mod: RValue, method_name: string): Callable | null {

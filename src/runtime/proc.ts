@@ -2,7 +2,7 @@ import { BlockCallData } from "../call_data";
 import { ExecutionContext } from "../execution_context";
 import { BlockFrame } from "../frame";
 import { InstructionSequence } from "../instruction_sequence";
-import { RValue, Class, ProcClass, NativeMethod } from "../runtime";
+import { RValue, Class, ProcClass, NativeMethod, Callable } from "../runtime";
 import { Binding } from "./binding";
 
 export abstract class Proc {

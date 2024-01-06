@@ -43,6 +43,7 @@ export const init = () => {
     const NameErrorClass = Runtime.define_class("NameError", StandardErrorClass);
     const LocalJumpErrorClass = Runtime.define_class("LocalJumpError", StandardErrorClass);
     const RuntimeErrorClass = Runtime.define_class("RuntimeError", StandardErrorClass);
+    const IndexErrorClass = Runtime.define_class("IndexError", StandardErrorClass);
     const FrozenErrorClass = Runtime.define_class("FrozenError", RuntimeErrorClass);
     const NoMethodErrorClass = Runtime.define_class("NoMethodError", NameErrorClass);
     const ArgumentErrorClass = Runtime.define_class("NoMethodError", StandardErrorClass);
@@ -203,6 +204,19 @@ export class RuntimeError extends RubyError {
 
     get ruby_class(): RValue {
         return RuntimeError.ruby_class ||= Runtime.constants["RuntimeError"];
+    }
+}
+
+export class IndexError extends RubyError {
+    private static ruby_class: RValue | null;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "IndexError";
+    }
+
+    get ruby_class(): RValue {
+        return IndexError.ruby_class ||= Runtime.constants["IndexError"];
     }
 }
 

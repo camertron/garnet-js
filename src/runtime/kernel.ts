@@ -291,10 +291,7 @@ export const init = async () => {
     });
 
     mod.define_native_method("singleton_class", (self: RValue): RValue => {
-        if (self.klass === ClassClass) {
-            return self.get_data<Class>().get_singleton_class();
-        } else {
-            return self.klass.get_data<Class>().get_singleton_class();
-        }
+        // @TODO: this needs to be smarter
+        return self.get_singleton_class();
     });
 };

@@ -5,7 +5,9 @@ import { Proc } from "./proc";
 
 export class Hash {
     static new(default_value?: RValue, default_proc?: RValue): RValue {
-        return new RValue(HashClass, new Hash(default_value, default_proc));
+        const val = new RValue(HashClass, new Hash(default_value, default_proc));
+        val.get_data<Hash>().self = val;
+        return val;
     }
 
     // maps hash codes to key objects
@@ -18,6 +20,8 @@ export class Hash {
 
     public default_value?: RValue;
     public default_proc?: RValue;
+
+    public self: RValue;
 
     constructor(default_value?: RValue, default_proc?: RValue) {
         this.keys = new Map();
@@ -35,7 +39,7 @@ export class Hash {
             if (this.default_value) {
                 return this.default_value;
             } else if (this.default_proc) {
-                return this.default_proc.get_data<Proc>().call(ExecutionContext.current, [key]);
+                return this.default_proc.get_data<Proc>().call(ExecutionContext.current, [this.self, key]);
             }
         }
 
@@ -78,7 +82,7 @@ export class Hash {
 
 export const defineHashBehaviorOn = (klass: Class) => {
     klass.define_native_singleton_method("new", (_self: RValue, args: RValue[], block?: RValue): RValue => {
-        return Hash.new(args[0] || Qnil, block);
+        return Hash.new(args[0], block);
     });
 
     klass.define_native_method("default", (self: RValue): RValue => {
@@ -110,6 +114,11 @@ export const defineHashBehaviorOn = (klass: Class) => {
     });
 
     klass.define_native_method("[]=", (self: RValue, args: RValue[]): RValue => {
+        const ec = ExecutionContext.current;
+        if (ec.globals["$cameron"] === Qtrue) {
+            ec.globals["$cameron"] = Qfalse;
+            debugger
+        }
         const [key, value] = args;
         const hash = self.get_data<Hash>();
         return hash.set(key, value);

@@ -1,4 +1,4 @@
-import { ArgumentError, NotImplementedError } from "../errors";
+import { ArgumentError, IndexError, NotImplementedError } from "../errors";
 import { Array as RubyArray, Class, Qnil, RValue, StringClass, String, IntegerClass, Runtime, Float, Qtrue, Qfalse, RegexpClass, NumericClass } from "../runtime";
 import { hash_string } from "../util/string_utils";
 import { Integer } from "./integer";
@@ -310,7 +310,7 @@ export const defineStringBehaviorOn = (klass: Class) => {
                 return Qnil;
             }
         } else if (args[0].klass === RegexpClass) {
-            throw new NotImplementedError("String[Regexp] is not yet implemented");
+            throw new NotImplementedError("String#[](Regexp) is not yet implemented");
         } else {
             Runtime.assert_type(args[0], IntegerClass);
             const start = args[0].get_data<number>();
@@ -331,18 +331,68 @@ export const defineStringBehaviorOn = (klass: Class) => {
 
     klass.define_native_method("[]=", (self: RValue, args: RValue[]): RValue => {
         const data = self.get_data<string>();
+        let replacement_pos = 1;
+        let start_pos, end_pos
 
-        // @TODO: implement all the other ways this function can be called (see [] above)
-        Runtime.assert_type(args[0], IntegerClass);
-        Runtime.assert_type(args[1], IntegerClass);
-        Runtime.assert_type(args[2], StringClass);
+        if (args[0].klass == Runtime.constants["Range"]) {
+            const range = args[0].get_data<Range>();
 
-        const start = args[0].get_data<number>();
-        const length = args[1].get_data<number>();
-        const replacement = args[2].get_data<string>();
+            Runtime.assert_type(range.begin, IntegerClass);
+            Runtime.assert_type(range.end, IntegerClass);
 
-        self.data = `${data.slice(0, start)}${replacement}${data.slice(start + length)}`;
-        return args[2];
+            start_pos = range.begin.get_data<number>();
+
+            if (start_pos < 0) {
+                start_pos = data.length + start_pos;
+            }
+
+            end_pos = range.end.get_data<number>();
+
+            if (end_pos < 0) {
+                end_pos = data.length + end_pos;
+            }
+
+            if (start_pos > end_pos) {
+                return Qnil;
+            }
+
+            if (!range.exclude_end) {
+                end_pos += 1
+            }
+        } else if (args[0].klass === StringClass) {
+            const substring = args[0].get_data<string>();
+            const idx = data.indexOf(substring);
+
+            if (idx > -1) {
+                start_pos = idx;
+                end_pos = start_pos + args[0].get_data<string>().length;
+            } else {
+                throw new IndexError("string not matched");
+            }
+        } else if (args[0].klass === RegexpClass) {
+            throw new NotImplementedError("String#[]=(Regexp) is not yet implemented");
+        } else {
+            Runtime.assert_type(args[0], IntegerClass);
+            start_pos = args[0].get_data<number>();
+
+            if (args.length > 2) {
+                Runtime.assert_type(args[1], IntegerClass);
+                end_pos = args[1].get_data<number>();
+                replacement_pos = 2;
+            } else {
+                if (start_pos >= data.length) {
+                    return Qnil;
+                }
+
+                end_pos = data.length - 1;
+            }
+        }
+
+        Runtime.assert_type(args[replacement_pos], StringClass);
+        const replacement = args[replacement_pos].get_data<string>();
+
+        self.data = `${data.slice(0, start_pos)}${replacement}${data.slice(end_pos)}`;
+        return args[replacement_pos];
     });
 
     klass.define_native_method("ljust", (self: RValue, args: RValue[]): RValue => {
@@ -411,7 +461,11 @@ export const defineStringBehaviorOn = (klass: Class) => {
             if (args[0].klass === StringClass) {
                 strings.push(arg.get_data<string>());
             } else {
-                strings.push(Object.send(arg, "to_str").get_data<string>());
+                if (Object.respond_to(arg, "to_str")) {
+                    strings.push(Object.send(arg, "to_str").get_data<string>());
+                } else {
+                    Runtime.assert_type(arg, StringClass);
+                }
             }
         }
 

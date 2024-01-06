@@ -12,7 +12,7 @@ import { vmfs } from "./vmfs";
 import { Proc, defineProcBehaviorOn } from "./runtime/proc";
 import { defineHashBehaviorOn } from "./runtime/hash";
 import { isNode } from "./env";
-import { CallData, CallDataFlag, MethodCallData } from "./call_data";
+import { BlockCallData, CallData, CallDataFlag, MethodCallData } from "./call_data";
 import { defineFloatBehaviorOn } from "./runtime/float";
 import { defineModuleBehaviorOn } from "./runtime/module";
 import { Kernel, init as kernelInit } from "./runtime/kernel";
@@ -154,6 +154,10 @@ export class Runtime {
     // each_ancestor to return false as well; otherwise it will return true.
     private static each_ancestor(mod: RValue, cb: (ancestor: RValue) => boolean): boolean {
         const module = mod.get_data<Module>();
+
+        if (Object.prototype.toString.call(module.prepends) != "[object Array]") {
+            debugger;
+        }
 
         for (let prepended_module of module.prepends) {
             if (!cb(prepended_module)) {
@@ -452,8 +456,7 @@ export class RValue {
     public object_id: number;
     public frozen: boolean;
 
-    // methods defined only on the instance
-    public methods: {[key: string]: Callable} = {};
+    private singleton_class: RValue | undefined;
 
     constructor(klass: RValue, data?: any) {
         this.klass = klass;
@@ -505,6 +508,20 @@ export class RValue {
 
     freeze() {
         this.frozen = true;
+    }
+
+    get_singleton_class(): RValue {
+        if (!this.singleton_class) {
+            const name = `#<${this.klass.get_data<Class>().name}:${Object.object_id_to_str(this.object_id)}>`
+            const klass = new Class(`#<Class:${name}>`, this.klass, true);
+            this.singleton_class = new RValue(ClassClass, klass);
+        }
+
+        return this.singleton_class;
+    }
+
+    has_singleton_class(): boolean {
+        return this.singleton_class !== undefined;
     }
 }
 
@@ -766,11 +783,16 @@ export class String {
         return self.object_id != args[0].object_id ? Qtrue : Qfalse;
     });
 
-    klass.define_native_method("instance_exec", (self: RValue, args: RValue[], block?: RValue): RValue => {
-        const context = ExecutionContext.current;
+    klass.define_native_method("instance_exec", (self: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData): RValue => {
         const proc = block!.get_data<Proc>();
         const binding = proc.binding.with_self(self);
-        return proc.with_binding(binding).call(ExecutionContext.current, args);
+        let block_call_data: BlockCallData | undefined = undefined;
+
+        if (call_data) {
+            block_call_data = BlockCallData.create(call_data.argc, call_data.flag, call_data.kw_arg);
+        }
+
+        return proc.with_binding(binding).call(ExecutionContext.current, args, block_call_data);
     });
 
     klass.define_native_method("method_missing", (self: RValue, args: RValue[]): RValue => {

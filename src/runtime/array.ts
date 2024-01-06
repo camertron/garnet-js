@@ -1,6 +1,7 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
 import { ExecutionContext } from "../execution_context";
 import { Array, ArrayClass, Class, IntegerClass, Qfalse, Qnil, Qtrue, RValue, Runtime, String, StringClass } from "../runtime";
+import { hash_combine } from "./hash_utils";
 import { Integer } from "./integer";
 import { Object } from "./object";
 
@@ -253,4 +254,17 @@ export const defineArrayBehaviorOn = (klass: Class) => {
     });
 
     klass.alias_method("initialize_copy", "replace");
+
+    klass.define_native_method("hash", (self: RValue): RValue => {
+        const elements = self.get_data<Array>().elements;
+        let hash = elements.length;
+
+        for (const element of elements) {
+            const elem_hash = Object.send(element, "hash")
+            Runtime.assert_type(elem_hash, IntegerClass);
+            hash = hash_combine(hash, elem_hash.get_data<number>());
+        }
+
+        return Integer.get(hash);
+    });
 };

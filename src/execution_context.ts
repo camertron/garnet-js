@@ -3,7 +3,7 @@ import { LocalJumpError, NativeError, RubyError } from "./errors";
 import { BlockFrame, ClassFrame, Frame, MethodFrame, RescueFrame, TopFrame } from "./frame";
 import Instruction from "./instruction";
 import { CatchBreak, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
-import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, String, STDOUT, IO, Qnil, STDERR, Qfalse, ArrayClass } from "./runtime";
+import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, String, STDOUT, IO, Qnil, STDERR, Qfalse, ArrayClass, ProcClass } from "./runtime";
 import { Binding } from "./runtime/binding";
 
 export type ExecutionResult = JumpResult | LeaveResult | null;
@@ -404,6 +404,14 @@ export class ExecutionContext {
                     return elem;
                 }
             })
+        }
+
+        if (!block && call_data && call_data.has_flag(CallDataFlag.ARGS_BLOCKARG)) {
+            if (locals.length > 0 && locals[locals.length - 1].klass === ProcClass) {
+                block = locals.pop();
+            } else {
+                // raise an error?
+            }
         }
 
         const post_num = iseq.argument_options.post_num || 0;

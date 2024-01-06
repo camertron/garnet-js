@@ -585,6 +585,7 @@ export class Compiler {
 
         switch (node.block?.constructor.name) {
             case "BlockNode":
+                flags |= CallDataFlag.ARGS_BLOCKARG;
                 block_iseq = this.visit_block_node(node.block as BlockNode, true);
                 break;
             case "BlockArgumentNode":
@@ -1710,7 +1711,7 @@ export class Compiler {
         this.visit(node.value, true);
 
         // copy the new value above our args so it can be returned
-        this.iseq.setn(1 + arg_size);
+        this.iseq.setn(2 + arg_size);
 
         // +1 for assigned value, the last argument
         // this.iseq.opt_aset(MethodCallData.create("[]=", arg_size + 1, CallDataFlag.FCALL, null));
@@ -1720,8 +1721,11 @@ export class Compiler {
 
         this.iseq.push(already_set);
 
+        // copy the existing above our args so it can be returned
+        this.iseq.setn(2 + arg_size);
+
         // []= was not called, so pop duped receiver and args
-        this.iseq.adjuststack(1 + arg_size);
+        this.iseq.adjuststack(2 + arg_size);
 
         this.iseq.push(done);
     }

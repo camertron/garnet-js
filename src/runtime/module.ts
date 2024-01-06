@@ -1,7 +1,11 @@
-import { NameError } from "../errors";
+import { MethodCallData } from "../call_data";
+import { Compiler } from "../compiler";
+import { ArgumentError, NameError } from "../errors";
+import { ExecutionContext } from "../execution_context";
 import { Array, String, Module, ModuleClass, RValue, Runtime, SymbolClass, Visibility, Qnil, StringClass, Class, Qtrue, Qfalse, NativeCallable, ClassClass } from "../runtime";
 import { Kernel } from "./kernel";
 import { Object } from "./object";
+import { Proc } from "./proc";
 
 export const defineModuleBehaviorOn = (mod: Module) => {
     mod.define_native_method("inspect", (self: RValue): RValue => {
@@ -133,6 +137,43 @@ export const defineModuleBehaviorOn = (mod: Module) => {
 
     mod.define_native_method("===", (self: RValue, args: RValue[]): RValue => {
         return Kernel.is_a(args[0], self) ? Qtrue : Qfalse;
+    });
+
+    mod.define_native_method("class_eval", (self: RValue, args: RValue[], block?: RValue): RValue => {
+        if (block) {
+            const proc = block!.get_data<Proc>();
+            const binding = proc.binding.with_self(self);
+            return proc.with_binding(binding).call(ExecutionContext.current, []);
+        } else {
+            Runtime.assert_type(args[0], StringClass);
+            const code = args[0].get_data<string>();
+            const iseq = Compiler.compile_string(code, "<class eval>");
+            return ExecutionContext.current.run_class_frame(iseq, self);
+        }
+    });
+
+    mod.define_native_method("define_method", (self: RValue, args: RValue[], block?: RValue): RValue => {
+        Runtime.assert_type(args[0], SymbolClass);
+        const method_name = args[0].get_data<string>();
+
+        if (!block) {
+            throw new ArgumentError("Module.define_method does not yet support being called without a block");
+        }
+
+        self.get_data<Module>().define_native_method(method_name, (mtd_self: RValue, mtd_args: RValue[], mtd_block?: RValue, call_data?: MethodCallData): RValue => {
+            if (mtd_block) {
+                mtd_args = [...mtd_args, mtd_block];
+            }
+
+            if (call_data) {
+                call_data = MethodCallData.create("instance_exec", mtd_args.length, call_data.flag, call_data.kw_arg)
+                return Object.send(mtd_self, call_data, mtd_args, block);
+            } else {
+                return Object.send(mtd_self, "instance_exec", args, block);
+            }
+        });
+
+        return args[0];
     });
 };
 

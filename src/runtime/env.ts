@@ -1,5 +1,5 @@
 import { isNode } from "../env";
-import { NativeCallable, ObjectClass, Qnil, RValue, Runtime, String, StringClass } from "../runtime"
+import { Class, NativeCallable, ObjectClass, Qnil, RValue, Runtime, String, StringClass } from "../runtime"
 import { Hash } from "./hash";
 
 let inited = false;
@@ -10,7 +10,7 @@ export const init = () => {
     const env_hash = new Hash();
     const env = new RValue(ObjectClass);
 
-    env.methods["[]"] = new NativeCallable((self: RValue, args: RValue[]): RValue => {
+    env.get_singleton_class().get_data<Class>().methods["[]"] = new NativeCallable((self: RValue, args: RValue[]): RValue => {
         Runtime.assert_type(args[0], StringClass);
 
         const result = env_hash.get(args[0]);
@@ -28,7 +28,7 @@ export const init = () => {
         return result;
     });
 
-    env.methods["[]="] = new NativeCallable((self: RValue, args: RValue[]): RValue => {
+    env.get_singleton_class().get_data<Class>().methods["[]="] = new NativeCallable((self: RValue, args: RValue[]): RValue => {
         Runtime.assert_type(args[0], StringClass);
         Runtime.assert_type(args[1], StringClass);
         env_hash.set(args[0], args[1]);
