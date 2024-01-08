@@ -15,7 +15,7 @@ import { isNode } from "./env";
 import { BlockCallData, CallData, CallDataFlag, MethodCallData } from "./call_data";
 import { defineFloatBehaviorOn } from "./runtime/float";
 import { defineModuleBehaviorOn } from "./runtime/module";
-import { Kernel, init as kernelInit } from "./runtime/kernel";
+import { Kernel, init as kernel_init } from "./runtime/kernel";
 import { init as objectInit } from "./runtime/object";
 import { init as errorInit } from "./errors";
 import { init as processInit } from "./runtime/process";
@@ -56,8 +56,10 @@ export class Runtime {
 
     static define_module(name: string, cb?: ModuleDefinitionCallback): RValue {
         if (!this.constants[name]) {
-            const module = new RValue(ModuleClass, new Module(name));
-            this.constants[name] = module;
+            const module = new Module(name)
+            const module_rval = new RValue(ModuleClass, module);
+            module.rval = module_rval;
+            this.constants[name] = module_rval;
         }
 
         if (cb) {
@@ -71,8 +73,10 @@ export class Runtime {
         const parent_mod = parent.get_data<Module>();
 
         if (!parent_mod.constants[name]) {
-            const module = new RValue(ModuleClass, new Module(name, parent));
-            parent_mod.constants[name] = module;
+            const module = new Module(name, parent);
+            const module_rval = new RValue(ModuleClass, module);
+            module.rval = module_rval;
+            parent_mod.constants[name] = module_rval;
         }
 
         if (cb) {
@@ -88,8 +92,10 @@ export class Runtime {
                 superclass = ObjectClass;
             }
 
-            const klass_val = new RValue(ClassClass, new Class(name, superclass));
-            this.constants[name] = klass_val;
+            const klass = new Class(name, superclass);
+            const klass_rval = new RValue(ClassClass, klass);
+            klass.rval = klass_rval;
+            this.constants[name] = klass_rval;
         }
 
         if (cb) {
@@ -107,8 +113,10 @@ export class Runtime {
                 superclass = ObjectClass;
             }
 
-            const klass_val = new RValue(ClassClass, new Class(name, superclass, false, parent));
-            parent_mod.constants[name] = klass_val;
+            const klass = new Class(name, superclass, false, parent);
+            const klass_rval = new RValue(ClassClass, klass);
+            klass.rval = klass_rval;
+            parent_mod.constants[name] = klass_rval;
         }
 
         if (cb) {
@@ -355,6 +363,7 @@ export class Module {
     public nesting_parent?: RValue;
     public default_visibility: Visibility = Visibility.public;
 
+    private rval_: RValue;
     private name_rval_: RValue;
 
     constructor(name: string | null, nesting_parent?: RValue) {
@@ -375,11 +384,11 @@ export class Module {
     }
 
     define_singleton_method(name: string, body: InstructionSequence) {
-        (this.get_singleton_class().get_data<Class>()).define_method(name, body);
+        (this.get_singleton_class().get_data<Module>()).define_method(name, body);
     }
 
     define_native_singleton_method(name: string, body: NativeMethod) {
-        (this.get_singleton_class().get_data<Class>()).define_native_method(name, body);
+        (this.get_singleton_class().get_data<Module>()).define_native_method(name, body);
     }
 
     alias_method(new_name: string, existing_name: string) {
@@ -444,6 +453,14 @@ export class Module {
         if (this.name_rval_) return this.name_rval_;
         this.name_rval_ = String.new(this.name);
         return this.name_rval_;
+    }
+
+    get rval(): RValue {
+        return this.rval_;
+    }
+
+    set rval(val: RValue) {
+        this.rval_ = val;
     }
 }
 
@@ -590,6 +607,26 @@ export const TrueClass        = Runtime.constants["TrueClass"]   = new RValue(Cl
 export const FalseClass       = Runtime.constants["FalseClass"]  = new RValue(ClassClass, new Class("FalseClass", ObjectClass));
 export const RegexpClass      = Runtime.constants["Regexp"]      = new RValue(ClassClass, new Class("Regexp", ObjectClass));
 export const KernelModule     = Runtime.constants["Kernel"]      = new RValue(ModuleClass, new Module("Kernel"));
+
+// Normally assigning rval is done by Runtime.define_class and friends, but since we have to
+// construct RValues manually above, the rval property has to be set manually as well.
+basic_object_class.rval = BasicObjectClass;
+object_class.rval = ObjectClass;
+module_class.rval = ModuleClass;
+class_class.rval = ClassClass;
+StringClass.get_data<Class>().rval = StringClass;
+ArrayClass.get_data<Class>().rval = ArrayClass;
+HashClass.get_data<Class>().rval = HashClass;
+NumericClass.get_data<Class>().rval = NumericClass;
+IntegerClass.get_data<Class>().rval = IntegerClass;
+FloatClass.get_data<Class>().rval = FloatClass;
+SymbolClass.get_data<Class>().rval = SymbolClass;
+ProcClass.get_data<Class>().rval = ProcClass;
+NilClass.get_data<Class>().rval = NilClass;
+TrueClass.get_data<Class>().rval = TrueClass;
+FalseClass.get_data<Class>().rval = FalseClass;
+RegexpClass.get_data<Class>().rval = RegexpClass;
+KernelModule.get_data<Class>().rval = KernelModule;
 
 object_class.superclass = BasicObjectClass;
 module_class.superclass = ObjectClass;
@@ -966,7 +1003,7 @@ export const init = async () => {
     dirInit();
     comparableInit();
     numericInit();
-    await kernelInit();
+    await kernel_init();
     objectInit();
     enumerableInit();
     rangeInit();
