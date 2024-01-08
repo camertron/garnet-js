@@ -146,29 +146,26 @@ export class Runtime {
     }
 
     static each_unique_ancestor(mod: RValue, cb: (ancestor: RValue) => boolean) {
-        const seen: Set<RValue> = new Set();
-
-        this.each_ancestor(mod, (ancestor: RValue): boolean => {
-            if (!seen.has(ancestor)) {
-                seen.add(ancestor);
-                return cb(ancestor);
-            }
-
-            return true;
-        });
+        this.each_ancestor(mod, new Set(), cb);
     }
 
     // Return false from cb() to exit early. Returning false from cb() will cause
     // each_ancestor to return false as well; otherwise it will return true.
-    private static each_ancestor(mod: RValue, cb: (ancestor: RValue) => boolean): boolean {
-        const module = mod.get_data<Module>();
+    private static each_ancestor(mod: RValue, seen: Set<RValue>, cb: (ancestor: RValue) => boolean): boolean {
+        if (seen.has(mod)) return true;
 
-        if (Object.prototype.toString.call(module.prepends) != "[object Array]") {
-            debugger;
-        }
+        seen.add(mod);
+
+        const module = mod.get_data<Module>();
 
         for (let prepended_module of module.prepends) {
             if (!cb(prepended_module)) {
+                return false;
+            }
+        }
+
+        if (mod.has_singleton_class()) {
+            if (!this.each_ancestor(mod.get_singleton_class(), seen, cb)) {
                 return false;
             }
         }
@@ -189,7 +186,7 @@ export class Runtime {
                     return false;
                 }
 
-                if (!this.each_ancestor(module.superclass, cb)) {
+                if (!this.each_ancestor(module.superclass, seen, cb)) {
                     return false;
                 }
             }
