@@ -22,8 +22,8 @@
   ],
   "scripts": {
     "clean": "rimraf build dist",
-    "build": "npx tsc && rollup -c",
-    "build:release": "npx tsc && RELEASE=1 rollup -c",
+    "build": "./scripts/build.sh",
+    "build:release": "./scripts/build.sh --release",
     "clean-build": "yarn run clean && yarn run build",
     "test": "node --experimental-vm-modules node_modules/.bin/jest --no-cache",
     "example": "node -r @swc-node/register ./test.ts"
