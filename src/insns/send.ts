@@ -2,7 +2,7 @@ import { MethodCallData, CallDataFlag } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { ArrayClass, ProcClass, Qfalse, Qnil } from "../runtime";
+import { ArrayClass, ProcClass, Qfalse, Qnil, Qtrue } from "../runtime";
 import { Object } from "../runtime/object"
 import { Proc } from "../runtime/proc";
 

@@ -209,6 +209,28 @@ export const defineArrayBehaviorOn = (klass: Class) => {
         return Integer.get(self.get_data<Array>().elements.length);
     });
 
+    klass.alias_method("length", "size");
+
+    klass.define_native_method("first", (self: RValue): RValue => {
+        const elements = self.get_data<Array>().elements;
+
+        if (elements.length > 0) {
+            return elements[0];
+        } else {
+            return Qnil;
+        }
+    });
+
+    klass.define_native_method("last", (self: RValue): RValue => {
+        const elements = self.get_data<Array>().elements;
+
+        if (elements.length > 0) {
+            return elements[elements.length - 1];
+        } else {
+            return Qnil;
+        }
+    });
+
     klass.define_native_method("dup", (self: RValue): RValue => {
         return Array.new([...self.get_data<Array>().elements]);
     });

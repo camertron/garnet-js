@@ -1,3 +1,4 @@
+import { KeyError } from "../errors";
 import { ExecutionContext } from "../execution_context";
 import { String, RValue, Class, Qtrue, Qfalse, Qnil, HashClass, ProcClass, Runtime, Array as RubyArray } from "../runtime";
 import { Object } from "./object";
@@ -50,6 +51,14 @@ export class Hash {
         const hash_code = this.get_hash_code(key);
         this.keys.set(hash_code, key);
         this.values.set(hash_code, value);
+        return value;
+    }
+
+    delete(key: RValue): RValue | undefined {
+        const hash_code = this.get_hash_code(key);
+        this.keys.delete(hash_code);
+        const value = this.values.get(hash_code);
+        this.values.delete(hash_code);
         return value;
     }
 
@@ -114,11 +123,6 @@ export const defineHashBehaviorOn = (klass: Class) => {
     });
 
     klass.define_native_method("[]=", (self: RValue, args: RValue[]): RValue => {
-        const ec = ExecutionContext.current;
-        if (ec.globals["$cameron"] === Qtrue) {
-            ec.globals["$cameron"] = Qfalse;
-            debugger
-        }
         const [key, value] = args;
         const hash = self.get_data<Hash>();
         return hash.set(key, value);
@@ -194,5 +198,33 @@ export const defineHashBehaviorOn = (klass: Class) => {
     klass.define_native_method("values", (self: RValue): RValue => {
         const keys = Array.from(self.get_data<Hash>().values.values());
         return RubyArray.new(keys);
+    });
+
+    klass.define_native_method("fetch", (self: RValue, args: RValue[], block?: RValue): RValue => {
+        const hash = self.get_data<Hash>();
+        const key = args[0];
+        const value = hash.get(key);
+        if (value) return value;
+
+        if (block) {
+            return block.get_data<Proc>().call(ExecutionContext.current, [key]);
+        } else if (args.length > 1) {
+            return args[1];
+        } else {
+            throw new KeyError(`key not found: ${Object.send(key, "inspect")}`);
+        }
+    });
+
+    klass.define_native_method("delete", (self: RValue, args: RValue[], block?: RValue): RValue => {
+        const hash = self.get_data<Hash>();
+        const key = args[0];
+        const value = hash.delete(key);
+        if (value) return value;
+
+        if (block) {
+            return block.get_data<Proc>().call(ExecutionContext.current, [key]);
+        } else {
+            return Qnil;
+        }
     });
 };

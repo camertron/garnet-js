@@ -1,7 +1,7 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
 import { ArgumentError, FrozenError, NoMethodError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Callable, Class, ClassClass, KernelModule, ModuleClass, ObjectClass, RValue, Runtime, StringClass, String, SymbolClass, Qtrue, Qfalse, ProcClass, Qnil } from "../runtime";
+import { Callable, Class, ClassClass, KernelModule, ModuleClass, ObjectClass, RValue, Runtime, StringClass, String, SymbolClass, Qtrue, Qfalse, ProcClass, Qnil, Module } from "../runtime";
 
 export class Object {
     static send(receiver: RValue, call_data_: MethodCallData | string, args: RValue[] = [], block?: RValue): RValue {
@@ -15,10 +15,6 @@ export class Object {
         } else {
             method_name = call_data_;
             call_data = undefined;
-        }
-
-        if (receiver === Qnil && method_name === "<<") {
-            debugger;
         }
 
         if (receiver.has_singleton_class() && receiver.get_singleton_class().get_data<Class>().methods[method_name]) {
@@ -55,6 +51,11 @@ export class Object {
     }
 
     static respond_to(obj: RValue, method_name: string): boolean {
+        if (obj.has_singleton_class()) {
+            const found = this.find_method_under(obj.get_singleton_class(), method_name);
+            if (found) return true;
+        }
+
         return this.find_method_under(obj.klass, method_name) ? true : false;
     }
 
@@ -62,11 +63,24 @@ export class Object {
         let found_method = null;
 
         Runtime.each_unique_ancestor(mod, (ancestor: RValue): boolean => {
-            const method = ancestor.get_data<Class>().methods[method_name];
+            const ancestor_mod = ancestor.get_data<Module>();
 
-            if (method) {
+            if (ancestor_mod.undefined_methods.has(method_name)) {
+                // Module.undef_method prevents any calls to the method_name method, regardless of
+                // their position in the inheritance chain. Exit early from each_unique_ancestor()
+                // by returning false here.
+                return false;
+            }
+
+            const method = ancestor_mod.methods[method_name];
+
+            // Methods can't be called if they were removed from a particular class, but superclass
+            // versions of the same method can still be called. Keep searching the inheritance chain.
+            if (method && !ancestor_mod.removed_methods.has(method_name)) {
                 found_method = method;
-                return false; // exit early from each_unique_ancestor()
+
+                // A matching method has been found; exit early from each_unique_ancestor().
+                return false;
             }
 
             return true;

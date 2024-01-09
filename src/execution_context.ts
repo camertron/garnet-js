@@ -3,7 +3,7 @@ import { LocalJumpError, NativeError, RubyError } from "./errors";
 import { BlockFrame, ClassFrame, Frame, MethodFrame, RescueFrame, TopFrame } from "./frame";
 import Instruction from "./instruction";
 import { CatchBreak, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
-import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, String, STDOUT, IO, Qnil, STDERR, Qfalse, ArrayClass, ProcClass } from "./runtime";
+import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, String, STDOUT, IO, Qnil, STDERR, ArrayClass, ProcClass } from "./runtime";
 import { Binding } from "./runtime/binding";
 
 export type ExecutionResult = JumpResult | LeaveResult | null;
@@ -112,11 +112,6 @@ export class ExecutionContext {
         // Finally we can execute the instructions one at a time. If they return
         // jumps or leaves we will handle those appropriately.
         while (true) {
-            if (this.globals["$cameron"] && this.globals["$cameron"].is_truthy()) {
-                this.globals["$cameron"] = Qfalse;
-                debugger;
-            }
-
             const insn = frame.iseq.compiled_insns[frame.pc];
 
             switch (insn.constructor) {

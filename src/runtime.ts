@@ -1,6 +1,6 @@
 import { InstructionSequence } from "./instruction_sequence";
 import { Compiler } from "./compiler";
-import { LoadError, NoMethodError, NotImplementedError } from "./errors";
+import { LoadError, TypeError, NoMethodError, NotImplementedError } from "./errors";
 import { ExecutionContext } from "./execution_context";
 import { defineArrayBehaviorOn } from "./runtime/array";
 import { Integer, defineIntegerBehaviorOn } from "./runtime/integer";
@@ -209,6 +209,29 @@ export class Runtime {
         }
     }
 
+    static coerce_to_string(obj: RValue): string {
+        switch (obj.klass) {
+            case StringClass:
+            case SymbolClass:
+                return obj.get_data<string>();
+            default:
+                if (Object.respond_to(obj, "to_str")) {
+                    const str = Object.send(obj, "to_str");
+
+                    if (str.klass === StringClass) {
+                        return str.get_data<string>();
+                    } else {
+                        const obj_class_name = obj.klass.get_data<Class>().name;
+                        const to_str_class_name = str.klass.get_data<Class>().name;
+                        throw new TypeError(`can't convert ${obj_class_name} to String (${obj_class_name}#to_str gives ${to_str_class_name})`);
+                    }
+                } else {
+                    const obj_class_name = obj.klass.get_data<Class>().name;
+                    throw new TypeError(`no implicit conversion of ${obj_class_name} into String`);
+                }
+        }
+    }
+
     static require(path: string): boolean {
         // console.log(`Require ${path}`);
         const ec = ExecutionContext.current;
@@ -352,13 +375,16 @@ export class NativeCallable extends Callable {
 
 export class Module {
     public name: string | null;
-    public constants: {[key: string]: RValue};
-    public methods: {[key: string]: Callable};
-    public includes: RValue[];
-    public prepends: RValue[];
     public singleton_class?: RValue;
     public nesting_parent?: RValue;
     public default_visibility: Visibility = Visibility.public;
+
+    private constants_: {[key: string]: RValue};
+    private methods_: {[key: string]: Callable};
+    private removed_methods_: Set<string>;
+    private undefined_methods_: Set<string>;
+    private includes_: RValue[];
+    private prepends_: RValue[];
 
     private rval_: RValue;
     private name_rval_: RValue;
@@ -366,10 +392,54 @@ export class Module {
     constructor(name: string | null, nesting_parent?: RValue) {
         this.name = name;
         this.nesting_parent = nesting_parent;
-        this.constants = {};
-        this.methods = {};
-        this.includes = [];
-        this.prepends = [];
+    }
+
+    get constants(): {[key: string]: RValue} {
+        if (!this.constants_) {
+            this.constants_ = {};
+        }
+
+        return this.constants_;
+    }
+
+    get methods(): {[key: string]: Callable} {
+        if (!this.methods_) {
+            this.methods_ = {};
+        }
+
+        return this.methods_;
+    }
+
+    get removed_methods(): Set<string> {
+        if (!this.removed_methods_) {
+            this.removed_methods_ = new Set();
+        }
+
+        return this.removed_methods_;
+    }
+
+    get undefined_methods(): Set<string> {
+        if (!this.undefined_methods_) {
+            this.undefined_methods_ = new Set();
+        }
+
+        return this.undefined_methods_;
+    }
+
+    get includes(): RValue[] {
+        if (!this.includes_) {
+            this.includes_ = [];
+        }
+
+        return this.includes_;
+    }
+
+    get prepends(): RValue[] {
+        if (!this.prepends_) {
+            this.prepends_ = [];
+        }
+
+        return this.prepends_;
     }
 
     define_method(name: string, body: InstructionSequence) {
@@ -390,6 +460,14 @@ export class Module {
 
     alias_method(new_name: string, existing_name: string) {
         this.methods[new_name] = this.methods[existing_name];
+    }
+
+    remove_method(name: string) {
+        this.removed_methods.add(name);
+    }
+
+    undef_method(name: string) {
+        this.undefined_methods.add(name);
     }
 
     find_constant(name: string, inherit: boolean = true): RValue | null {
@@ -840,19 +918,19 @@ export class String {
     });
 
     klass.define_native_method("__send__", (self: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData): RValue => {
-        Runtime.assert_type(args[0], StringClass);
+        const method_name = Runtime.coerce_to_string(args[0]);
         let send_call_data;
 
         if (call_data) {
             send_call_data = MethodCallData.create(
-                args[0].get_data<string>(), call_data.argc - 1, call_data.flag, call_data.kw_arg
+                method_name, call_data.argc - 1, call_data.flag, call_data.kw_arg
             );
         } else {
             let flags = CallDataFlag.ARGS_SIMPLE;
             if (block) flags |= CallDataFlag.ARGS_BLOCKARG;
 
             send_call_data = MethodCallData.create(
-                args[0].get_data<string>(), args.length - 1, flags
+                method_name, args.length - 1, flags
             );
         }
 

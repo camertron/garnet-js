@@ -175,6 +175,16 @@ export const defineModuleBehaviorOn = (mod: Module) => {
 
         return args[0];
     });
+
+    mod.define_native_method("remove_method", (self: RValue, args: RValue[]): RValue => {
+        self.get_data<Module>().remove_method(Runtime.coerce_to_string(args[0]));
+        return self;
+    });
+
+    mod.define_native_method("undef_method", (self: RValue, args: RValue[]): RValue => {
+        self.get_data<Module>().undef_method(Runtime.coerce_to_string(args[0]));
+        return self;
+    });
 };
 
 const define_attr_reader_on = (mod: RValue, name: string): string => {
