@@ -6,14 +6,6 @@ import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
 
-const kernel_puts = (_self: RValue, args: RValue[]): RValue => {
-    for (let arg of args) {
-        console.log(Object.send(arg, "to_s").get_data<string>());
-    }
-
-    return Qnil;
-};
-
 export class Kernel {
     public static exit_handlers: RValue[] = [];
 
@@ -45,8 +37,13 @@ export const init = async () => {
         // kexec = (await import("@gongt/kexec")).default;
     }
 
-    mod.define_native_method("puts", kernel_puts);
-    mod.define_native_singleton_method("puts", kernel_puts);
+    mod.define_native_method("puts", (_self: RValue, args: RValue[]): RValue => {
+        return Object.send(ExecutionContext.current.globals["$stdout"], "puts", args);
+    });
+
+    mod.define_native_singleton_method("puts", (_self: RValue, args: RValue[]): RValue => {
+        return Object.send(ExecutionContext.current.globals["$stdout"], "puts", args);
+    });
 
     mod.define_native_method("require", (_self: RValue, args: RValue[]): RValue => {
         const path = args[0];

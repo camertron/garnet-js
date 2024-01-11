@@ -1,0 +1,14 @@
+/* Application styles */
+
+/* Anything that needs to fetch an asset from app/assets via url() needs to go in this file, which
+ * is managed by cssbundling/propshaft. "Normal" stuff can go in app/javascript/entrypoints/application.css,
+ * which is managed by Vite and hot reloaded.
+ */
+
+@font-face {
+    font-family: 'lequire-regular';
+    src: url('lequire-webfont.woff2') format('woff2'),
+         url('lequire-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}

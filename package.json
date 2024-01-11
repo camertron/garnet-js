@@ -2,9 +2,8 @@
   "name": "@camertron/yarv-js",
   "version": "0.1.0",
   "description": "The YARV virtual machine written in Javascript.",
-  "main": "dist/yarv.js",
-  "module": "dist/yarv.js",
-  "types": "dist/yarv.d.ts",
+  "main": "src/yarv.ts",
+  "module": "src/yarv.ts",
   "repository": "camertron/yarv-js",
   "type": "module",
   "keywords": [
@@ -29,6 +28,7 @@
     "example": "node -r @swc-node/register ./test.ts"
   },
   "dependencies": {
+    "@bjorn3/browser_wasi_shim": "^0.2.17",
     "@gongt/kexec": "^3.0.0",
     "@ruby/prism": "link:/Users/camertron/workspace/ruby/prism/javascript/"
   },

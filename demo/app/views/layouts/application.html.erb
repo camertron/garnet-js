@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Demo</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+
+    <script type="text/javascript">
+      window.yarv_wasm_modules = <%= Rails.application.assets.load_path.manifest.each_with_object({}) do |(file_name, _), memo|
+        next unless file_name.end_with?(".wasm")
+        memo[file_name] = Rails.application.assets.resolver.resolve(file_name)
+      end.to_json.html_safe %>;
+    </script>
+
+    <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
+    <%= stylesheet_link_tag "primer_view_components", "data-turbo-track": "reload" %>
+    <%#= javascript_include_tag "application", "data-turbo-track": "reload", type: "module" %>
+    <%= vite_client_tag %>
+    <%= vite_stylesheet_tag 'application', data: { "turbo-track": "reload" } %>
+    <%= vite_typescript_tag 'application' %>
+  </head>
+
+  <body>
+    <div class="Header">
+      <%= render(Primer::Beta::Octicon.new(icon: :ruby, size: :medium, style: "fill: white")) %>
+      <span class="mt-1 ml-2">YARV-JS Demo</span>
+    </div>
+
+    <%= yield %>
+  </body>
+</html>

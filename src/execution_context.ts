@@ -265,8 +265,19 @@ export class ExecutionContext {
         stdout.puts(`${backtrace[0]}: ${e.message} (${e.constructor.name})`);
 
         for (let i = 1; i < backtrace.length; i ++) {
-            stdout.puts(backtrace[i]);
+            stdout.puts(`        ${backtrace[i]}`);
         }
+    }
+
+    static print_backtrace_to_string(e: any): string {
+        const backtrace = e.backtrace as string[];
+        const lines = [`${backtrace[0]}: ${e.message} (${e.constructor.name})`];
+
+        for (let i = 1; i < backtrace.length; i ++) {
+            lines.push(`        ${backtrace[i]}`);
+        }
+
+        return lines.join("\n");
     }
 
     frame_yield(): MethodFrame | null {

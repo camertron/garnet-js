@@ -297,9 +297,15 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
+"@bjorn3/browser_wasi_shim@^0.2.17":
+  version "0.2.17"
+  resolved "https://registry.yarnpkg.com/@bjorn3/browser_wasi_shim/-/browser_wasi_shim-0.2.17.tgz#82f34df431c22302684a4cf90a523aa29d58b42b"
+  integrity sha512-B2qcaGROo4e2s4nXb3VPATrczVrntM4BUXtAU1gEzUOfqKTcVuePq4NfhH5hmLBSvZ45YcT4gflDRUFYqLhkxA==
+
 "@camertron/yarv-js@./":
   version "0.1.0"
   dependencies:
+    "@gongt/kexec" "^3.0.0"
     "@ruby/prism" "link:../../ruby/prism/javascript"
 
 "@cspotcode/source-map-support@^0.8.0":

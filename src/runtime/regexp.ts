@@ -1,5 +1,18 @@
 import { RuntimeError } from "../errors";
 import { RValue, RegexpClass } from "../runtime";
+import * as WASM from "../wasm";
+
+let onigmo: Onigmo, onig_memory: DataView;
+let inited = false;
+
+export const init = async () => {
+    if (inited) return;
+
+    onigmo = await WASM.load_module("onigmo") as unknown as Onigmo;
+    onig_memory = new DataView(onigmo.exports.memory.buffer);
+
+    inited = true;
+};
 
 type Address = number;
 
@@ -259,13 +272,6 @@ const ONIG_NO_SUPPORT_CONFIG = -2;
 
 // general constants
 const ONIG_MAX_ERROR_MESSAGE_LEN = 90
-
-let onigmo: Onigmo, onig_memory: DataView;
-
-export const init = (onigmoWasm: Onigmo) => {
-    onigmo = onigmoWasm;
-    onig_memory = new DataView(onigmoWasm.exports.memory.buffer);
-};
 
 export class Regexp {
     static new(pattern: string, options: string): RValue {

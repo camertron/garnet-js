@@ -15,9 +15,9 @@
     "strictPropertyInitialization": false,
     "strict": true,
     "types": ["node"],
-    "esModuleInterop": true
-  },
-  "paths": {
+    "esModuleInterop": true,
+    "paths": {
+    },
   },
   "include": [
     "src/**/*.ts"

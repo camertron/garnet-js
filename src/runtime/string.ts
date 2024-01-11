@@ -506,4 +506,12 @@ export const defineStringBehaviorOn = (klass: Class) => {
             }
         }
     });
+
+    klass.define_native_method("upcase", (self: RValue): RValue => {
+        return String.new(self.get_data<string>().toUpperCase());
+    });
+
+    klass.define_native_method("downcase", (self: RValue): RValue => {
+        return String.new(self.get_data<string>().toLowerCase());
+    });
 };

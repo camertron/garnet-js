@@ -2,35 +2,33 @@ import { Qnil, RValue, Runtime, init as initRuntime } from "./runtime";
 import { ExecutionContext } from "./execution_context";
 import { vmfs } from "./vmfs";
 import { Compiler } from "./compiler";
-import { loadPrism } from "@ruby/prism";
 import { Options } from "./options";
 import { RubyError, SystemExit } from "./errors";
-import { Onigmo, Regexp, init as regexp_init } from "./runtime/regexp";
-
-// @TODO: figure out how to load wasm modules in the browser
-import * as fs from "fs"
-import { fileURLToPath } from "node:url";
-import { WASI } from "wasi";
 import { Kernel } from "./runtime/kernel";
 import { Object } from "./runtime/object";
 import { Proc } from "./runtime/proc";
 import { isNode } from "./env";
+import * as WASM from "./wasm";
+import { parsePrism } from "@ruby/prism/src/parsePrism";
+import { Regexp } from "./runtime/regexp";
 
 export async function init() {
     if (!ExecutionContext.current) {
+        if (isNode) {
+            const path = await import("path");
+            const url = await import("url");
+
+            WASM.add_to_module_path(
+                path.resolve(path.join(path.dirname(url.fileURLToPath(import.meta.url)), "wasm_modules"))
+            )
+        }
+
         await initRuntime();
 
         ExecutionContext.current = new ExecutionContext();
-        Compiler.parse = await loadPrism();
 
-        const onigmo_module = await WebAssembly.compile(fs.readFileSync(fileURLToPath(new URL("/Users/camertron/workspace/interscript/onigmo/onigmo.wasm", import.meta.url))));
-        const wasi = new WASI({ version: "preview1" });
-
-        /* @ts-ignore */
-        const onigmo = await WebAssembly.instantiate(onigmo_module, wasi.getImportObject());
-        wasi.initialize(onigmo);
-
-        regexp_init(onigmo as unknown as Onigmo);
+        const prism_instance = await WASM.load_module("prism");
+        Compiler.parse = (source) => parsePrism(prism_instance.exports, source);
     }
 }
 
@@ -60,7 +58,6 @@ export async function evaluate(code: string, path?: string, compiler_options?: O
         // should be handled by the caller.
         if (e instanceof RubyError) {
             ExecutionContext.print_backtrace(e);
-            return Qnil;
         } else if (e instanceof RValue) {
             // jesus christ improve this crap
             if (e.get_data<any>() instanceof RubyError) {
@@ -76,7 +73,6 @@ export async function evaluate(code: string, path?: string, compiler_options?: O
             if (Object.send(e, "is_a?", [Runtime.constants["Exception"]]).is_truthy()) {
                 console.log(Object.send(e, "full_message").get_data<string>());
             }
-            return Qnil;
         }
 
         throw e;
@@ -102,7 +98,14 @@ export {
     Qtrue,
     Qfalse,
     STDOUT,
-    STDERR
+    STDERR,
+    IOClass,
+    RValue
 } from "./runtime";
 
-export { ExecutionContext, vmfs, Regexp };
+export type { IO } from "./runtime";
+
+export { Object } from "./runtime/object";
+export { RubyError } from "./errors";
+
+export { ExecutionContext, vmfs, Regexp, WASM };

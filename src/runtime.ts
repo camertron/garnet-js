@@ -31,6 +31,7 @@ import { init as bindingInit } from "./runtime/binding";
 import { init as signalInit } from "./runtime/signal";
 import { init as timeInit } from "./stdlib/time";
 import { init as threadInit } from './stdlib/thread';
+import { init as regexpInit} from "./runtime/regexp";
 import { obj_id_hash } from "./util/object_id";
 
 
@@ -1086,6 +1087,7 @@ export const init = async () => {
     signalInit();
     timeInit();
     threadInit();
+    await regexpInit();
 
     defineArrayBehaviorOn(ArrayClass.get_data<Class>());
 
@@ -1116,7 +1118,7 @@ export const init = async () => {
                 if (typeof (navigator as any).userAgentData !== 'undefined' && (navigator as any).userAgentData != null) {
                     return (navigator as any).userAgentData.platform;
                 }
-                // Deprecated but still works for most of the browser
+                // Deprecated but still works for most of the browsers
                 if (typeof navigator.platform !== 'undefined') {
                     if (typeof navigator.userAgent !== 'undefined' && /android/.test(navigator.userAgent.toLowerCase())) {
                         // android device’s navigator.platform is often set as 'linux', so let’s use userAgent for them

@@ -1,0 +1,41 @@
+@import "@primer/css";
+@import "xterm/css/xterm";
+
+body {
+    padding: 0;
+    margin: 0;
+    background-color: black;
+}
+
+.Header {
+    display: flex;
+    align-items: center;
+    background-color: #bd4136;
+    padding: 20px;
+    color: white;
+    font-family: 'lequire-regular';
+    font-size: 25px;
+}
+
+.xterm-rows {
+    color: #33ff33 !important;
+}
+
+.Console {
+    background-color: #222222;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0px 0px 13px 3px rgba(87,87,87,1);
+    border: 1px solid rgba(87,87,87,1);
+}
+
+.Console-header {
+    display: flex;
+    gap: 3px;
+    margin-bottom: 15px;
+}
+
+.Console-header-btn {
+    width: 15px;
+    height: 15px;
+}
