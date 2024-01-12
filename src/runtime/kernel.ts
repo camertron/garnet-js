@@ -28,7 +28,7 @@ export class Kernel {
 export const init = async () => {
     const mod = KernelModule.get_data<Module>();
     let child_process: unknown;
-    let kexec: (executable: string, args?: string[]) => never;
+    // let kexec: (executable: string, args?: string[]) => never;
 
     if (isNode) {
         // child_process = await import("child_process");
@@ -259,12 +259,14 @@ export const init = async () => {
                     const elems = args[1].get_data<Array>().elements;
                     elems.forEach((elem) => Runtime.assert_type(elem, StringClass));
                     const elem_strings = elems.map((elem) => elem.get_data<string>());
-                    kexec(first_arg.get_data<string>(), elem_strings);
+                    // kexec(first_arg.get_data<string>(), elem_strings);
+                    return Qnil;
                 } else {
                     throw new NotImplementedError(`unexpected ${first_arg.get_data<Class>().name} passed as the first argument to Kernel#exec`);
                 }
             } else {
-                kexec(first_arg.get_data<string>());
+                // kexec(first_arg.get_data<string>());
+                return Qnil;
             }
         } else if (first_arg.klass === HashClass) {
             throw new NotImplementedError("passing a hash as the first argument to Kernel#exec is not yet supported");
@@ -273,7 +275,8 @@ export const init = async () => {
             elems.forEach((elem) => Runtime.assert_type(elem, StringClass));
             const elem_strings = elems.map((elem) => elem.get_data<string>());
             console.log(elem_strings);
-            kexec(elem_strings.join(" "));
+            // kexec(elem_strings.join(" "));
+            return Qnil;
         } else {
             throw new ArgumentError(`unexpected ${first_arg.klass.get_data<Class>().name} passed as the first argument to Kernel#exec`);
         }

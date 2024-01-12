@@ -435,12 +435,11 @@ __metadata:
 
 "@camertron/yarv-js@file:./::locator=%40camertron%2Fyarv-js%40workspace%3A.":
   version: 0.1.0
-  resolution: "@camertron/yarv-js@file:./#./::hash=77a444&locator=%40camertron%2Fyarv-js%40workspace%3A."
+  resolution: "@camertron/yarv-js@file:./#./::hash=0731e2&locator=%40camertron%2Fyarv-js%40workspace%3A."
   dependencies:
     "@bjorn3/browser_wasi_shim": "npm:^0.2.17"
-    "@gongt/kexec": "npm:^3.0.0"
     "@ruby/prism": "npm:0.18.0"
-  checksum: 7e2dd25a7eb30d3e5b2e8e0a5008c8ca82134eb04ec51f47bd44bcf4fe1aa748fbe82581827037336d62113da3ace624a37801d6ecb55fcc646687f086594172
+  checksum: 8a660cc1335ccd25bd190575a0feef15a927039a8e4192bc710771432e3afead9773388c7a5953390201c791598ad127f01c2663595bb033ab27660f22a6a418
   languageName: node
   linkType: hard
 
@@ -450,7 +449,6 @@ __metadata:
   dependencies:
     "@bjorn3/browser_wasi_shim": "npm:^0.2.17"
     "@camertron/yarv-js": ./
-    "@gongt/kexec": "npm:^3.0.0"
     "@rollup/plugin-node-resolve": "npm:^14.0.1"
     "@rollup/plugin-typescript": "npm:^8.5.0"
     "@ruby/prism": "npm:0.18.0"
@@ -629,16 +627,6 @@ __metadata:
   version: 0.18.20
   resolution: "@esbuild/win32-x64@npm:0.18.20"
   conditions: os=win32 & cpu=x64
-  languageName: node
-  linkType: hard
-
-"@gongt/kexec@npm:^3.0.0":
-  version: 3.0.0
-  resolution: "@gongt/kexec@npm:3.0.0"
-  dependencies:
-    nan: "npm:^2.13.2"
-    node-gyp: "npm:latest"
-  checksum: 639b806fae0744080406cd6e4a91a531015aa89582051e079634cc347a64f6b0635733aa067bba3f520b7fe96005612f1fc98fab194712b3d2eb38141a584148
   languageName: node
   linkType: hard
 
@@ -3360,15 +3348,6 @@ __metadata:
   version: 2.1.2
   resolution: "ms@npm:2.1.2"
   checksum: a437714e2f90dbf881b5191d35a6db792efbca5badf112f87b9e1c712aace4b4b9b742dd6537f3edf90fd6f684de897cec230abde57e87883766712ddda297cc
-  languageName: node
-  linkType: hard
-
-"nan@npm:^2.13.2":
-  version: 2.18.0
-  resolution: "nan@npm:2.18.0"
-  dependencies:
-    node-gyp: "npm:latest"
-  checksum: 9209d80134fdb98c0afe35c1372d2b930a0a8d3c52706cb5e4257a27e9845c375f7a8daedadadec8d6403ca2eebb3b37d362ff5d1ec03249462abf65fef2a148
   languageName: node
   linkType: hard
 
