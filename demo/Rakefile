@@ -8,6 +8,7 @@ Rails.application.load_tasks
 if Rails.env.production?
   task :yarn_install do
     system "yarn install"
+    Rake::Task["assets:clobber"].invoke
   end
 
   Rake::Task["assets:precompile"].enhance ["yarn_install"]
