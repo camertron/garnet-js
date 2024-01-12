@@ -13,5 +13,6 @@
     "vite-plugin-full-reload": "^1.1.0",
     "vite-plugin-rails": "^0.5.0",
     "vite-plugin-stimulus-hmr": "^3.0.0"
-  }
+  },
+  "packageManager": "yarn@4.0.2"
 }
