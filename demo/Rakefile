@@ -4,3 +4,11 @@
 require_relative "config/application"
 
 Rails.application.load_tasks
+
+if Rails.env.production?
+  task :yarn_install do
+    system "yarn install"
+  end
+
+  Rake::Task["assets:precompile"].enhance ["yarn_install"]
+end

@@ -5,7 +5,8 @@ import ViteRails from "vite-plugin-rails"
 export default defineConfig(
     {
         build: {
-            target: "esnext"
+            target: "esnext",
+            minify: false
         },
         clearScreen: false,
         plugins: [
