@@ -20,6 +20,7 @@ export default [
       format: "es",
       sourcemap: true
     },
+    inlineDynamicImports: true,
     plugins: plugins,
     onwarn: (warning, warn) => {
       if (warning.code === "CIRCULAR_DEPENDENCY") {

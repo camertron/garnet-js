@@ -2,8 +2,8 @@
   "name": "@camertron/yarv-js",
   "version": "0.1.0",
   "description": "The YARV virtual machine written in Javascript.",
-  "main": "src/yarv.ts",
-  "module": "src/yarv.ts",
+  "main": "dist/yarv.js",
+  "module": "dist/yarv.js",
   "repository": "camertron/yarv-js",
   "type": "module",
   "keywords": [
@@ -17,7 +17,8 @@
     "url": "https://github.com/camertron/yarv-js/issues"
   },
   "files": [
-    "/dist"
+    "/dist",
+    "/src"
   ],
   "scripts": {
     "clean": "rimraf build dist",

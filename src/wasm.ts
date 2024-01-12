@@ -61,6 +61,7 @@ const load_module_source = async (locator: string): Promise<Buffer> => {
         return new Promise((resolve, reject) => {
             let fetch_promise;
 
+            /* @ts-ignore */
             if (URL.canParse(locator)) {
                 fetch_promise = fetch(locator);
             } else {
