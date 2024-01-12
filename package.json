@@ -31,7 +31,7 @@
   "dependencies": {
     "@bjorn3/browser_wasi_shim": "^0.2.17",
     "@gongt/kexec": "^3.0.0",
-    "@ruby/prism": "link:/Users/camertron/workspace/ruby/prism/javascript/"
+    "@ruby/prism": "0.18.0"
   },
   "devDependencies": {
     "@camertron/yarv-js": "./",

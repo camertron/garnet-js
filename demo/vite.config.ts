@@ -2,7 +2,11 @@
 import {defineConfig} from 'vite'
 import ViteRails from "vite-plugin-rails"
 
-export default defineConfig({
+export default defineConfig(
+    {
+        build: {
+            target: "esnext"
+        },
         clearScreen: false,
         plugins: [
             ViteRails({
