@@ -435,12 +435,12 @@ __metadata:
 
 "@camertron/yarv-js@file:./::locator=%40camertron%2Fyarv-js%40workspace%3A.":
   version: 0.1.0
-  resolution: "@camertron/yarv-js@file:./#./::hash=871466&locator=%40camertron%2Fyarv-js%40workspace%3A."
+  resolution: "@camertron/yarv-js@file:./#./::hash=944934&locator=%40camertron%2Fyarv-js%40workspace%3A."
   dependencies:
     "@bjorn3/browser_wasi_shim": "npm:^0.2.17"
     "@gongt/kexec": "npm:^3.0.0"
     "@ruby/prism": "npm:0.18.0"
-  checksum: d3a132210622a1650ee9fbf8c2158c2dbc29568c4bb1a9be10a1c91dcdc83faab3207c0116b7f45dfcf14a8676f65ce507ac701ac08d62afd8b0d8ed46cf64bf
+  checksum: bc8376200a815644e17e6db93cfa0495387524b01c9523ab4f25014dedc266a1d1ed910e8d3b6c62ea34b42c9cd0d37c40623a668a9d7fb6c070aebd9cf80f0e
   languageName: node
   linkType: hard
 
