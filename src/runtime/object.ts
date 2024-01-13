@@ -2,6 +2,8 @@ import { CallDataFlag, MethodCallData } from "../call_data";
 import { ArgumentError, FrozenError, NoMethodError } from "../errors";
 import { ExecutionContext } from "../execution_context";
 import { Callable, Class, ClassClass, KernelModule, ModuleClass, ObjectClass, RValue, Runtime, StringClass, String, SymbolClass, Qtrue, Qfalse, ProcClass, Qnil, Module } from "../runtime";
+import { NativeProc } from "./proc";
+import { Symbol } from "./symbol";
 
 export class Object {
     static send(receiver: RValue, call_data_: MethodCallData | string, args: RValue[] = [], block?: RValue): RValue {
@@ -23,6 +25,10 @@ export class Object {
             method = Object.find_method_under(receiver.get_data<Class>().get_singleton_class(), method_name);
         } else {
             method = Object.find_method_under(receiver.klass, method_name);
+        }
+
+        if (block?.klass === SymbolClass) {
+            block = Symbol.to_proc(block);
         }
 
         if (method) {

@@ -35,7 +35,7 @@ export const defineStringBehaviorOn = (klass: Class) => {
             .replace(/\"/g, "\\\"")
             .replace(/\r/g, "\\r")
             .replace(/\n/g, "\\n");
-        return String.new(escaped_str);
+        return String.new(`"${escaped_str}"`);
     });
 
     klass.define_native_method("*", (self: RValue, args: RValue[]): RValue => {

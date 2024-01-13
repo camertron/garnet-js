@@ -8,8 +8,8 @@ import { Binding } from "./binding";
 export abstract class Proc {
     public binding: Binding;
 
-    static from_native_fn(context: ExecutionContext, method: NativeMethod): RValue {
-        const binding = context.get_binding();
+    static from_native_fn(context: ExecutionContext, method: NativeMethod, binding?: Binding): RValue {
+        binding ||= context.get_binding();
         return new RValue(ProcClass, new NativeProc(method, binding));
     }
 

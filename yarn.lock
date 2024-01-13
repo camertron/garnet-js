@@ -435,11 +435,11 @@ __metadata:
 
 "@camertron/yarv-js@file:./::locator=%40camertron%2Fyarv-js%40workspace%3A.":
   version: 0.1.0
-  resolution: "@camertron/yarv-js@file:./#./::hash=0731e2&locator=%40camertron%2Fyarv-js%40workspace%3A."
+  resolution: "@camertron/yarv-js@file:./#./::hash=88d200&locator=%40camertron%2Fyarv-js%40workspace%3A."
   dependencies:
     "@bjorn3/browser_wasi_shim": "npm:^0.2.17"
-    "@ruby/prism": "npm:0.18.0"
-  checksum: 8a660cc1335ccd25bd190575a0feef15a927039a8e4192bc710771432e3afead9773388c7a5953390201c791598ad127f01c2663595bb033ab27660f22a6a418
+    "@ruby/prism": "npm:0.19.0"
+  checksum: 9772ed52fca80a6dc3370b7c78343836adb2981c435bf59d5f173a66516f4d403a3f074bd2897d8d7d56e28db7d3083aebbae8b251d832d5573dcf3df6abe75c
   languageName: node
   linkType: hard
 
@@ -451,7 +451,7 @@ __metadata:
     "@camertron/yarv-js": ./
     "@rollup/plugin-node-resolve": "npm:^14.0.1"
     "@rollup/plugin-typescript": "npm:^8.5.0"
-    "@ruby/prism": "npm:0.18.0"
+    "@ruby/prism": "npm:0.19.0"
     "@types/jest": "npm:^29.5.8"
     "@types/node": "npm:^20.9.1"
     benchmarkify: "npm:^3.0.0"
@@ -1038,10 +1038,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@ruby/prism@npm:0.18.0":
-  version: 0.18.0
-  resolution: "@ruby/prism@npm:0.18.0"
-  checksum: 1f3bc416ae19b05330874ad811ecadf3a93b5c882479646ec871eed573b30c92dd3b970f8767306ef9d7cda6365ad0083759955cdfb7b18075ee6e850fb3bb3e
+"@ruby/prism@npm:0.19.0":
+  version: 0.19.0
+  resolution: "@ruby/prism@npm:0.19.0"
+  checksum: 19fe975ca4f631a6ba625657dc1dae202eedf87f7f80fb3fd3beee03c8a0a9097da86815a5315411df46c2baa75201d697cca6657c4e9451a2edbcd6f442e067
   languageName: node
   linkType: hard
 

@@ -1,6 +1,28 @@
+import { ExecutionContext } from "../execution_context";
 import { Class, Qfalse, Qtrue, RValue, String, SymbolClass } from "../runtime";
 import { hash_string } from "../util/string_utils";
 import { Integer } from "./integer";
+import { Object } from "./object";
+import { Proc } from "./proc";
+
+export class Symbol {
+    private static to_proc_table: Map<string, RValue> = new Map();
+
+    static to_proc(symbol: RValue): RValue {
+        const sym = symbol.get_data<string>();
+
+        if (!this.to_proc_table.has(sym)) {
+            this.to_proc_table.set(
+                sym,
+                Proc.from_native_fn(ExecutionContext.current, (_self: RValue, args: RValue[]): RValue => {
+                    return Object.send(args[0], sym);
+                })
+            );
+        }
+
+        return this.to_proc_table.get(sym)!;
+    }
+}
 
 export const defineSymbolBehaviorOn = (klass: Class) => {
     klass.define_native_method("inspect", (self: RValue): RValue => {
@@ -26,5 +48,9 @@ export const defineSymbolBehaviorOn = (klass: Class) => {
 
     klass.define_native_method("to_sym", (self: RValue): RValue => {
         return self;
+    });
+
+    klass.define_native_method("to_proc", (self: RValue): RValue => {
+        return Symbol.to_proc(self);
     });
 };
