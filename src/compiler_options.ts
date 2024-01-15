@@ -2,7 +2,7 @@
 // control how it compiles the code. It mirrors the options that can be
 // passed to RubyVM::InstructionSequence.compile, except it only includes
 // options that actually change the behavior.
-export class Options {
+export class CompilerOptions {
     private _frozen_string_literal: boolean;
     private _inline_const_cache: boolean;
     private _operands_unification: boolean;

@@ -52,7 +52,7 @@ import TopN from "./insns/topn";
 import ToRegexp from "./insns/toregexp";
 import Instruction, { ValueType } from "./instruction";
 import { LocalTable, Lookup } from "./local_table";
-import { Options } from "./options";
+import { CompilerOptions } from "./compiler_options";
 import { RValue, String as RubyString } from "./runtime";
 
 class Node {
@@ -349,7 +349,7 @@ export class InstructionSequence {
     public line: number;
     public type: string;
     public parent_iseq: InstructionSequence | null;
-    public options: Options
+    public options: CompilerOptions
 
     public argument_size: number;
     public argument_options: ArgumentOptions;
@@ -361,7 +361,7 @@ export class InstructionSequence {
     public storage_index: number;
     public stack: Stack;
 
-    constructor(name: string, file: string, line: number, type: string, parent_iseq: InstructionSequence | null = null, options: Options) {
+    constructor(name: string, file: string, line: number, type: string, parent_iseq: InstructionSequence | null = null, options: CompilerOptions) {
         this.name = name;
         this.file = file;
         this.line = line;

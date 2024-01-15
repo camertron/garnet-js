@@ -1,7 +1,7 @@
-import { ParseResult } from "@ruby/prism/types/deserialize";
+import { ParseResult } from "@ruby/prism/src/deserialize";
 import { MethodCallData, BlockCallData, CallDataFlag } from "./call_data";
 import { CatchBreak, InstructionSequence, Label, CatchTableStack, CatchNext } from "./instruction_sequence";
-import { Options } from "./options";
+import { CompilerOptions } from "./compiler_options";
 import {
     AndNode,
     ArgumentsNode,
@@ -84,8 +84,8 @@ import {
     WhileNode,
     XStringNode,
     YieldNode
-} from "@ruby/prism/types/nodes";
-import { Visitor } from "@ruby/prism";
+} from "@ruby/prism/src/nodes";
+import { Visitor } from "@ruby/prism/src/visitor";
 import { Lookup } from "./local_table";
 import { ObjectClass, Qnil, Qtrue, String } from "./runtime";
 import { DefineClassFlags } from "./insns/defineclass";
@@ -97,8 +97,22 @@ import { GetSpecialType } from "./insns/getspecial";
 import { SyntaxError } from "./errors";
 import { ThrowType } from "./insns/throw";
 
+export type ParseLocal = {
+    name: string
+}
+
+export type ParseOptions = {
+    filepath?: string,
+    line?: number,
+    encoding?: string,
+    frozen_string_literal?: boolean,
+    verbose?: boolean,
+    version?: string,
+    scopes?: ParseLocal[][],
+}
+
 export class Compiler extends Visitor {
-    private options: Options;
+    private compiler_options: CompilerOptions;
     private source: string;
     private path: string;
     private iseq: InstructionSequence;
@@ -109,25 +123,25 @@ export class Compiler extends Visitor {
 
     public static parse: (code: string) => ParseResult;
 
-    constructor(source: string, path: string, options?: Options) {
+    constructor(source: string, path: string, compiler_options?: CompilerOptions) {
         super();
 
         this.source = source;
         this.path = path;
-        this.options = options || new Options();
+        this.compiler_options = compiler_options || new CompilerOptions();
         this.local_depth = 0;
         this.local_catch_table_stack = new CatchTableStack();
         this.current_line = 0;
     }
 
-    static compile(source: string, path: string, ast: any, options?: Options): InstructionSequence {
-        const compiler = new Compiler(source, path, options);
+    static compile(source: string, path: string, ast: any, compiler_options?: CompilerOptions): InstructionSequence {
+        const compiler = new Compiler(source, path, compiler_options);
         return compiler.visitProgramNode(ast.value, true);
     }
 
-    static compile_string(source: string, path: string, options?: Options) {
+    static compile_string(source: string, path: string, compiler_options?: CompilerOptions) {
         const ast = Compiler.parse(source);
-        return this.compile(source, path, ast, options);
+        return this.compile(source, path, ast, compiler_options);
     }
 
     visit(node: Node, used: boolean) {
@@ -158,7 +172,7 @@ export class Compiler extends Visitor {
     }
 
     override visitProgramNode(node: ProgramNode, _used: boolean): InstructionSequence {
-        const top_iseq = new InstructionSequence("<main>", this.path, this.start_line_for_loc(node.location)!, "top", null, this.options);
+        const top_iseq = new InstructionSequence("<main>", this.path, this.start_line_for_loc(node.location)!, "top", null, this.compiler_options);
 
         node.locals.forEach((local: string) => {
             top_iseq.local_table.plain(local);

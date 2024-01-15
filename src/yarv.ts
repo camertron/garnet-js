@@ -1,8 +1,8 @@
 import { RValue, Runtime, init as initRuntime } from "./runtime";
 import { ExecutionContext } from "./execution_context";
 import { vmfs } from "./vmfs";
-import { Compiler } from "./compiler";
-import { Options } from "./options";
+import { Compiler, ParseLocal, ParseOptions } from "./compiler";
+import { CompilerOptions } from "./compiler_options";
 import { RubyError, SystemExit } from "./errors";
 import { Kernel } from "./runtime/kernel";
 import { Object } from "./runtime/object";
@@ -26,9 +26,17 @@ export async function init() {
         await initRuntime();
 
         ExecutionContext.current = new ExecutionContext();
-
         const prism_instance = await WASM.load_module("prism");
-        Compiler.parse = (source) => parsePrism(prism_instance.exports, source);
+
+        Compiler.parse = (source) => {
+            const scope: ParseLocal[] = [];
+
+            ExecutionContext.current.top_locals.forEach((local) => {
+                scope.push({name: local.name});
+            });
+
+            return parsePrism(prism_instance.exports, source, { scopes: [scope] });
+        }
     }
 }
 
@@ -43,7 +51,7 @@ export async function deinit() {
     ExecutionContext.current = null;
 }
 
-export async function evaluate(code: string, path?: string, compiler_options?: Options): Promise<RValue> {
+export async function evaluate(code: string, path?: string, compiler_options?: CompilerOptions): Promise<RValue> {
     if (!ExecutionContext.current) {
         throw new Error("The Ruby VM has not been initialized. Please call YARV.init().");
     }

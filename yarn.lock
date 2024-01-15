@@ -435,11 +435,11 @@ __metadata:
 
 "@camertron/yarv-js@file:./::locator=%40camertron%2Fyarv-js%40workspace%3A.":
   version: 0.1.0
-  resolution: "@camertron/yarv-js@file:./#./::hash=dafe11&locator=%40camertron%2Fyarv-js%40workspace%3A."
+  resolution: "@camertron/yarv-js@file:./#./::hash=9a29ac&locator=%40camertron%2Fyarv-js%40workspace%3A."
   dependencies:
     "@bjorn3/browser_wasi_shim": "npm:^0.2.17"
-    "@ruby/prism": "file:../../ruby/prism/javascript"
-  checksum: 2af9b8f31db92396318523edb3f3c56779bb22c53bb202f3614906b247e392ca2af14790a79e329585fd1ff69ff2c20774e1fa6795fb5fd19dbcd5d10f3a97e4
+    "@ruby/prism": "link:../../ruby/prism/javascript"
+  checksum: 8d397b348722c62a702b9b2f6d681227d1960af0fd5554f2dcc7fb293ed5059e15f379adf61fdd41e96016a99052077870975eb1319a7640bd699704c0f9a2ad
   languageName: node
   linkType: hard
 
@@ -451,7 +451,7 @@ __metadata:
     "@camertron/yarv-js": ./
     "@rollup/plugin-node-resolve": "npm:^14.0.1"
     "@rollup/plugin-typescript": "npm:^8.5.0"
-    "@ruby/prism": "file:../../ruby/prism/javascript"
+    "@ruby/prism": "link:../../ruby/prism/javascript"
     "@types/jest": "npm:^29.5.8"
     "@types/node": "npm:^20.9.1"
     benchmarkify: "npm:^3.0.0"
@@ -1038,19 +1038,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@ruby/prism@file:../../ruby/prism/javascript::locator=%40camertron%2Fyarv-js%40file%3A.%2F%23.%2F%3A%3Ahash%3Ddafe11%26locator%3D%2540camertron%252Fyarv-js%2540workspace%253A.":
-  version: 0.19.0
-  resolution: "@ruby/prism@file:../../ruby/prism/javascript#../../ruby/prism/javascript::hash=983f39&locator=%40camertron%2Fyarv-js%40file%3A.%2F%23.%2F%3A%3Ahash%3Ddafe11%26locator%3D%2540camertron%252Fyarv-js%2540workspace%253A."
-  checksum: dfc506eb2b621e35bb3d0e71b17ff1a54123c9867882f70f6ce4333fb93d8fc9720db31d0efec3c14aa695bef6115e71ec25150ed0b5de551533242fb841b4eb
+"@ruby/prism@link:../../ruby/prism/javascript::locator=%40camertron%2Fyarv-js%40file%3A.%2F%23.%2F%3A%3Ahash%3D9a29ac%26locator%3D%2540camertron%252Fyarv-js%2540workspace%253A.":
+  version: 0.0.0-use.local
+  resolution: "@ruby/prism@link:../../ruby/prism/javascript::locator=%40camertron%2Fyarv-js%40file%3A.%2F%23.%2F%3A%3Ahash%3D9a29ac%26locator%3D%2540camertron%252Fyarv-js%2540workspace%253A."
   languageName: node
-  linkType: hard
+  linkType: soft
 
-"@ruby/prism@file:../../ruby/prism/javascript::locator=%40camertron%2Fyarv-js%40workspace%3A.":
-  version: 0.19.0
-  resolution: "@ruby/prism@file:../../ruby/prism/javascript#../../ruby/prism/javascript::hash=983f39&locator=%40camertron%2Fyarv-js%40workspace%3A."
-  checksum: dfc506eb2b621e35bb3d0e71b17ff1a54123c9867882f70f6ce4333fb93d8fc9720db31d0efec3c14aa695bef6115e71ec25150ed0b5de551533242fb841b4eb
+"@ruby/prism@link:../../ruby/prism/javascript::locator=%40camertron%2Fyarv-js%40workspace%3A.":
+  version: 0.0.0-use.local
+  resolution: "@ruby/prism@link:../../ruby/prism/javascript::locator=%40camertron%2Fyarv-js%40workspace%3A."
   languageName: node
-  linkType: hard
+  linkType: soft
 
 "@sinclair/typebox@npm:^0.27.8":
   version: 0.27.8

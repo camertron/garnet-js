@@ -3,6 +3,7 @@ import { LocalJumpError, NativeError, RubyError } from "./errors";
 import { BlockFrame, ClassFrame, Frame, MethodFrame, RescueFrame, TopFrame } from "./frame";
 import Instruction from "./instruction";
 import { CatchBreak, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
+import { Local } from "./local_table";
 import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, String, STDOUT, IO, Qnil, STDERR, ArrayClass, ProcClass } from "./runtime";
 import { Binding } from "./runtime/binding";
 
@@ -58,13 +59,11 @@ export class ExecutionContext {
     public frame: Frame | null;
 
     // The last top frame that was evaluated.
-    public last_top_frame: TopFrame | null = null;
-
-    // Call data for the current method, block, proc, or lambda being executed
-    public call_data: CallData;
+    public top_locals: Map<string, Local>;
 
     constructor() {
         this.stack = [];
+        this.top_locals = new Map();
 
         this.globals = {
             '$:': RubyArray.new(),  // load path
@@ -227,9 +226,13 @@ export class ExecutionContext {
                     if (result instanceof JumpResult) {
                         frame.pc = frame.iseq.compiled_insns.indexOf(result.label) + 1;
                     } else if (result instanceof LeaveResult) {
-                        // this shouldn't be necessary, but is because we're not handling
-                        // the stack correctly at the moment
-                        this.stack.splice(frame.stack_index);
+                        // don't remove locals from top frames so they can be accessed by the
+                        // next top frame, should there be one
+                        if (!(frame instanceof TopFrame)) {
+                            // this shouldn't be necessary, but is because we're not handling
+                            // the stack correctly at the moment
+                            this.stack.splice(frame.stack_index);
+                        }
 
                         // restore the previous frame
                         this.frame = previous || frame.parent;
@@ -308,20 +311,14 @@ export class ExecutionContext {
     }
 
     run_top_frame(iseq: InstructionSequence, stack_index?: number): RValue {
-        const top_frame = new TopFrame(iseq, stack_index);
-        const result = this.run_frame(top_frame, () => {
-            if (!this.last_top_frame) return null;
-
-            for (let i = 0; i < top_frame.iseq.local_table.locals.length; i ++) {
-                const local = top_frame.iseq.local_table.locals[i];
-                const lookup = this.last_top_frame.iseq.local_table.find(local.name)
-
-                if (lookup) {
-                    top_frame.local_set(this, i, 0, this.last_top_frame.local_get(this, lookup.index, 0));
+        const new_top_frame = new TopFrame(iseq, stack_index);
+        const result = this.run_frame(new_top_frame, () => {
+            for (const local of new_top_frame.iseq.local_table.locals) {
+                if (!this.top_locals.has(local.name)) {
+                    this.top_locals.set(local.name, local);
                 }
             }
 
-            this.last_top_frame = top_frame;
             return null;
         });
 
