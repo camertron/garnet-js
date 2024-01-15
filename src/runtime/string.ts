@@ -263,6 +263,11 @@ export const defineStringBehaviorOn = (klass: Class) => {
         return String.new(self.get_data<string>() + args[0].get_data<string>());
     });
 
+    klass.define_native_method("<<", (self: RValue, args: RValue[]): RValue => {
+        self.data = self.get_data<string>() + Runtime.coerce_to_string(args[0]);
+        return self;
+    });
+
     klass.define_native_method("empty?", (self: RValue): RValue => {
         return self.get_data<string>().length === 0 ? Qtrue : Qfalse;
     });

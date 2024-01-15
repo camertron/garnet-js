@@ -1,4 +1,4 @@
-import { Qnil, RValue, Runtime, init as initRuntime } from "./runtime";
+import { RValue, Runtime, init as initRuntime } from "./runtime";
 import { ExecutionContext } from "./execution_context";
 import { vmfs } from "./vmfs";
 import { Compiler } from "./compiler";

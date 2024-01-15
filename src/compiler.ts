@@ -85,6 +85,7 @@ import {
     XStringNode,
     YieldNode
 } from "@ruby/prism/types/nodes";
+import { Visitor } from "@ruby/prism";
 import { Lookup } from "./local_table";
 import { ObjectClass, Qnil, Qtrue, String } from "./runtime";
 import { DefineClassFlags } from "./insns/defineclass";
@@ -96,7 +97,7 @@ import { GetSpecialType } from "./insns/getspecial";
 import { SyntaxError } from "./errors";
 import { ThrowType } from "./insns/throw";
 
-export class Compiler {
+export class Compiler extends Visitor {
     private options: Options;
     private source: string;
     private path: string;
@@ -109,6 +110,8 @@ export class Compiler {
     public static parse: (code: string) => ParseResult;
 
     constructor(source: string, path: string, options?: Options) {
+        super();
+
         this.source = source;
         this.path = path;
         this.options = options || new Options();
@@ -119,7 +122,7 @@ export class Compiler {
 
     static compile(source: string, path: string, ast: any, options?: Options): InstructionSequence {
         const compiler = new Compiler(source, path, options);
-        return compiler.visit_program_node(ast.value, true);
+        return compiler.visitProgramNode(ast.value, true);
     }
 
     static compile_string(source: string, path: string, options?: Options) {
@@ -127,7 +130,7 @@ export class Compiler {
         return this.compile(source, path, ast, options);
     }
 
-    private visit(node: Node, used: boolean) {
+    visit(node: Node, used: boolean) {
         let line = this.start_line_for_loc(node.location)
 
         if (line && line != this.current_line) {
@@ -135,316 +138,7 @@ export class Compiler {
             this.current_line = line;
         }
 
-        switch (node.constructor.name) {
-            case "ProgramNode":
-                this.visit_program_node(node as ProgramNode, used);
-                break;
-
-            case "StatementsNode":
-                this.visit_statements_node(node as StatementsNode, used);
-                break;
-
-            case "ArgumentsNode":
-                this.visit_arguments_node(node as ArgumentsNode, used);
-                break;
-
-            case "CallNode":
-                this.visit_call_node(node as CallNode, used);
-                break;
-
-            case "IntegerNode":
-                this.visit_integer_node(node as IntegerNode, used);
-                break;
-
-            case "FloatNode":
-                this.visit_float_node(node as FloatNode, used);
-                break;
-
-            case "StringNode":
-                this.visit_string_node(node as StringNode, used);
-                break;
-
-            case "LocalVariableReadNode":
-                this.visit_local_variable_read_node(node as LocalVariableReadNode, used);
-                break;
-
-            case "LocalVariableWriteNode":
-                this.visit_local_variable_write_node(node as LocalVariableWriteNode, used);
-                break;
-
-            case "LocalVariableAndWriteNode":
-                this.visit_local_variable_and_write_node(node as LocalVariableAndWriteNode, used);
-                break;
-
-            case "LocalVariableOperatorWriteNode":
-                this.visit_local_variable_operator_write_node(node as LocalVariableOperatorWriteNode, used);
-                break;
-
-            case "ArrayNode":
-                this.visit_array_node(node as ArrayNode, used);
-                break;
-
-            case "HashNode":
-                this.visit_hash_node(node as HashNode, used);
-                break;
-
-            case "AssocNode":
-                this.visit_assoc_node(node as AssocNode, used);
-                break;
-
-            case "DefNode":
-                this.visit_def_node(node as DefNode, used);
-                break;
-
-            case "ParametersNode":
-                this.visit_parameters_node(node as ParametersNode, used);
-                break;
-
-            case "RequiredParameterNode":
-                this.visit_required_parameter_node(node as RequiredParameterNode, used);
-                break;
-
-            case "OptionalParameterNode":
-                this.visit_optional_parameter_node(node as OptionalParameterNode, used);
-                break;
-
-            case "RestParameterNode":
-                this.visit_rest_parameter_node(node as RestParameterNode, used);
-                break;
-
-            case "IfNode":
-                this.visit_if_node(node as IfNode, used);
-                break;
-
-            case "UnlessNode":
-                this.visit_unless_node(node as UnlessNode, used);
-                break;
-
-            case "ElseNode":
-                this.visit_else_node(node as ElseNode, used);
-                break;
-
-            case "AndNode":
-                this.visit_and_node(node as AndNode, used);
-                break;
-
-            case "OrNode":
-                this.visit_or_node(node as OrNode, used);
-                break;
-
-            case "ClassNode":
-                this.visit_class_node(node as ClassNode, used);
-                break;
-
-            case "ModuleNode":
-                this.visit_module_node(node as ModuleNode, used);
-                break;
-
-            case "ConstantReadNode":
-                this.visit_constant_read_node(node as ConstantReadNode, used);
-                break;
-
-            case "ConstantWriteNode":
-                this.visit_constant_write_node(node as ConstantWriteNode, used);
-                break;
-
-            case "SymbolNode":
-                this.visit_symbol_node(node as SymbolNode, used);
-                break;
-
-            case "BlockParametersNode":
-                this.visit_block_parameters_node(node as BlockParametersNode, used);
-                break;
-
-            case "BlockParameterNode":
-                this.visit_block_parameter_node(node as BlockParameterNode, used);
-                break;
-
-            case "InstanceVariableWriteNode":
-                this.visit_instance_variable_write_node(node as InstanceVariableWriteNode, used);
-                break;
-
-            case "InstanceVariableReadNode":
-                this.visit_instance_variable_read_node(node as InstanceVariableReadNode, used);
-                break;
-
-            case "InstanceVariableTargetNode":
-                this.visit_instance_variable_target_node(node as InstanceVariableTargetNode, used);
-                break;
-
-            case "ReturnNode":
-                this.visit_return_node(node as ReturnNode, used);
-                break;
-
-            case "BeginNode":
-                this.visit_begin_node(node as BeginNode, used);
-                break;
-
-            case "RescueNode":
-                this.visit_rescue_node(node as RescueNode, used);
-                break;
-
-            case "NilNode":
-                this.visit_nil_node(node as NilNode, used);
-                break;
-
-            case "TrueNode":
-                this.visit_true_node(node as TrueNode, used);
-                break;
-
-            case "FalseNode":
-                this.visit_false_node(node as FalseNode, used);
-                break;
-
-            case "EnsureNode":
-                this.visit_ensure_node(node as EnsureNode, used);
-                break;
-
-            case "LocalVariableTargetNode":
-                this.visit_local_variable_target_node(node as LocalVariableTargetNode, used);
-                break;
-
-            case "InterpolatedStringNode":
-                this.visit_interpolated_string_node(node as InterpolatedStringNode, used);
-                break;
-
-            case "InterpolatedSymbolNode":
-                this.visit_interpolated_symbol_node(node as InterpolatedSymbolNode, used);
-                break;
-
-            case "EmbeddedStatementsNode":
-                this.visit_embedded_statements_node(node as EmbeddedStatementsNode, used);
-                break;
-
-            case "SelfNode":
-                this.visit_self_node(node as SelfNode, used);
-                break;
-
-            case "ConstantPathNode":
-                this.visit_constant_path_node(node as ConstantPathNode, used);
-                break;
-
-            case "SplatNode":
-                this.visit_splat_node(node as SplatNode, used);
-                break;
-
-            case "BlockArgumentNode":
-                this.visit_block_argument_node(node as BlockArgumentNode, used);
-                break;
-
-            case "ParenthesesNode":
-                this.visit_parentheses_node(node as ParenthesesNode, used);
-                break;
-
-            case "InstanceVariableOperatorWriteNode":
-                this.visit_instance_variable_operator_write_node(node as InstanceVariableOperatorWriteNode, used);
-                break;
-
-            case "GlobalVariableReadNode":
-                this.visit_global_variable_read_node(node as GlobalVariableReadNode, used);
-                break;
-
-            case "GlobalVariableWriteNode":
-                this.visit_global_variable_write_node(node as GlobalVariableWriteNode, used);
-                break;
-
-            case "GlobalVariableOrWriteNode":
-                this.visit_global_variable_or_write_node(node as GlobalVariableOrWriteNode, used);
-                break;
-
-            case "CaseNode":
-                this.visit_case_node(node as CaseNode, used);
-                break;
-
-            case "KeywordHashNode":
-                this.visit_keyword_hash_node(node as KeywordHashNode, used);
-                break;
-
-            case "InstanceVariableOrWriteNode":
-                this.visit_instance_variable_or_write_node(node as InstanceVariableOrWriteNode, used);
-                break;
-
-            case "YieldNode":
-                this.visit_yield_node(node as YieldNode, used);
-                break;
-
-            case "SingletonClassNode":
-                this.visit_singleton_class_node(node as SingletonClassNode, used);
-                break;
-
-            case "WhileNode":
-                this.visit_while_node(node as WhileNode, used);
-                break;
-
-            case "MultiWriteNode":
-                this.visit_multi_write_node(node as MultiWriteNode, used);
-                break;
-
-            case "RegularExpressionNode":
-                this.visit_regular_expression_node(node as RegularExpressionNode, used);
-                break;
-
-            case "InterpolatedRegularExpressionNode":
-                this.visit_interpolated_regular_expression_node(node as InterpolatedRegularExpressionNode, used);
-                break;
-
-            case "NextNode":
-                this.visit_next_node(node as NextNode, used);
-                break;
-
-            case "LambdaNode":
-                this.visit_lambda_node(node as LambdaNode, used);
-                break;
-
-            case "IndexOrWriteNode":
-                this.visit_index_or_write_node(node as IndexOrWriteNode, used);
-                break;
-
-            case "RangeNode":
-                this.visit_range_node(node as RangeNode, used);
-                break;
-
-            case "SuperNode":
-                this.visit_super_node(node as SuperNode, used);
-                break;
-
-            case "ForwardingSuperNode":
-                this.visit_forwarding_super_node(node as ForwardingSuperNode, used);
-                break;
-
-            case "XStringNode":
-                this.visit_x_string_node(node as XStringNode, used);
-                break;
-
-            case "NumberedReferenceReadNode":
-                this.visit_numbered_reference_read_node(node as NumberedReferenceReadNode, used);
-                break;
-
-            case "SourceFileNode":
-                this.visit_source_file_node(node as SourceFileNode, used);
-                break;
-
-            case "BreakNode":
-                this.visit_break_node(node as BreakNode, used);
-                break;
-
-            case "IndexOperatorWriteNode":
-                this.visit_index_operator_write_node(node as IndexOperatorWriteNode, used);
-                break;
-
-            case "DefinedNode":
-                this.visit_defined_node(node as DefinedNode, used);
-                break;
-
-            default:
-                throw new Error(`I can't handle ${node.constructor.name}s yet, help me!\nAt ${this.path}:${this.start_line_for_loc(node.location)}`);
-        }
-    }
-
-    private visit_all(nodes: any[], used: boolean) {
-        nodes.forEach((node: any) => {
-            this.visit(node, used);
-        });
+        super.visit(node, used);
     }
 
     // The current instruction sequence that we're compiling is always stored
@@ -463,7 +157,7 @@ export class Compiler {
         }
     }
 
-    private visit_program_node(node: ProgramNode, _used: boolean): InstructionSequence {
+    override visitProgramNode(node: ProgramNode, _used: boolean): InstructionSequence {
         const top_iseq = new InstructionSequence("<main>", this.path, this.start_line_for_loc(node.location)!, "top", null, this.options);
 
         node.locals.forEach((local: string) => {
@@ -492,14 +186,14 @@ export class Compiler {
                     }
                 }
 
-                this.visit_all(preexes, false);
+                this.visitAll(preexes, false);
 
                 if (statements.length == 0) {
                     this.iseq.putnil();
                 } else {
                     const [first_statements, last_statement] = this.split_rest_last(statements)
 
-                    this.visit_all(first_statements, false);
+                    this.visitAll(first_statements, false);
                     this.visit(last_statement, true);
                 }
             }
@@ -523,18 +217,18 @@ export class Compiler {
         }
     }
 
-    private visit_statements_node(node: StatementsNode, used: boolean) {
+    override visitStatementsNode(node: StatementsNode, used: boolean) {
         const [statements, last_statement] = this.split_rest_last(node.body as any[])
 
-        this.visit_all(statements, false);
+        this.visitAll(statements, false);
         this.visit(last_statement, used);
     }
 
-    private visit_arguments_node(node: ArgumentsNode, used: boolean) {
-        this.visit_all(node.arguments_, used);
+    override visitArgumentsNode(node: ArgumentsNode, used: boolean) {
+        this.visitAll(node.arguments_, used);
     }
 
-    private visit_call_node(node: CallNode, used: boolean) {
+    override visitCallNode(node: CallNode, used: boolean) {
         if (node.receiver) {
             this.visit(node.receiver, true);
         } else {
@@ -586,7 +280,7 @@ export class Compiler {
         switch (node.block?.constructor.name) {
             case "BlockNode":
                 flags |= CallDataFlag.ARGS_BLOCKARG;
-                block_iseq = this.visit_block_node(node.block as BlockNode, true);
+                block_iseq = this.visitBlockNode(node.block as BlockNode, true);
                 break;
             case "BlockArgumentNode":
                 flags |= CallDataFlag.ARGS_BLOCKARG;
@@ -618,7 +312,7 @@ export class Compiler {
         }
     }
 
-    private visit_block_node(node: BlockNode, used: boolean): InstructionSequence {
+    override visitBlockNode(node: BlockNode, used: boolean): InstructionSequence {
         return this.with_child_iseq(this.iseq.block_child_iseq(this.start_line_for_loc(node.location)!), () => {
             const begin_label = this.iseq.label();
             const end_label = this.iseq.label();
@@ -646,21 +340,21 @@ export class Compiler {
         });
     }
 
-    private visit_integer_node(node: IntegerNode, used: boolean) {
+    override visitIntegerNode(node: IntegerNode, used: boolean) {
         if (used) {
             const intVal = this.text_for_loc(node.location);
             this.iseq.putobject({ type: "Integer", value: parseInt(intVal) });
         }
     }
 
-    private visit_float_node(node: FloatNode, used: boolean) {
+    override visitFloatNode(node: FloatNode, used: boolean) {
         if (used) {
             const floatVal = this.text_for_loc(node.location);
             this.iseq.putobject({ type: "Float", value: parseFloat(floatVal) });
         }
     }
 
-    private visit_string_node(node: StringNode, used: boolean) {
+    override visitStringNode(node: StringNode, used: boolean) {
         if (!used) return
 
         if (node.isFrozen()) {
@@ -670,7 +364,7 @@ export class Compiler {
         }
     }
 
-    private visit_local_variable_read_node(node: LocalVariableReadNode, used: boolean) {
+    override visitLocalVariableReadNode(node: LocalVariableReadNode, used: boolean) {
         const lookup = this.find_local_or_throw(node.name, node.depth + this.local_depth);
 
         if (used) {
@@ -678,7 +372,7 @@ export class Compiler {
         }
     }
 
-    private visit_local_variable_write_node(node: LocalVariableWriteNode, used: boolean) {
+    override visitLocalVariableWriteNode(node: LocalVariableWriteNode, used: boolean) {
         this.visit(node.value, true);
 
         if (used) {
@@ -689,7 +383,7 @@ export class Compiler {
         this.iseq.setlocal(lookup.index, lookup.depth);
     }
 
-    private visit_local_variable_and_write_node(node: LocalVariableAndWriteNode, used: boolean) {
+    override visitLocalVariableAndWriteNode(node: LocalVariableAndWriteNode, used: boolean) {
         const label = this.iseq.label();
 
         const lookup = this.find_local_or_throw(node.name, node.depth + this.local_depth);
@@ -705,7 +399,7 @@ export class Compiler {
         this.iseq.push(label);
     }
 
-    private visit_local_variable_operator_write_node(node: LocalVariableOperatorWriteNode, used: boolean) {
+    override visitLocalVariableOperatorWriteNode(node: LocalVariableOperatorWriteNode, used: boolean) {
         const lookup = this.find_local_or_throw(node.name, node.depth + this.local_depth);
         this.iseq.getlocal(lookup.index, lookup.depth);
         this.visit(node.value, true);
@@ -714,18 +408,18 @@ export class Compiler {
         this.iseq.setlocal(lookup.index, lookup.depth);
     }
 
-    private visit_local_variable_target_node(node: LocalVariableTargetNode, used: boolean) {
+    override visitLocalVariableTargetNode(node: LocalVariableTargetNode, used: boolean) {
         const lookup = this.find_local_or_throw(node.name, node.depth + this.local_depth);
         this.iseq.setlocal(lookup.index, lookup.depth);
     }
 
-    private visit_multi_write_node(node: MultiWriteNode, used: boolean) {
+    override visitMultiWriteNode(node: MultiWriteNode, used: boolean) {
         this.visit(node.value, true);
         if (used) this.iseq.dup();
 
         if (node.lefts.length > 0) {
             this.iseq.expandarray(node.lefts.length, node.rest ? ExpandArrayFlag.SPLAT_FLAG : 0);
-            this.visit_all(node.lefts, true);
+            this.visitAll(node.lefts, true);
         }
 
         let flags = 0;
@@ -750,26 +444,18 @@ export class Compiler {
             }
         }
 
-        this.visit_all(node.rights, true);
-
-        // const targets = [...node.targets];
-        // targets.pop if targets.last.is_a?(Prism::SplatNode) && targets.last.operator == ","
-
-        // visit(node.value, used)
-        // iseq.dup
-        // iseq.expandarray(targets.length, 0)
-        // visit_all(targets, true)
+        this.visitAll(node.rights, true);
     }
 
-    private visit_array_node(node: ArrayNode, used: boolean) {
-        this.visit_all(node.elements, used);
+    override visitArrayNode(node: ArrayNode, used: boolean) {
+        this.visitAll(node.elements, used);
 
         if (used) {
             this.iseq.newarray(node.elements.length);
         }
     }
 
-    private visit_hash_node(node: HashNode, used: boolean) {
+    override visitHashNode(node: HashNode, used: boolean) {
         let length = 0;
 
         node.elements.forEach((element) => {
@@ -804,7 +490,7 @@ export class Compiler {
         }
     }
 
-    private visit_assoc_node(node: AssocNode, used: boolean) {
+    override visitAssocNode(node: AssocNode, used: boolean) {
         this.visit(node.key, used);
 
         // I don't understand how value could ever be null, but whatevs
@@ -813,7 +499,7 @@ export class Compiler {
         }
     }
 
-    private visit_def_node(node: DefNode, used: boolean) {
+    override visitDefNode(node: DefNode, used: boolean) {
         const name = node.name;
         const method_iseq = this.iseq.method_child_iseq(name, this.start_line_for_loc(node.location)!);
 
@@ -853,10 +539,10 @@ export class Compiler {
     }
 
     // (required, optional = nil, *rest, post)
-    private visit_parameters_node(node: ParametersNode, _used: boolean) {
-        this.visit_all(node.requireds, true);
+    override visitParametersNode(node: ParametersNode, _used: boolean) {
+        this.visitAll(node.requireds, true);
         this.iseq.argument_options.lead_num = node.requireds.length;
-        this.visit_all(node.optionals, true);
+        this.visitAll(node.optionals, true);
         this.iseq.argument_size += node.requireds.length + node.optionals.length;
 
         if (node.rest) {
@@ -868,7 +554,7 @@ export class Compiler {
         // posts are of type RequiredParameterNode
         if (node.posts) {
             this.iseq.argument_options.post_start = this.iseq.argument_size;
-            this.visit_all(node.posts, true);
+            this.visitAll(node.posts, true);
             this.iseq.argument_size += node.posts.length;
             this.iseq.argument_options.post_num = node.posts.length;
         }
@@ -880,11 +566,11 @@ export class Compiler {
         }
     }
 
-    private visit_required_parameter_node(node: RequiredParameterNode, used: boolean) {
+    override visitRequiredParameterNode(node: RequiredParameterNode, used: boolean) {
         // no-op
     }
 
-    private visit_optional_parameter_node(node: OptionalParameterNode, _used: boolean) {
+    override visitOptionalParameterNode(node: OptionalParameterNode, _used: boolean) {
         let index = this.iseq.argument_options.lead_num || 0;
         const opt_length = this.iseq.argument_options.opt.length;
 
@@ -908,27 +594,27 @@ export class Compiler {
         this.iseq.argument_options.opt.push(arg_given_label);
     }
 
-    private visit_rest_parameter_node(node: RestParameterNode, used: boolean) {
+    override visitRestParameterNode(node: RestParameterNode, used: boolean) {
         // no-op
     }
 
-    private visit_splat_node(node: SplatNode, used: boolean) {
+    override visitSplatNode(node: SplatNode, used: boolean) {
         if (node.expression) {
             this.visit(node.expression, used);
         }
     }
 
-    private visit_block_parameter_node(node: BlockParameterNode, used: boolean) {
+    override visitBlockParameterNode(node: BlockParameterNode, used: boolean) {
         // no-op
     }
 
-    private visit_block_argument_node(node: BlockArgumentNode, used: boolean) {
+    override visitBlockArgumentNode(node: BlockArgumentNode, used: boolean) {
         if (node.expression) {
             this.visit(node.expression, used);
         }
     }
 
-    private visit_if_node(node: IfNode, used: boolean) {
+    override visitIfNode(node: IfNode, used: boolean) {
         const body_label = this.iseq.label();
         const else_label = this.iseq.label();
         const done_label = this.iseq.label();
@@ -958,7 +644,7 @@ export class Compiler {
         this.iseq.push(done_label);
     }
 
-    private visit_unless_node(node: UnlessNode, used: boolean) {
+    override visitUnlessNode(node: UnlessNode, used: boolean) {
         const body_label = this.iseq.label();
         const else_label = this.iseq.label();
         const done_label = this.iseq.label();
@@ -996,13 +682,13 @@ export class Compiler {
         this.iseq.push(done_label);
     }
 
-    private visit_else_node(node: ElseNode, used: boolean) {
+    override visitElseNode(node: ElseNode, used: boolean) {
         if (node.statements) {
             this.visit(node.statements, used);
         }
     }
 
-    private visit_and_node(node: AndNode, used: boolean) {
+    override visitAndNode(node: AndNode, used: boolean) {
         const label = this.iseq.label()
 
         this.visit(node.left, true);
@@ -1013,7 +699,7 @@ export class Compiler {
         this.iseq.push(label);
     }
 
-    private visit_or_node(node: OrNode, used: boolean) {
+    override visitOrNode(node: OrNode, used: boolean) {
         const label = this.iseq.label();
 
         this.visit(node.left, true);
@@ -1024,7 +710,7 @@ export class Compiler {
         this.iseq.push(label);
     }
 
-    private visit_class_node(node: ClassNode, used: boolean) {
+    override visitClassNode(node: ClassNode, used: boolean) {
         const class_iseq = this.iseq.class_child_iseq(node.name, this.start_line_for_loc(node.location)!);
         this.with_child_iseq(class_iseq, () => {
             if (node.body) {
@@ -1063,7 +749,7 @@ export class Compiler {
         }
     }
 
-    private visit_module_node(node: ModuleNode, used: boolean) {
+    override visitModuleNode(node: ModuleNode, used: boolean) {
         const module_iseq = this.iseq.module_child_iseq(node.name, this.start_line_for_loc(node.location)!);
         this.with_child_iseq(module_iseq, () => {
             if (node.body) {
@@ -1096,7 +782,7 @@ export class Compiler {
         }
     }
 
-    private visit_constant_read_node(node: ConstantReadNode, used: boolean) {
+    override visitConstantReadNode(node: ConstantReadNode, used: boolean) {
         this.iseq.putnil();
         this.iseq.putobject({type: "TrueClass", value: true});
 
@@ -1105,7 +791,7 @@ export class Compiler {
         }
     }
 
-    private visit_constant_write_node(node: ConstantWriteNode, used: boolean) {
+    override visitConstantWriteNode(node: ConstantWriteNode, used: boolean) {
         this.visit(node.value, true);
 
         if (used) {
@@ -1116,35 +802,35 @@ export class Compiler {
         this.iseq.setconstant(node.name);
     }
 
-    private visit_symbol_node(node: SymbolNode, used: boolean) {
+    override visitSymbolNode(node: SymbolNode, used: boolean) {
         if (used) {
             this.iseq.putobject({type: "Symbol", value: node.unescaped});
         }
     }
 
-    private visit_block_parameters_node(node: BlockParametersNode, used: boolean) {
+    override visitBlockParametersNode(node: BlockParametersNode, used: boolean) {
         if (node.parameters) {
             this.visit(node.parameters, used);
         }
     }
 
-    private visit_instance_variable_write_node(node: InstanceVariableWriteNode, used: boolean) {
+    override visitInstanceVariableWriteNode(node: InstanceVariableWriteNode, used: boolean) {
         this.visit(node.value, true);
         if (used) this.iseq.dup();
         this.iseq.setinstancevariable(node.name);
     }
 
-    private visit_instance_variable_read_node(node: InstanceVariableReadNode, used: boolean) {
+    override visitInstanceVariableReadNode(node: InstanceVariableReadNode, used: boolean) {
         if (used) {
             this.iseq.getinstancevariable(node.name);
         }
     }
 
-    private visit_instance_variable_target_node(node: InstanceVariableTargetNode, _used: boolean) {
+    override visitInstanceVariableTargetNode(node: InstanceVariableTargetNode, _used: boolean) {
         this.iseq.setinstancevariable(node.name);
     }
 
-    private visit_return_node(node: ReturnNode, used: boolean) {
+    override visitReturnNode(node: ReturnNode, used: boolean) {
         if (node.arguments_) {
             if (node.arguments_.arguments_.length == 1) {
                 this.visit(node.arguments_, true);
@@ -1174,7 +860,7 @@ export class Compiler {
         throw new SyntaxError("Invalid return");
     }
 
-    private visit_begin_node(node: BeginNode, used: boolean) {
+    override visitBeginNode(node: BeginNode, used: boolean) {
         const begin_label = this.iseq.label();
         const end_label = this.iseq.label();
         const exit_label = this.iseq.label();
@@ -1184,7 +870,7 @@ export class Compiler {
 
         if (node.statements) {
             const [first_statements, last_statement] = this.split_rest_last(node.statements.body);
-            this.visit_all(first_statements, true);
+            this.visitAll(first_statements, true);
             this.visit(last_statement, used);
 
             if (node.elseClause) {
@@ -1229,7 +915,7 @@ export class Compiler {
         }
     }
 
-    private visit_rescue_node(node: RescueNode, used: boolean) {
+    override visitRescueNode(node: RescueNode, used: boolean) {
         const handled_label = this.iseq.label();
         const unhandled_label = this.iseq.label();
         const exit_label = this.iseq.label();
@@ -1271,7 +957,7 @@ export class Compiler {
         this.iseq.push(unhandled_label);
 
         if (node.consequent) {
-            this.visit_rescue_node(node.consequent, used);
+            this.visitRescueNode(node.consequent, used);
         }
 
         // nothing handled the error, so re-raise
@@ -1283,32 +969,32 @@ export class Compiler {
         this.iseq.leave();
     }
 
-    private visit_ensure_node(node: EnsureNode, used: boolean) {
+    override visitEnsureNode(node: EnsureNode, used: boolean) {
         if (node.statements) {
             this.visit(node.statements, used);
         }
     }
 
-    private visit_nil_node(node: NilNode, used: boolean) {
+    override visitNilNode(node: NilNode, used: boolean) {
         if (used) {
             this.iseq.putnil();
         }
     }
 
-    private visit_true_node(node: TrueNode, used: boolean) {
+    override visitTrueNode(node: TrueNode, used: boolean) {
         if (used) {
             this.iseq.putobject({type: "TrueClass", value: true});
         }
     }
 
-    private visit_false_node(node: FalseNode, used: boolean) {
+    override visitFalseNode(node: FalseNode, used: boolean) {
         if (used) {
             this.iseq.putobject({type: "FalseClass", value: false});
         }
     }
 
-    private visit_interpolated_string_node(node: InterpolatedStringNode, used: boolean) {
-        this.visit_all(node.parts, true);
+    override visitInterpolatedStringNode(node: InterpolatedStringNode, used: boolean) {
+        this.visitAll(node.parts, true);
         this.iseq.dup();
         this.iseq.objtostring(MethodCallData.create("to_s", 0, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE));
         this.iseq.anytostring()
@@ -1319,8 +1005,8 @@ export class Compiler {
         }
     }
 
-    private visit_interpolated_symbol_node(node: InterpolatedSymbolNode, used: boolean) {
-        this.visit_all(node.parts, true);
+    override visitInterpolatedSymbolNode(node: InterpolatedSymbolNode, used: boolean) {
+        this.visitAll(node.parts, true);
         this.iseq.dup();
         this.iseq.objtostring(MethodCallData.create("to_s", 0, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE));
         this.iseq.anytostring();
@@ -1328,19 +1014,19 @@ export class Compiler {
         this.iseq.intern();
     }
 
-    private visit_embedded_statements_node(node: EmbeddedStatementsNode, used: boolean) {
+    override visitEmbeddedStatementsNode(node: EmbeddedStatementsNode, used: boolean) {
         if (node.statements) {
             this.visit(node.statements, used);
         }
     }
 
-    private visit_self_node(node: SelfNode, used: boolean) {
+    override visitSelfNode(node: SelfNode, used: boolean) {
         if (used) {
             this.iseq.putself();
         }
     }
 
-    private visit_constant_path_node(node: ConstantPathNode, used: boolean) {
+    override visitConstantPathNode(node: ConstantPathNode, used: boolean) {
         if (node.parent == null) {
             this.iseq.putobject({type: "RValue", value: ObjectClass});
             this.iseq.putobject({type: "TrueClass", value: true});
@@ -1352,7 +1038,7 @@ export class Compiler {
         this.iseq.getconstant((node.child as ConstantReadNode).name);
     }
 
-    private visit_parentheses_node(node: ParenthesesNode, used: boolean) {
+    override visitParenthesesNode(node: ParenthesesNode, used: boolean) {
         if (node.body) {
             this.visit(node.body, used);
         } else {
@@ -1362,7 +1048,7 @@ export class Compiler {
         }
     }
 
-    private visit_instance_variable_operator_write_node(node: InstanceVariableOperatorWriteNode, used: boolean) {
+    override visitInstanceVariableOperatorWriteNode(node: InstanceVariableOperatorWriteNode, used: boolean) {
         this.iseq.getinstancevariable(node.name);
         this.visit(node.value, true);
         this.iseq.send(MethodCallData.create(node.operator, 1), null);
@@ -1374,19 +1060,19 @@ export class Compiler {
         this.iseq.setinstancevariable(node.name);
     }
 
-    private visit_global_variable_read_node(node: GlobalVariableReadNode, used: boolean) {
+    override visitGlobalVariableReadNode(node: GlobalVariableReadNode, used: boolean) {
         if (used) {
             this.iseq.getglobal(node.name);
         }
     }
 
-    private visit_global_variable_write_node(node: GlobalVariableWriteNode, used: boolean) {
+    override visitGlobalVariableWriteNode(node: GlobalVariableWriteNode, used: boolean) {
         this.visit(node.value, true);
         if (used) this.iseq.dup()
         this.iseq.setglobal(node.name);
     }
 
-    private visit_global_variable_or_write_node(node: GlobalVariableOrWriteNode, used: boolean) {
+    override visitGlobalVariableOrWriteNode(node: GlobalVariableOrWriteNode, used: boolean) {
         const defined_label = this.iseq.label();
         const undefined_label = this.iseq.label();
 
@@ -1407,7 +1093,7 @@ export class Compiler {
         this.iseq.push(undefined_label);
     }
 
-    private visit_case_node(node: CaseNode, used: boolean) {
+    override visitCaseNode(node: CaseNode, used: boolean) {
         if (node.predicate) {
             this.visit(node.predicate, true);
         }
@@ -1456,7 +1142,7 @@ export class Compiler {
         this.iseq.push(done_label);
     }
 
-    private visit_keyword_hash_node(node: KeywordHashNode, used: boolean) {
+    override visitKeywordHashNode(node: KeywordHashNode, used: boolean) {
         if (node.elements.length > 0) {
             if (node.elements[0].constructor.name === "AssocSplatNode") {
                 const splat_node = node.elements[0] as AssocSplatNode;
@@ -1479,7 +1165,7 @@ export class Compiler {
         }
     }
 
-    private visit_instance_variable_or_write_node(node: InstanceVariableOrWriteNode, used: boolean) {
+    override visitInstanceVariableOrWriteNode(node: InstanceVariableOrWriteNode, used: boolean) {
         const label = this.iseq.label();
 
         this.iseq.getinstancevariable(node.name);
@@ -1494,7 +1180,7 @@ export class Compiler {
         this.iseq.push(label);
     }
 
-    private visit_yield_node(node: YieldNode, used: boolean) {
+    override visitYieldNode(node: YieldNode, used: boolean) {
         let argc = 0;
 
         if (node.arguments_) {
@@ -1506,7 +1192,7 @@ export class Compiler {
         if (!used) this.iseq.pop();
     }
 
-    private visit_singleton_class_node(node: SingletonClassNode, used: boolean) {
+    override visitSingletonClassNode(node: SingletonClassNode, used: boolean) {
         this.visit(node.expression, true);
         this.iseq.putnil()
 
@@ -1526,7 +1212,7 @@ export class Compiler {
         if (!used) this.iseq.pop();
     }
 
-    private visit_while_node(node: WhileNode, used: boolean) {
+    override visitWhileNode(node: WhileNode, used: boolean) {
         const predicate_label = this.iseq.label();
         const body_label = this.iseq.label();
         const done_label = this.iseq.label();
@@ -1559,15 +1245,15 @@ export class Compiler {
         });
     }
 
-    private visit_regular_expression_node(node: RegularExpressionNode, used: boolean) {
+    override visitRegularExpressionNode(node: RegularExpressionNode, used: boolean) {
         if (used) {
             // @TODO: handle options
             this.iseq.putobject({type: "RValue", value: Regexp.new(node.unescaped, "")})
         }
     }
 
-    private visit_interpolated_regular_expression_node(node: InterpolatedRegularExpressionNode, used: boolean) {
-        this.visit_all(node.parts, true);
+    override visitInterpolatedRegularExpressionNode(node: InterpolatedRegularExpressionNode, used: boolean) {
+        this.visitAll(node.parts, true);
         this.iseq.dup();
         this.iseq.objtostring(MethodCallData.create("to_s", 0, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE));
         this.iseq.anytostring();
@@ -1577,7 +1263,7 @@ export class Compiler {
         if (!used) this.iseq.pop();
     }
 
-    private visit_next_node(node: NextNode, used: boolean) {
+    override visitNextNode(node: NextNode, used: boolean) {
         if (node.arguments_) {
             if (node.arguments_.arguments_.length == 1) {
                 this.visit(node.arguments_, true);
@@ -1616,7 +1302,7 @@ export class Compiler {
         throw new SyntaxError("Invalid next");
     }
 
-    private visit_break_node(node: BreakNode, used: boolean) {
+    override visitBreakNode(node: BreakNode, used: boolean) {
         if (node.arguments_) {
             if (node.arguments_.arguments_.length == 1) {
                 this.visit(node.arguments_, true);
@@ -1644,7 +1330,7 @@ export class Compiler {
         throw new SyntaxError("Invalid break");
     }
 
-    private visit_lambda_node(node: LambdaNode, used: boolean) {
+    override visitLambdaNode(node: LambdaNode, used: boolean) {
         const lambda_iseq = this.iseq.block_child_iseq(this.start_line_for_loc(node.location)!);
 
         this.with_child_iseq(lambda_iseq, () => {
@@ -1676,7 +1362,7 @@ export class Compiler {
         }
     }
 
-    private visit_index_or_write_node(node: IndexOrWriteNode, used: boolean) {
+    override visitIndexOrWriteNode(node: IndexOrWriteNode, used: boolean) {
         const already_set = this.iseq.label();
         const done = this.iseq.label();
 
@@ -1730,7 +1416,7 @@ export class Compiler {
         this.iseq.push(done);
     }
 
-    private visit_range_node(node: RangeNode, used: boolean) {
+    override visitRangeNode(node: RangeNode, used: boolean) {
         if (node.left) {
             this.visit(node.left, used);
         } else if (used) {
@@ -1746,7 +1432,7 @@ export class Compiler {
         if (used) this.iseq.newrange(node.isExcludeEnd());
     }
 
-    private visit_super_node(node: SuperNode, used: boolean) {
+    override visitSuperNode(node: SuperNode, used: boolean) {
         if (node.arguments_) {
             this.visit(node.arguments_, true);
         }
@@ -1755,7 +1441,7 @@ export class Compiler {
         let block_iseq = null;
 
         if (node.block) {
-          block_iseq = this.visit_block_node(node.block as BlockNode, true);
+          block_iseq = this.visitBlockNode(node.block as BlockNode, true);
         } else {
           flags |= CallDataFlag.ARGS_SIMPLE;
         }
@@ -1765,12 +1451,12 @@ export class Compiler {
         if (!used) this.iseq.pop();
     }
 
-    private visit_forwarding_super_node(node: ForwardingSuperNode, used: boolean) {
+    override visitForwardingSuperNode(node: ForwardingSuperNode, used: boolean) {
         let flags = CallDataFlag.FCALL | CallDataFlag.SUPER | CallDataFlag.ZSUPER;
         let block_iseq = null;
 
         if (node.block) {
-          block_iseq = this.visit_block_node(node.block as BlockNode, true);
+          block_iseq = this.visitBlockNode(node.block as BlockNode, true);
         } else {
           flags |= CallDataFlag.ARGS_SIMPLE;
         }
@@ -1780,26 +1466,26 @@ export class Compiler {
         if (!used) this.iseq.pop();
     }
 
-    private visit_x_string_node(node: XStringNode, used: boolean) {
+    override visitXStringNode(node: XStringNode, used: boolean) {
         this.iseq.putself();
         this.iseq.putobject({type: "String", value: node.unescaped});
         this.iseq.send(MethodCallData.create("`", 1, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE), null);
         if (!used) this.iseq.pop()
     }
 
-    private visit_numbered_reference_read_node(node: NumberedReferenceReadNode, used: boolean) {
+    override visitNumberedReferenceReadNode(node: NumberedReferenceReadNode, used: boolean) {
         if (used) {
             this.iseq.getspecial(GetSpecialType.BACKREF, node.number << 1);
         }
     }
 
-    private visit_source_file_node(node: SourceFileNode, used: boolean) {
+    override visitSourceFileNode(node: SourceFileNode, used: boolean) {
         if (used) {
             this.iseq.putstring(this.path);
         }
     }
 
-    private visit_index_operator_write_node(node: IndexOperatorWriteNode, used: boolean) {
+    override visitIndexOperatorWriteNode(node: IndexOperatorWriteNode, used: boolean) {
         if (node.arguments_) {
             const argc = node.arguments_.arguments_.length;
 
@@ -1830,7 +1516,7 @@ export class Compiler {
         }
     }
 
-    private visit_defined_node(node: DefinedNode, used: boolean) {
+    override visitDefinedNode(node: DefinedNode, used: boolean) {
         if (!used) return;
 
         const value = node.value;

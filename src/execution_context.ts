@@ -57,6 +57,9 @@ export class ExecutionContext {
     // The current frame.
     public frame: Frame | null;
 
+    // The last top frame that was evaluated.
+    public last_top_frame: TopFrame | null = null;
+
     // Call data for the current method, block, proc, or lambda being executed
     public call_data: CallData;
 
@@ -305,7 +308,24 @@ export class ExecutionContext {
     }
 
     run_top_frame(iseq: InstructionSequence, stack_index?: number): RValue {
-        return this.run_frame(new TopFrame(iseq, stack_index));
+        const top_frame = new TopFrame(iseq, stack_index);
+        const result = this.run_frame(top_frame, () => {
+            if (!this.last_top_frame) return null;
+
+            for (let i = 0; i < top_frame.iseq.local_table.locals.length; i ++) {
+                const local = top_frame.iseq.local_table.locals[i];
+                const lookup = this.last_top_frame.iseq.local_table.find(local.name)
+
+                if (lookup) {
+                    top_frame.local_set(this, i, 0, this.last_top_frame.local_get(this, lookup.index, 0));
+                }
+            }
+
+            this.last_top_frame = top_frame;
+            return null;
+        });
+
+        return result;
     }
 
     run_block_frame(call_data: BlockCallData, iseq: InstructionSequence, binding: Binding, args: RValue[]): RValue {

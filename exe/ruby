@@ -1,4 +1,4 @@
 #! /bin/sh
 
 echo "Running YARV.js!"
-npx --no-warnings tsx bin/ruby-exe.ts "${@}"
+npx --no-warnings tsx exe/ruby-exe.ts "${@}"
