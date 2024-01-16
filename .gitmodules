@@ -1,0 +1,3 @@
+[submodule "vendor/prism"]
+	path = vendor/prism
+	url = https://github.com/camertron/prism

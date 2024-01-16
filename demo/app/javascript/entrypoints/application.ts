@@ -1,4 +1,4 @@
-import * as YARV from "@camertron/yarv-js";
+import * as YARV from "@camertron/yarv-js/src/yarv";
 import {Terminal} from "xterm";
 import {LocalEchoAddon} from "@gytx/xterm-local-echo";
 

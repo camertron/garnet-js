@@ -26,11 +26,12 @@
     "build:release": "./scripts/build.sh --release",
     "clean-build": "yarn run clean && yarn run build",
     "test": "node --experimental-vm-modules node_modules/.bin/jest --no-cache",
-    "example": "node -r @swc-node/register ./test.ts"
+    "example": "node -r @swc-node/register ./test.ts",
+    "postinstall": "./scripts/build-prism.sh"
   },
   "dependencies": {
     "@bjorn3/browser_wasi_shim": "^0.2.17",
-    "@ruby/prism": "link:../../ruby/prism/javascript"
+    "@ruby/prism": "link:./vendor/prism/javascript"
   },
   "devDependencies": {
     "@camertron/yarv-js": "./",
