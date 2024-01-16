@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@bjorn3/browser_wasi_shim": "^0.2.17",
-    "@ruby/prism": "file:../../ruby/prism/javascript"
+    "@ruby/prism": "link:../../ruby/prism/javascript"
   },
   "devDependencies": {
     "@camertron/yarv-js": "./",

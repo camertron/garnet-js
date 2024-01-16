@@ -1,8 +1,13 @@
-import { fileURLToPath } from "url";
 import { isNode } from "../env";
 import { Module, Runtime, String } from "../runtime"
 import { Hash } from "../runtime/hash";
 import { vmfs } from "../vmfs";
+
+let url: typeof import("node:url");
+
+if (isNode) {
+    url = await import("node:url");
+}
 
 let inited = false;
 
@@ -16,7 +21,7 @@ export const init = () => {
     config.set(String.new("RUBY_INSTALL_NAME"), String.new("ruby"));
 
     if (isNode) {
-        config.set(String.new("bindir"), String.new(vmfs.real_path(vmfs.join_paths(fileURLToPath(import.meta.url), "..", "..", "..", "exe"))));
+        config.set(String.new("bindir"), String.new(vmfs.real_path(vmfs.join_paths(url.fileURLToPath(import.meta.url), "..", "..", "..", "exe"))));
     }
 
     Runtime.define_module("RbConfig", (mod: Module): void => {

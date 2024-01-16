@@ -84,8 +84,8 @@ import {
     WhileNode,
     XStringNode,
     YieldNode
-} from "@ruby/prism/src";
-import { Visitor } from "@ruby/prism/src";
+} from "@ruby/prism/src/nodes";
+import { Visitor } from "@ruby/prism/src/visitor";
 import { Lookup } from "./local_table";
 import { ObjectClass, Qnil, Qtrue, String } from "./runtime";
 import { DefineClassFlags } from "./insns/defineclass";
