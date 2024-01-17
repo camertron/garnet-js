@@ -6,7 +6,7 @@
     "@hotwired/stimulus": "^3.2.2",
     "@hotwired/turbo-rails": "^8.0.0-beta.2",
     "@primer/css": "^21.1.1",
-    "@ruby/prism": "link:./vendor/prism/javascript",
+    "@ruby/prism": "https://gitpkg.now.sh/ruby/prism/javascript?606810cc8af118f92f270b09e3ffe94086eb8c12",
     "rollup": "^4.9.5",
     "xterm": "^5.3.0"
   },
