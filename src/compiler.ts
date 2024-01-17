@@ -1,4 +1,4 @@
-import { ParseResult } from "@ruby/prism/javascript/src/deserialize";
+import { ParseResult } from "@ruby/prism/src/deserialize";
 import { MethodCallData, BlockCallData, CallDataFlag } from "./call_data";
 import { CatchBreak, InstructionSequence, Label, CatchTableStack, CatchNext } from "./instruction_sequence";
 import { CompilerOptions } from "./compiler_options";
@@ -84,8 +84,8 @@ import {
     WhileNode,
     XStringNode,
     YieldNode
-} from "@ruby/prism/javascript/src/nodes";
-import { Visitor } from "@ruby/prism/javascript/src/visitor";
+} from "@ruby/prism/src/nodes";
+import { Visitor } from "@ruby/prism/src/visitor";
 import { Lookup } from "./local_table";
 import { ObjectClass, Qnil, Qtrue, String } from "./runtime";
 import { DefineClassFlags } from "./insns/defineclass";
