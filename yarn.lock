@@ -417,11 +417,10 @@ __metadata:
 
 "@camertron/yarv-js@file:./::locator=%40camertron%2Fyarv-js%40workspace%3A.":
   version: 0.1.0
-  resolution: "@camertron/yarv-js@file:./#./::hash=5da504&locator=%40camertron%2Fyarv-js%40workspace%3A."
+  resolution: "@camertron/yarv-js@file:./#./::hash=e43068&locator=%40camertron%2Fyarv-js%40workspace%3A."
   dependencies:
     "@bjorn3/browser_wasi_shim": "npm:^0.2.17"
-    "@ruby/prism": "file:./demo/prism.tgz"
-  checksum: fbb007e37b67f767861e4a24d71ec7eb35946ca64e308d94031d1f2068a98f70a39450b6061a0b6858700d1925756e5e2c132b36cbbc72eb79b3c0c0b1bcae55
+  checksum: e72dd08af5ef8d16c68a560ba23e00b080c343980f959e40fc78b8d7bc8e6170ae256165c76fb0c6e07c147203bc55f3ecddef05006863aee0b08a5ad67a0837
   languageName: node
   linkType: hard
 
@@ -1017,13 +1016,6 @@ __metadata:
   peerDependencies:
     rollup: ^1.20.0||^2.0.0
   checksum: 7151753160d15ba2b259461a6c25b3932150994ea52dba8fd3144f634c7647c2e56733d986e2c15de67c4d96a9ee7d6278efa6d2e626a7169898fd64adc0f90c
-  languageName: node
-  linkType: hard
-
-"@ruby/prism@file:./demo/prism.tgz::locator=%40camertron%2Fyarv-js%40file%3A.%2F%23.%2F%3A%3Ahash%3D5da504%26locator%3D%2540camertron%252Fyarv-js%2540workspace%253A.":
-  version: 0.19.0
-  resolution: "@ruby/prism@file:./demo/prism.tgz#./demo/prism.tgz::hash=fe4757&locator=%40camertron%2Fyarv-js%40file%3A.%2F%23.%2F%3A%3Ahash%3D5da504%26locator%3D%2540camertron%252Fyarv-js%2540workspace%253A."
-  checksum: 924eb30ec57ba7fce51b3d17808761e03dd52b831e5e1629b56c874a87d5f9ea5590cd0b769fdceca73eecddd9fafcdfb8c5530f6e35c17fc084f28df3413deb
   languageName: node
   linkType: hard
 

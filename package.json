@@ -29,13 +29,13 @@
     "example": "node -r @swc-node/register ./test.ts"
   },
   "dependencies": {
-    "@bjorn3/browser_wasi_shim": "^0.2.17",
-    "@ruby/prism": "file:./demo/prism.tgz"
+    "@bjorn3/browser_wasi_shim": "^0.2.17"
   },
   "devDependencies": {
     "@camertron/yarv-js": "./",
     "@rollup/plugin-node-resolve": "^14.0.1",
     "@rollup/plugin-typescript": "^8.5.0",
+    "@ruby/prism": "file:./demo/prism.tgz",
     "@types/jest": "^29.5.8",
     "@types/node": "^20.9.1",
     "benchmarkify": "^3.0.0",
