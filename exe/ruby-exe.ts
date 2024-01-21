@@ -28,6 +28,10 @@ for (let i = 0; i < argv.length; i ++) {
     } else if (argv[i] == "-r") {
         Runtime.require(argv[i + 1]);
         i ++;
+    } else if (argv[i] == "-m") {
+        const module_name = argv[i + 1];
+        await import(module_name);
+        i ++;
     } else if (argv[i] == "-C") {
         let dir = argv[i + 1];
 

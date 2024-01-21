@@ -1,11 +1,13 @@
-import { ArgumentError, IndexError, NotImplementedError } from "../errors";
-import { Array as RubyArray, Class, Qnil, RValue, StringClass, String, IntegerClass, Runtime, Float, Qtrue, Qfalse, RegexpClass, NumericClass } from "../runtime";
+import { ArgumentError, IndexError, NotImplementedError, RangeError } from "../errors";
+import { Array as RubyArray, Class, Qnil, RValue, StringClass, String as RubyString, IntegerClass, Runtime, Float, Qtrue, Qfalse, RegexpClass, NumericClass } from "../runtime";
 import { hash_string } from "../util/string_utils";
 import { Integer } from "./integer";
 import { Regexp } from "./regexp";
 import { Range } from "./range";
 import { Object } from "./object";
 import { ExecutionContext } from "../execution_context";
+import { Encoding } from "./encoding";
+import { Kernel } from "./kernel";
 
 export const defineStringBehaviorOn = (klass: Class) => {
     klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
@@ -35,13 +37,13 @@ export const defineStringBehaviorOn = (klass: Class) => {
             .replace(/\"/g, "\\\"")
             .replace(/\r/g, "\\r")
             .replace(/\n/g, "\\n");
-        return String.new(`"${escaped_str}"`);
+        return RubyString.new(`"${escaped_str}"`);
     });
 
     klass.define_native_method("*", (self: RValue, args: RValue[]): RValue => {
         const multiplier = args[0];
         Runtime.assert_type(multiplier, NumericClass);  // @TODO: handle floats (yes, you can multiply strings by floats, oh ruby)
-        return String.new(self.get_data<string>().repeat(multiplier.get_data<number>()));
+        return RubyString.new(self.get_data<string>().repeat(multiplier.get_data<number>()));
     });
 
     klass.define_native_method("split", (self: RValue, args: RValue[]): RValue => {
@@ -55,7 +57,7 @@ export const defineStringBehaviorOn = (klass: Class) => {
 
         const str = self.get_data<string>();
 
-        return RubyArray.new(str.split(delim).map((elem) => String.new(elem)));
+        return RubyArray.new(str.split(delim).map((elem) => RubyString.new(elem)));
     });
 
     klass.define_native_method("gsub", (self: RValue, args: RValue[], block?: RValue): RValue => {
@@ -82,7 +84,7 @@ export const defineStringBehaviorOn = (klass: Class) => {
 
             chunks.push(str.slice(last_pos, str.length));
 
-            return String.new(chunks.join(""));
+            return RubyString.new(chunks.join(""));
         }
 
         return self;
@@ -231,7 +233,7 @@ export const defineStringBehaviorOn = (klass: Class) => {
         }
 
         const result = chunks.join("").replace("%%", "%");
-        return String.new(result);
+        return RubyString.new(result);
     });
 
     klass.define_native_method("==", (self: RValue, args: RValue[]): RValue => {
@@ -260,12 +262,7 @@ export const defineStringBehaviorOn = (klass: Class) => {
 
     klass.define_native_method("+", (self: RValue, args: RValue[]): RValue => {
         Runtime.assert_type(args[0], StringClass);
-        return String.new(self.get_data<string>() + args[0].get_data<string>());
-    });
-
-    klass.define_native_method("<<", (self: RValue, args: RValue[]): RValue => {
-        self.data = self.get_data<string>() + Runtime.coerce_to_string(args[0]);
-        return self;
+        return RubyString.new(self.get_data<string>() + args[0].get_data<string>());
     });
 
     klass.define_native_method("empty?", (self: RValue): RValue => {
@@ -304,13 +301,13 @@ export const defineStringBehaviorOn = (klass: Class) => {
             }
 
             if (range.exclude_end) {
-                return String.new(data.substring(start_pos, end_pos));
+                return RubyString.new(data.substring(start_pos, end_pos));
             } else {
-                return String.new(data.substring(start_pos, end_pos + 1));
+                return RubyString.new(data.substring(start_pos, end_pos + 1));
             }
         } else if (args[0].klass === StringClass) {
             if (data.indexOf(args[0].get_data<string>()) > 0) {
-                return String.new(args[0].get_data<string>());
+                return RubyString.new(args[0].get_data<string>());
             } else {
                 return Qnil;
             }
@@ -323,10 +320,10 @@ export const defineStringBehaviorOn = (klass: Class) => {
             if (args.length > 1) {
                 Runtime.assert_type(args[1], IntegerClass);
                 const len = args[1].get_data<number>();
-                return String.new(data.substring(start, start + len));
+                return RubyString.new(data.substring(start, start + len));
             } else {
                 if (start < data.length) {
-                    return String.new(data.charAt(start));
+                    return RubyString.new(data.charAt(start));
                 } else {
                     return Qnil;
                 }
@@ -414,11 +411,11 @@ export const defineStringBehaviorOn = (klass: Class) => {
             pad_str = " ";
         }
 
-        return String.new(left_pad(data, pad_str, size));
+        return RubyString.new(left_pad(data, pad_str, size));
     });
 
     klass.define_native_method("dup", (self: RValue): RValue => {
-        return String.new(self.get_data<string>());
+        return RubyString.new(self.get_data<string>());
     });
 
     klass.define_native_method("replace", (self: RValue, args: RValue[]): RValue => {
@@ -457,24 +454,47 @@ export const defineStringBehaviorOn = (klass: Class) => {
         }
     });
 
+    // this is designed to be used only by << and concat below
+    const append_to = (str: RValue, val: RValue): void => {
+        const encoding = RubyString.get_encoding(str);
+
+        if (val.klass === IntegerClass) {
+            const num = val.get_data<number>();
+
+            if (!encoding.codepoint_valid(num)) {
+                throw new RangeError(`${num} out of char range`);
+            }
+
+            if (num >= 128 && num <= 255 && encoding.name === "US-ASCII") {
+                RubyString.set_encoding(str, Encoding.binary);
+            }
+
+            str.data = str.get_data<string>() + encoding.codepoint_to_utf16(num);
+        } else {
+            str.data = str.get_data<string>() + Runtime.coerce_to_string(val);
+        }
+    }
+
+    klass.define_native_method("<<", (self: RValue, args: RValue[]): RValue => {
+        Object.check_frozen(self);
+        append_to(self, args[0]);
+        return self;
+    });
+
     klass.define_native_method("concat", (self: RValue, args: RValue[]): RValue => {
         Object.check_frozen(self);
 
-        const strings = [];
+        const self_data = self.get_data<string>();
 
         for (const arg of args) {
-            if (args[0].klass === StringClass) {
-                strings.push(arg.get_data<string>());
+            if (arg.object_id === self.object_id) {
+                // concating self uses the previous value of self
+                self.data = self.get_data<string>() + self_data;
             } else {
-                if (Object.respond_to(arg, "to_str")) {
-                    strings.push(Object.send(arg, "to_str").get_data<string>());
-                } else {
-                    Runtime.assert_type(arg, StringClass);
-                }
+                append_to(self, arg);
             }
         }
 
-        self.data = self.get_data<string>() + strings.join("");
         return self;
     });
 
@@ -502,21 +522,44 @@ export const defineStringBehaviorOn = (klass: Class) => {
         const remove_re = chomp_re_map[line_sep_str];
 
         if (remove_re) {
-            return String.new(data.replace(remove_re, ""));
+            return RubyString.new(data.replace(remove_re, ""));
         } else {
             if (data.endsWith(line_sep_str)) {
-                return String.new(data.slice(0, data.length - line_sep_str.length));
+                return RubyString.new(data.slice(0, data.length - line_sep_str.length));
             } else {
-                return String.new(data);
+                return RubyString.new(data);
             }
         }
     });
 
     klass.define_native_method("upcase", (self: RValue): RValue => {
-        return String.new(self.get_data<string>().toUpperCase());
+        return RubyString.new(self.get_data<string>().toUpperCase());
     });
 
     klass.define_native_method("downcase", (self: RValue): RValue => {
-        return String.new(self.get_data<string>().toLowerCase());
+        return RubyString.new(self.get_data<string>().toLowerCase());
+    });
+
+    klass.define_native_method("encoding", (self: RValue): RValue => {
+        return RubyString.get_encoding_rval(self);
+    });
+
+    klass.define_native_method("encode!", (self: RValue, args: RValue[]): RValue => {
+        if (!Kernel.is_a(args[0], Runtime.constants["Encoding"])) {
+            throw new ArgumentError("String#encode! must be passed an Encoding instance for the time being");
+        }
+
+        RubyString.set_encoding(self, args[0]);
+        return self;
+    });
+
+    klass.define_native_method("encode", (self: RValue, args: RValue[]): RValue => {
+        if (!Kernel.is_a(args[0], Runtime.constants["Encoding"])) {
+            throw new ArgumentError("String#encode must be passed an Encoding instance for the time being");
+        }
+
+        const new_str = RubyString.new(self.get_data<string>());
+        RubyString.set_encoding(new_str, args[0]);
+        return new_str;
     });
 };

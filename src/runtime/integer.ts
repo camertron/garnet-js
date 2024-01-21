@@ -1,5 +1,7 @@
+import { RangeError } from "../errors";
 import { Class, Float, FloatClass, IntegerClass, NumericClass, Qfalse, Qnil, Qtrue, RValue, Runtime, String } from "../runtime";
 import { obj_id_hash } from "../util/object_id";
+import { Encoding } from "./encoding";
 
 export class Integer {
     static INT2FIX0: RValue;
@@ -107,6 +109,23 @@ export const defineIntegerBehaviorOn = (klass: Class) => {
         }
     });
 
+    klass.define_native_method("**", (self: RValue, args: RValue[]): RValue => {
+        const term = args[0];
+        Runtime.assert_type(term, NumericClass);
+
+        const result = Math.pow(self.get_data<number>(), term.get_data<number>());
+
+        if (term.klass === FloatClass) {
+            return Float.new(result);
+        } else {
+            return Integer.get(Math.floor(result));
+        }
+    });
+
+    klass.define_native_method("-@", (self: RValue): RValue => {
+        return Integer.get(-self.get_data<number>());
+    });
+
     klass.define_native_method("<=>", (self: RValue, args: RValue[]): RValue => {
         const other = args[0];
 
@@ -141,5 +160,16 @@ export const defineIntegerBehaviorOn = (klass: Class) => {
     klass.define_native_method("size", (self: RValue): RValue => {
         // all numbers in js are 64-bit floats
         return Integer.get(8);
+    });
+
+    klass.define_native_method("chr", (self: RValue, args: RValue[]): RValue => {
+        const data = self.get_data<number>();
+        const encoding = (args[0] || Encoding.us_ascii).get_data<Encoding>();
+
+        if (encoding.codepoint_valid(data)) {
+            return String.new(encoding.codepoint_to_utf16(data));
+        } else {
+            throw new RangeError(`${data} out of char range`);
+        }
     });
 };

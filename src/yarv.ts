@@ -116,4 +116,7 @@ export type { IO } from "./runtime";
 export { Object } from "./runtime/object";
 export { RubyError } from "./errors";
 
+export { Encoding, UnicodeEncoding } from "./runtime/encoding"
+export { isNode } from "./env"
+
 export { ExecutionContext, vmfs, Regexp, WASM };

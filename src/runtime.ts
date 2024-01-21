@@ -32,6 +32,7 @@ import { init as signalInit } from "./runtime/signal";
 import { init as timeInit } from "./stdlib/time";
 import { init as threadInit } from './stdlib/thread';
 import { init as regexpInit} from "./runtime/regexp";
+import { Encoding, init as encodingInit } from "./runtime/encoding";
 import { obj_id_hash } from "./util/object_id";
 
 
@@ -219,7 +220,8 @@ export class Runtime {
                 if (Object.respond_to(obj, "to_str")) {
                     const str = Object.send(obj, "to_str");
 
-                    if (str.klass === StringClass) {
+                    // make sure classes that inherit from String also work here
+                    if (Kernel.is_a(str, StringClass)) {
                         return str.get_data<string>();
                     } else {
                         const obj_class_name = obj.klass.get_data<Class>().name;
@@ -834,6 +836,18 @@ export class String {
     static new(str: string): RValue {
         return new RValue(StringClass, str);
     }
+
+    static get_encoding(str: RValue): Encoding {
+        return this.get_encoding_rval(str).get_data<Encoding>();
+    }
+
+    static get_encoding_rval(str: RValue): RValue {
+        return str.iv_exists("@__encoding") ? str.iv_get("@__encoding") : Encoding.default;
+    }
+
+    static set_encoding(str: RValue, encoding: RValue): void {
+        str.iv_set("@__encoding", encoding);
+    }
 }
 
 (ClassClass.get_data<Class>()).tap( (klass: Class) => {
@@ -1088,6 +1102,7 @@ export const init = async () => {
     timeInit();
     threadInit();
     await regexpInit();
+    encodingInit();
 
     defineArrayBehaviorOn(ArrayClass.get_data<Class>());
 

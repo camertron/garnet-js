@@ -1,20 +1,21 @@
 {
-  "name": "@camertron/yarv-js",
+  "name": "@garnet-js/encoding-euc-jp",
   "version": "0.1.0",
-  "description": "The YARV virtual machine written in Javascript.",
-  "main": "dist/yarv.js",
-  "module": "dist/yarv.js",
-  "repository": "camertron/yarv-js",
+  "description": "EUC-JP encoding support for garnet-js.",
+  "main": "dist/encoding-euc-jp.js",
+  "module": "dist/encoding-euc-jp.js",
+  "repository": "garnet-js/encoding-euc-jp",
   "type": "module",
   "keywords": [
     "ruby",
-    "virtual-machine"
+    "encoding",
+    "EUC-JP"
   ],
   "author": "Cameron Dutro",
   "license": "MIT",
-  "homepage": "https://github.com/camertron/yarv-js#readme",
+  "homepage": "https://github.com/garnet-js/encoding-euc-jp#readme",
   "bugs": {
-    "url": "https://github.com/camertron/yarv-js/issues"
+    "url": "https://github.com/garnet-js/encoding-euc-jp/issues"
   },
   "files": [
     "/dist",
@@ -25,21 +26,15 @@
     "build": "./scripts/build.sh",
     "build:release": "./scripts/build.sh --release",
     "clean-build": "yarn run clean && yarn run build",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest --no-cache",
-    "example": "node -r @swc-node/register ./test.ts"
-  },
-  "dependencies": {
-    "@bjorn3/browser_wasi_shim": "^0.2.17"
+    "test": "node --experimental-vm-modules node_modules/.bin/jest --no-cache"
   },
   "devDependencies": {
-    "@camertron/yarv-js": "./",
-    "@garnet-js/encoding-euc-jp": "link:./packages/encoding-euc-jp",
+    "@camertron/yarv-js": "link:../../",
+    "@garnet-js/encoding-euc-jp": "./",
     "@rollup/plugin-node-resolve": "^14.0.1",
     "@rollup/plugin-typescript": "^8.5.0",
-    "@ruby/prism": "file:./demo/prism.tgz",
     "@types/jest": "^29.5.8",
     "@types/node": "^20.9.1",
-    "benchmarkify": "^3.0.0",
     "jest": "^29.7.0",
     "rimraf": "3.0.2",
     "rollup": "^2.79.0",
