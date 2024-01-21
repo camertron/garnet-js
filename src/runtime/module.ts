@@ -7,7 +7,13 @@ import { Kernel } from "./kernel";
 import { Object } from "./object";
 import { Proc } from "./proc";
 
-export const defineModuleBehaviorOn = (mod: Module) => {
+let inited = false;
+
+export const init = () => {
+    if (inited) return;
+
+    const mod = Runtime.constants["Module"].get_data<Module>();
+
     mod.define_native_method("inspect", (self: RValue): RValue => {
         const mod = self.get_data<Module>();
 
@@ -185,6 +191,8 @@ export const defineModuleBehaviorOn = (mod: Module) => {
         self.get_data<Module>().undef_method(Runtime.coerce_to_string(args[0]));
         return self;
     });
+
+    inited = true;
 };
 
 const define_attr_reader_on = (mod: RValue, name: string): string => {

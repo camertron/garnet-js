@@ -1,5 +1,5 @@
 import { ExecutionContext } from "../execution_context";
-import { Class, Qfalse, Qtrue, RValue, String, SymbolClass } from "../runtime";
+import { Class, Qfalse, Qtrue, RValue, Runtime, String, SymbolClass } from "../runtime";
 import { hash_string } from "../util/string_utils";
 import { Integer } from "./integer";
 import { Object } from "./object";
@@ -24,7 +24,13 @@ export class Symbol {
     }
 }
 
-export const defineSymbolBehaviorOn = (klass: Class) => {
+let inited = false;
+
+export const init = () => {
+    if (inited) return;
+
+    const klass = Runtime.constants["Symbol"].get_data<Class>();
+
     klass.define_native_method("inspect", (self: RValue): RValue => {
         const str = self.get_data<string>();
         const quote = !/^\w+$/.test(str);
@@ -53,4 +59,6 @@ export const defineSymbolBehaviorOn = (klass: Class) => {
     klass.define_native_method("to_proc", (self: RValue): RValue => {
         return Symbol.to_proc(self);
     });
+
+    inited = true;
 };

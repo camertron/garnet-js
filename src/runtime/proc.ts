@@ -2,7 +2,7 @@ import { BlockCallData } from "../call_data";
 import { ExecutionContext } from "../execution_context";
 import { BlockFrame } from "../frame";
 import { InstructionSequence } from "../instruction_sequence";
-import { RValue, Class, ProcClass, NativeMethod, Callable } from "../runtime";
+import { RValue, Class, ProcClass, NativeMethod, Callable, Runtime } from "../runtime";
 import { Binding } from "./binding";
 
 export abstract class Proc {
@@ -63,11 +63,19 @@ export class InterpretedProc extends Proc {
     }
 }
 
-export const defineProcBehaviorOn = (klass: Class) => {
+let inited = false;
+
+export const init = () => {
+    if (inited) return;
+
+    const klass = Runtime.constants["Proc"].get_data<Class>();
+
     klass.define_native_method("call", (self: RValue, args: RValue[]): RValue => {
         const ec = ExecutionContext.current
         return self.get_data<Proc>().call(ec, args, (ec.frame as BlockFrame).call_data);
     });
 
     klass.alias_method("[]", "call");
+
+    inited = true;
 };

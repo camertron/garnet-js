@@ -9,7 +9,13 @@ import { ExecutionContext } from "../execution_context";
 import { Encoding } from "./encoding";
 import { Kernel } from "./kernel";
 
-export const defineStringBehaviorOn = (klass: Class) => {
+let inited = false;
+
+export const init = () => {
+    if (inited) return;
+
+    const klass = Runtime.constants["String"].get_data<Class>();
+
     klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
         const str = args[0];
 
@@ -562,4 +568,6 @@ export const defineStringBehaviorOn = (klass: Class) => {
         RubyString.set_encoding(new_str, args[0]);
         return new_str;
     });
+
+    inited = true;
 };

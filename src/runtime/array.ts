@@ -5,7 +5,13 @@ import { hash_combine } from "../util/hash_utils";
 import { Integer } from "./integer";
 import { Object } from "./object";
 
-export const defineArrayBehaviorOn = (klass: Class) => {
+let inited = false;
+
+export const init = () => {
+    if (inited) return;
+
+    const klass = Runtime.constants["Array"].get_data<Class>();
+
     klass.include(Runtime.constants["Enumerable"]);
 
     klass.define_native_method("inspect", (self: RValue): RValue => {
@@ -289,4 +295,6 @@ export const defineArrayBehaviorOn = (klass: Class) => {
 
         return Integer.get(hash);
     });
+
+    inited = true;
 };

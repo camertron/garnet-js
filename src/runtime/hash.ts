@@ -89,7 +89,13 @@ export class Hash {
     }
 }
 
-export const defineHashBehaviorOn = (klass: Class) => {
+let inited = false;
+
+export const init = () => {
+    if (inited) return;
+
+    const klass = Runtime.constants["Hash"].get_data<Class>();
+
     klass.define_native_singleton_method("new", (_self: RValue, args: RValue[], block?: RValue): RValue => {
         return Hash.new(args[0], block);
     });
@@ -227,4 +233,6 @@ export const defineHashBehaviorOn = (klass: Class) => {
             return Qnil;
         }
     });
+
+    inited = true;
 };

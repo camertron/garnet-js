@@ -2,19 +2,19 @@ import { InstructionSequence } from "./instruction_sequence";
 import { Compiler } from "./compiler";
 import { LoadError, TypeError, NoMethodError, NotImplementedError } from "./errors";
 import { ExecutionContext } from "./execution_context";
-import { defineArrayBehaviorOn } from "./runtime/array";
-import { Integer, defineIntegerBehaviorOn } from "./runtime/integer";
+import { init as arrayInit } from "./runtime/array";
+import { Integer, init as integerInit } from "./runtime/integer";
 import { Object } from "./runtime/object";
-import { defineSymbolBehaviorOn } from "./runtime/symbol";
-import { defineStringBehaviorOn } from "./runtime/string";
+import { init as symbolInit } from "./runtime/symbol";
+import { init as stringInit } from "./runtime/string";
 import { Dir } from "./runtime/dir";
 import { vmfs } from "./vmfs";
-import { Proc, defineProcBehaviorOn } from "./runtime/proc";
-import { defineHashBehaviorOn } from "./runtime/hash";
+import { Proc, init as procInit } from "./runtime/proc";
+import { init as hashInit } from "./runtime/hash";
 import { isNode } from "./env";
 import { BlockCallData, CallData, CallDataFlag, MethodCallData } from "./call_data";
-import { defineFloatBehaviorOn } from "./runtime/float";
-import { defineModuleBehaviorOn } from "./runtime/module";
+import { init as floatInit } from "./runtime/float";
+import { init as moduleInit } from "./runtime/module";
 import { Kernel, init as kernel_init } from "./runtime/kernel";
 import { init as objectInit } from "./runtime/object";
 import { init as errorInit } from "./errors";
@@ -715,9 +715,6 @@ const ConstBase = new RValue(new RValue(ClassClass, new Class("ConstBase", null)
 export { ConstBase };
 
 export const Main = new RValue(ObjectClass);
-
-defineModuleBehaviorOn(ModuleClass.get_data<Module>());
-
 export const Qnil = new RValue(NilClass, null);
 export const Qtrue = new RValue(TrueClass, true);
 export const Qfalse = new RValue(FalseClass, false);
@@ -953,22 +950,14 @@ export class String {
     });
 });
 
-defineStringBehaviorOn(StringClass.get_data<Class>());
-
 Runtime.constants["RUBY_VERSION"] = String.new("3.2.2");
 Runtime.constants["RUBY_ENGINE"] = String.new("YARV-JS");
-
-defineIntegerBehaviorOn(IntegerClass.get_data<Class>());
 
 export class Float {
     static new(value: number): RValue {
         return new RValue(FloatClass, value);
     }
 }
-
-defineFloatBehaviorOn(FloatClass.get_data<Class>());
-
-defineSymbolBehaviorOn(SymbolClass.get_data<Class>());
 
 export interface IO {
     puts(val: string): void;
@@ -1081,11 +1070,14 @@ export class Array {
     }
 }
 
-defineHashBehaviorOn(HashClass.get_data<Class>());
-
-defineProcBehaviorOn(ProcClass.get_data<Class>());
-
 export const init = async () => {
+    moduleInit();
+    stringInit();
+    integerInit();
+    floatInit();
+    symbolInit();
+    hashInit();
+    procInit();
     errorInit();
     processInit();
     envInit();
@@ -1103,8 +1095,7 @@ export const init = async () => {
     threadInit();
     await regexpInit();
     encodingInit();
-
-    defineArrayBehaviorOn(ArrayClass.get_data<Class>());
+    arrayInit();
 
     Runtime.constants["RUBY_PLATFORM"] = await (async () => {
         if (isNode) {

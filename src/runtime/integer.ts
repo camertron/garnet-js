@@ -25,7 +25,13 @@ export class Integer {
     }
 }
 
-export const defineIntegerBehaviorOn = (klass: Class) => {
+let inited = false;
+
+export const init = () => {
+    if (inited) return
+
+    const klass = Runtime.constants["Integer"].get_data<Class>();
+
     Integer.INT2FIX0 = Integer.new(0);
     Integer.INT2FIX1 = Integer.new(1);
     Integer.INT2FIXN1 = Integer.new(-1);
@@ -172,4 +178,6 @@ export const defineIntegerBehaviorOn = (klass: Class) => {
             throw new RangeError(`${data} out of char range`);
         }
     });
+
+    inited = true;
 };
