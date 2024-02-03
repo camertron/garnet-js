@@ -1,8 +1,9 @@
 import { KeyError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { String, RValue, Class, Qtrue, Qfalse, Qnil, HashClass, ProcClass, Runtime, Array as RubyArray } from "../runtime";
+import { RValue, Class, Qtrue, Qfalse, Qnil, HashClass, ProcClass, Runtime, Array as RubyArray } from "../runtime";
 import { Object } from "./object";
 import { Proc } from "./proc";
+import { String } from "../runtime/string";
 
 export class Hash {
     static new(default_value?: RValue, default_proc?: RValue): RValue {

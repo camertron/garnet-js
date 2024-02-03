@@ -1,7 +1,8 @@
 import { ErrnoENOENT } from "../errors";
-import { Class, IOClass, Qnil, RValue, Runtime, StringClass, String, Qtrue, Qfalse } from "../runtime"
+import { Class, IOClass, Qnil, RValue, Runtime, StringClass, Qtrue, Qfalse } from "../runtime"
 import { vmfs } from "../vmfs";
 import { Dir } from "./dir";
+import { String } from "../runtime/string";
 
 const path_from_realpath_args = (args: RValue[]): string => {
     Runtime.assert_type(args[0], StringClass);

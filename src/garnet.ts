@@ -53,7 +53,7 @@ export async function deinit() {
 
 export async function evaluate(code: string, path?: string, compiler_options?: CompilerOptions): Promise<RValue> {
     if (!ExecutionContext.current) {
-        throw new Error("The Ruby VM has not been initialized. Please call YARV.init().");
+        throw new Error("The Ruby VM has not been initialized. Please call Garnet.init().");
     }
 
     const insns = Compiler.compile_string(code, path || "<code>", compiler_options);
@@ -96,7 +96,6 @@ export {
     ObjectClass,
     BasicObjectClass,
     Array,
-    String,
     StringClass,
     RegexpClass,
     NilClass,
@@ -108,15 +107,17 @@ export {
     STDOUT,
     STDERR,
     IOClass,
-    RValue
+    RValue,
+    Main
 } from "./runtime";
 
 export type { IO } from "./runtime";
+export { String } from "./runtime/string";
 
 export { Object } from "./runtime/object";
 export { RubyError } from "./errors";
 
-export { Encoding, UnicodeEncoding } from "./runtime/encoding"
+export { Encoding, UnicodeEncoding, register_encoding } from "./runtime/encoding"
 export { isNode } from "./env"
 
 export { ExecutionContext, vmfs, Regexp, WASM };

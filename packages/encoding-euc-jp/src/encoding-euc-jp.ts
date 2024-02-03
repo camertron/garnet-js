@@ -1,10 +1,15 @@
-import { Class, Encoding, RValue, Runtime } from "@camertron/yarv-js/src/yarv";
+import { Class, Encoding, RValue, Runtime, register_encoding } from "@camertron/garnet-js/src/garnet";
 import { to_unicode } from "./unicode-map"
 
 let inited = false;
 
 export class EUCJPEncoding extends Encoding {
     public name: string = "EUC-JP";
+    public conversion_targets = ["US-ASCII"]; // @TODO: is this correct?
+
+    constructor() {
+        super(1, 3);
+    }
 
     codepoint_valid(codepoint: number): boolean {
         return to_unicode.has(codepoint);
@@ -18,9 +23,7 @@ export class EUCJPEncoding extends Encoding {
 export const init = () => {
     if (inited) return;
 
-    const encoding_class = Runtime.constants["Encoding"];
-    const encoding = encoding_class.get_data<Class>();
-    encoding.constants["EUC_JP"] = new RValue(encoding_class, new EUCJPEncoding());
+    register_encoding("EUC_JP", ["EUC-JP"], new EUCJPEncoding());
 
     inited = true;
 }

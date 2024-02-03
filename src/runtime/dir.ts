@@ -1,4 +1,5 @@
-import { Class, ObjectClass, Runtime, RValue, String } from "../runtime";
+import { Class, ObjectClass, Runtime, RValue, } from "../runtime";
+import { String } from "../runtime/string";
 
 export class Dir {
     private static wd: string;

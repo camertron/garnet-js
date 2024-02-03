@@ -1,7 +1,7 @@
 {
   "name": "app",
   "dependencies": {
-    "@camertron/yarv-js": "link:../",
+    "@camertron/garnet-js": "link:../",
     "@gytx/xterm-local-echo": "^0.1.8",
     "@hotwired/stimulus": "^3.2.2",
     "@hotwired/turbo-rails": "^8.0.0-beta.2",

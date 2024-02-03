@@ -1,7 +1,8 @@
 import { isNode } from "../env";
-import { Module, Runtime, String } from "../runtime"
+import { Module, Runtime } from "../runtime"
 import { Hash } from "../runtime/hash";
 import { vmfs } from "../vmfs";
+import { String } from "../runtime/string";
 
 let url: typeof import("node:url");
 

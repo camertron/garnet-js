@@ -1,9 +1,10 @@
 import { ArgumentError, NotImplementedError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Class, IntegerClass, Qnil, RValue, Runtime, StringClass, String } from "../runtime"
+import { Class, IntegerClass, Qnil, RValue, Runtime, StringClass } from "../runtime"
 import { Hash } from "./hash";
 import { Integer } from "./integer";
 import { Proc } from "./proc";
+import { String } from "../runtime/string";
 
 let inited = false;
 

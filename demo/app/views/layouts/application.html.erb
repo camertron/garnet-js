@@ -7,7 +7,7 @@
     <%= csp_meta_tag %>
 
     <script type="text/javascript">
-      window.yarv_wasm_modules = <%= Rails.application.assets.load_path.manifest.each_with_object({}) do |(file_name, _), memo|
+      window.garnet_wasm_modules = <%= Rails.application.assets.load_path.manifest.each_with_object({}) do |(file_name, _), memo|
         next unless file_name.end_with?(".wasm")
         memo[file_name] = Rails.application.assets.resolver.resolve(file_name)
       end.to_json.html_safe %>;

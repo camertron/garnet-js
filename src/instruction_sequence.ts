@@ -53,7 +53,8 @@ import ToRegexp from "./insns/toregexp";
 import Instruction, { ValueType } from "./instruction";
 import { LocalTable, Lookup } from "./local_table";
 import { CompilerOptions } from "./compiler_options";
-import { RValue, String as RubyString } from "./runtime";
+import { RValue } from "./runtime";
+import { String as RubyString } from "./runtime/string";
 
 class Node {
     public instruction: Instruction;

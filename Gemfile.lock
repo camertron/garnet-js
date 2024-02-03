@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    yarv-js (0.1.0)
+    garnet-js (0.1.0)
 
 GEM
   remote: https://rubygems.org/
@@ -23,9 +23,9 @@ PLATFORMS
   x86_64-linux
 
 DEPENDENCIES
+  garnet-js!
   pry-byebug
   rake
-  yarv-js!
 
 BUNDLED WITH
    2.3.7

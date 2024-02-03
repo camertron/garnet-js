@@ -114,6 +114,7 @@ describe :string_concat_encoding, shared: true do
 
   describe "when self and the argument are in different ASCII-compatible encodings" do
     it "uses self's encoding if both are ASCII-only" do
+      $cameron = true
       "abc".encode("UTF-8").send(@method, "123".encode("SHIFT_JIS")).encoding.should == Encoding::UTF_8
     end
 

@@ -1,10 +1,10 @@
 {
-  "name": "@camertron/yarv-js",
+  "name": "@camertron/garnet-js",
   "version": "0.1.0",
   "description": "The YARV virtual machine written in Javascript.",
-  "main": "dist/yarv.js",
-  "module": "dist/yarv.js",
-  "repository": "camertron/yarv-js",
+  "main": "dist/garnet.js",
+  "module": "dist/garnet.js",
+  "repository": "camertron/garnet-js",
   "type": "module",
   "keywords": [
     "ruby",
@@ -12,9 +12,9 @@
   ],
   "author": "Cameron Dutro",
   "license": "MIT",
-  "homepage": "https://github.com/camertron/yarv-js#readme",
+  "homepage": "https://github.com/camertron/garnet-js#readme",
   "bugs": {
-    "url": "https://github.com/camertron/yarv-js/issues"
+    "url": "https://github.com/camertron/garnet-js/issues"
   },
   "files": [
     "/dist",
@@ -32,8 +32,9 @@
     "@bjorn3/browser_wasi_shim": "^0.2.17"
   },
   "devDependencies": {
-    "@camertron/yarv-js": "./",
+    "@camertron/garnet-js": "./",
     "@garnet-js/encoding-euc-jp": "link:./packages/encoding-euc-jp",
+    "@garnet-js/encoding-shift-jis": "link:./packages/encoding-shift-jis",
     "@rollup/plugin-node-resolve": "^14.0.1",
     "@rollup/plugin-typescript": "^8.5.0",
     "@ruby/prism": "file:./demo/prism.tgz",

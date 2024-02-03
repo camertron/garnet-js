@@ -4,8 +4,9 @@ import { BlockFrame, ClassFrame, Frame, MethodFrame, RescueFrame, TopFrame } fro
 import Instruction from "./instruction";
 import { CatchBreak, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
 import { Local } from "./local_table";
-import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, String, STDOUT, IO, Qnil, STDERR, ArrayClass, ProcClass } from "./runtime";
+import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, ArrayClass, ProcClass } from "./runtime";
 import { Binding } from "./runtime/binding";
+import { String } from "./runtime/string";
 
 export type ExecutionResult = JumpResult | LeaveResult | null;
 
@@ -194,8 +195,11 @@ export class ExecutionContext {
                             result = error.value
                             this.stack.push(result);
                         } else {
-                            if (error instanceof RubyError) {
-                                error.backtrace ||= this.create_backtrace();
+                            // I really need to clean up errors and error handling, what a mess
+                            if (error instanceof RubyError || error instanceof RValue) {
+                                if (error instanceof RubyError) {
+                                    error.backtrace ||= this.create_backtrace();
+                                }
 
                                 const catch_entry = this.find_catch_entry(frame, CatchRescue)
 
@@ -207,8 +211,16 @@ export class ExecutionContext {
                                 this.stack.splice!(frame.stack_index + frame.iseq.local_table.size() + catch_entry.restore_sp)
                                 this.frame = frame;
 
+                                let error_rval;
+
+                                if (error instanceof RValue) {
+                                    error_rval = error;
+                                } else {
+                                    error_rval = error.to_rvalue();
+                                }
+
                                 frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.cont_label);
-                                result = this.run_rescue_frame(catch_entry.iseq!, frame, error.to_rvalue());
+                                result = this.run_rescue_frame(catch_entry.iseq!, frame, error_rval);
                                 this.stack.push(result);
                             } else {
                                 // re-raise javascript errors

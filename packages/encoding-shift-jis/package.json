@@ -1,21 +1,21 @@
 {
-  "name": "@garnet-js/encoding-euc-jp",
+  "name": "@garnet-js/encoding-shift-jis",
   "version": "0.1.0",
-  "description": "EUC-JP encoding support for garnet-js.",
-  "main": "dist/encoding-euc-jp.js",
-  "module": "dist/encoding-euc-jp.js",
-  "repository": "garnet-js/encoding-euc-jp",
+  "description": "SHIFT-JIS encoding support for garnet-js.",
+  "main": "dist/encoding-shift-jis.js",
+  "module": "dist/encoding-shift-jis.js",
+  "repository": "garnet-js/encoding-shift-jis",
   "type": "module",
   "keywords": [
     "ruby",
     "encoding",
-    "EUC-JP"
+    "SHIFT-JIS"
   ],
   "author": "Cameron Dutro",
   "license": "MIT",
-  "homepage": "https://github.com/garnet-js/encoding-euc-jp#readme",
+  "homepage": "https://github.com/garnet-js/encoding-shift-jis#readme",
   "bugs": {
-    "url": "https://github.com/garnet-js/encoding-euc-jp/issues"
+    "url": "https://github.com/garnet-js/encoding-shift-jis/issues"
   },
   "files": [
     "/dist",
@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@camertron/garnet-js": "link:../../",
-    "@garnet-js/encoding-euc-jp": "./",
+    "@garnet-js/encoding-shift-jis": "./",
     "@rollup/plugin-node-resolve": "^14.0.1",
     "@rollup/plugin-typescript": "^8.5.0",
     "@types/jest": "^29.5.8",

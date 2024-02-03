@@ -1,6 +1,6 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { String } from "../runtime";
+import { String } from "../runtime/string";
 
 export default class ConcatStrings extends Instruction {
     public count: number;

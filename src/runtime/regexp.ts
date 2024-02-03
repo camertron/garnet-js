@@ -1,6 +1,7 @@
 import { RuntimeError } from "../errors";
-import { RValue, RegexpClass } from "../runtime";
+import { Class, Qnil, RValue, RegexpClass, Runtime } from "../runtime";
 import * as WASM from "../wasm";
+import { Integer } from "./integer";
 
 let onigmo: Onigmo, onig_memory: DataView;
 let inited = false;
@@ -10,6 +11,15 @@ export const init = async () => {
 
     onigmo = await WASM.load_module("onigmo") as unknown as Onigmo;
     onig_memory = new DataView(onigmo.exports.memory.buffer);
+
+    const regexp = RegexpClass.get_data<Class>();
+
+    regexp.define_native_method("=~", (self: RValue, args: RValue[]): RValue => {
+        const str = Runtime.coerce_to_string(args[0]);
+        const regexp = self.get_data<Regexp>();
+        const result = regexp.search(str.get_data<string>());
+        return result ? Integer.get(result) : Qnil;
+    });
 
     inited = true;
 };

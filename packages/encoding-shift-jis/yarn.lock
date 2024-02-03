@@ -408,9 +408,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@camertron/garnet-js@link:../../::locator=%40garnet-js%2Fencoding-euc-jp%40workspace%3A.":
+"@camertron/garnet-js@link:../../::locator=%40garnet-js%2Fencoding-shift-jis%40workspace%3A.":
   version: 0.0.0-use.local
-  resolution: "@camertron/garnet-js@link:../../::locator=%40garnet-js%2Fencoding-euc-jp%40workspace%3A."
+  resolution: "@camertron/garnet-js@link:../../::locator=%40garnet-js%2Fencoding-shift-jis%40workspace%3A."
   languageName: node
   linkType: soft
 
@@ -584,19 +584,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@garnet-js/encoding-euc-jp@file:./::locator=%40garnet-js%2Fencoding-euc-jp%40workspace%3A.":
+"@garnet-js/encoding-shift-jis@file:./::locator=%40garnet-js%2Fencoding-shift-jis%40workspace%3A.":
   version: 0.1.0
-  resolution: "@garnet-js/encoding-euc-jp@file:./#./::hash=4159f7&locator=%40garnet-js%2Fencoding-euc-jp%40workspace%3A."
-  checksum: be498b63e1eb169824e793ff886056dede97e022aa407cec8e8d8032628b88af0567a8a48d145f592b163b8fcebf052fbdad2d3380a8611170450ae1bb5a6922
+  resolution: "@garnet-js/encoding-shift-jis@file:./#./::hash=ae9a4f&locator=%40garnet-js%2Fencoding-shift-jis%40workspace%3A."
+  checksum: 8c34b57435275b15fa4a7a5b018ecd610d8447e2322a466585bdc2add51ae5a316a962687cdf0347cce4358285310095ac06f9f55de5be6849f77381a5637c03
   languageName: node
   linkType: hard
 
-"@garnet-js/encoding-euc-jp@workspace:.":
+"@garnet-js/encoding-shift-jis@workspace:.":
   version: 0.0.0-use.local
-  resolution: "@garnet-js/encoding-euc-jp@workspace:."
+  resolution: "@garnet-js/encoding-shift-jis@workspace:."
   dependencies:
     "@camertron/garnet-js": "link:../../"
-    "@garnet-js/encoding-euc-jp": ./
+    "@garnet-js/encoding-shift-jis": ./
     "@rollup/plugin-node-resolve": "npm:^14.0.1"
     "@rollup/plugin-typescript": "npm:^8.5.0"
     "@types/jest": "npm:^29.5.8"

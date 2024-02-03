@@ -1,4 +1,5 @@
-import { Class, NumericClass, RValue, Runtime, String, Float } from "../runtime";
+import { Class, NumericClass, RValue, Runtime, Float } from "../runtime";
+import { String } from "../runtime/string";
 
 let inited = false;
 

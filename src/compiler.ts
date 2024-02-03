@@ -87,7 +87,7 @@ import {
 } from "@ruby/prism/src/nodes";
 import { Visitor } from "@ruby/prism/src/visitor";
 import { Lookup } from "./local_table";
-import { ObjectClass, Qnil, Qtrue, String } from "./runtime";
+import { ObjectClass, Qnil, Qtrue } from "./runtime";
 import { DefineClassFlags } from "./insns/defineclass";
 import { SpecialObjectType } from "./insns/putspecialobject";
 import { ExpandArrayFlag } from "./insns/expandarray";
@@ -96,6 +96,7 @@ import { DefinedType } from "./insns/defined";
 import { GetSpecialType } from "./insns/getspecial";
 import { SyntaxError } from "./errors";
 import { ThrowType } from "./insns/throw";
+import { String } from "./runtime/string";
 
 export type ParseLocal = {
     name: string

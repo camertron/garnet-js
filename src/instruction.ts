@@ -1,6 +1,7 @@
 import { ExecutionContext, ExecutionResult } from "./execution_context";
-import { Float, Qfalse, Qnil, Qtrue, Runtime, RValue, String } from "./runtime";
+import { Float, Qfalse, Qnil, Qtrue, Runtime, RValue } from "./runtime";
 import { Integer } from "./runtime/integer";
+import { String } from "./runtime/string";
 
 export type ValueType = {
     value: any,

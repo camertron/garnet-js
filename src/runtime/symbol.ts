@@ -1,9 +1,10 @@
 import { ExecutionContext } from "../execution_context";
-import { Class, Qfalse, Qtrue, RValue, Runtime, String, SymbolClass } from "../runtime";
+import { Class, Qfalse, Qtrue, RValue, Runtime, SymbolClass } from "../runtime";
 import { hash_string } from "../util/string_utils";
 import { Integer } from "./integer";
 import { Object } from "./object";
 import { Proc } from "./proc";
+import { String } from "../runtime/string";
 
 export class Symbol {
     private static to_proc_table: Map<string, RValue> = new Map();

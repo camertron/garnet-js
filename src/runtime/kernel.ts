@@ -1,10 +1,11 @@
 import { isNode } from "../env";
 import { ArgumentError, NotImplementedError, RubyError, RuntimeError, SystemExit, TypeError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Array, Module, Qfalse, Qnil, Qtrue, RValue, StringClass, String, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, ArrayClass, InterpretedCallable, Callable, HashClass, SymbolClass, FloatClass } from "../runtime";
+import { Array, Module, Qfalse, Qnil, Qtrue, RValue, StringClass, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, ArrayClass, InterpretedCallable, Callable, HashClass, SymbolClass, FloatClass } from "../runtime";
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
+import { String } from "../runtime/string";
 
 export class Kernel {
     public static exit_handlers: RValue[] = [];

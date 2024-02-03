@@ -1,22 +1,22 @@
-import * as YARV from "@camertron/yarv-js/src/yarv";
+import * as Garnet from "@camertron/garnet-js/src/garnet";
 import {Terminal} from "xterm";
 import {LocalEchoAddon} from "@gytx/xterm-local-echo";
 
 declare global {
   interface Window {
-    yarv_wasm_modules: {[key: string]: string};
+    garnet_wasm_modules: {[key: string]: string};
   }
 }
 
-YARV.WASM.register_module_resolver((locator: string): string => {
-  return window.yarv_wasm_modules[`${locator}.wasm`];
+Garnet.WASM.register_module_resolver((locator: string): string => {
+  return window.garnet_wasm_modules[`${locator}.wasm`];
 });
 
-await YARV.init();
+await Garnet.init();
 
-class IRBIO implements YARV.IO {
-  static new(local_echo: LocalEchoAddon): YARV.RValue {
-    return new YARV.RValue(YARV.IOClass, new IRBIO(local_echo));
+class IRBIO implements Garnet.IO {
+  static new(local_echo: LocalEchoAddon): Garnet.RValue {
+    return new Garnet.RValue(Garnet.IOClass, new IRBIO(local_echo));
   }
 
   private local_echo: LocalEchoAddon;
@@ -34,8 +34,8 @@ class IRBIO implements YARV.IO {
   }
 }
 
-const ec = YARV.ExecutionContext.current;
-const terminal = new Terminal({cursorBlink: true, fontSize: 18,   theme: {background: '#222222'}});
+const ec = Garnet.ExecutionContext.current;
+const terminal = new Terminal({cursorBlink: true, fontSize: 18, theme: {background: '#222222'}});
 terminal.open(document.querySelector(".Console")!);
 const local_echo = new LocalEchoAddon();
 terminal.loadAddon(local_echo);
@@ -50,11 +50,11 @@ const readLine = async () => {
 
   if (input.trim().length > 0) {
     try {
-      const result = await YARV.evaluate(input);
-      local_echo.println(`=> ${YARV.Object.send(result, "inspect").get_data<string>()}`)
+      const result = await Garnet.evaluate(input);
+      local_echo.println(`=> ${Garnet.Object.send(result, "inspect").get_data<string>()}`)
     } catch (e) {
-      if (e instanceof YARV.RubyError) {
-        local_echo.println(YARV.ExecutionContext.print_backtrace_to_string(e));
+      if (e instanceof Garnet.RubyError) {
+        local_echo.println(Garnet.ExecutionContext.print_backtrace_to_string(e));
       } else if (e instanceof Error) {
         local_echo.println(`Unhandled JavaScript error: ${e.message}`);
         if (e.stack) local_echo.println(e.stack);

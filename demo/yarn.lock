@@ -5,9 +5,9 @@ __metadata:
   version: 8
   cacheKey: 10c0
 
-"@camertron/yarv-js@link:../::locator=app%40workspace%3A.":
+"@camertron/garnet-js@link:../::locator=app%40workspace%3A.":
   version: 0.0.0-use.local
-  resolution: "@camertron/yarv-js@link:../::locator=app%40workspace%3A."
+  resolution: "@camertron/garnet-js@link:../::locator=app%40workspace%3A."
   languageName: node
   linkType: soft
 
@@ -667,7 +667,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "app@workspace:."
   dependencies:
-    "@camertron/yarv-js": "link:../"
+    "@camertron/garnet-js": "link:../"
     "@gytx/xterm-local-echo": "npm:^0.1.8"
     "@hotwired/stimulus": "npm:^3.2.2"
     "@hotwired/turbo-rails": "npm:^8.0.0-beta.2"

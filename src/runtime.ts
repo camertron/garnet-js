@@ -32,9 +32,9 @@ import { init as signalInit } from "./runtime/signal";
 import { init as timeInit } from "./stdlib/time";
 import { init as threadInit } from './stdlib/thread';
 import { init as regexpInit} from "./runtime/regexp";
-import { Encoding, init as encodingInit } from "./runtime/encoding";
+import { init as encodingInit } from "./runtime/encoding";
 import { obj_id_hash } from "./util/object_id";
-
+import { String } from "./runtime/string";
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
@@ -154,6 +154,10 @@ export class Runtime {
     // Return false from cb() to exit early. Returning false from cb() will cause
     // each_ancestor to return false as well; otherwise it will return true.
     private static each_ancestor(mod: RValue, seen: Set<RValue>, cb: (ancestor: RValue) => boolean): boolean {
+        if (!mod) {
+            debugger;
+        }
+
         if (seen.has(mod)) return true;
 
         seen.add(mod);
@@ -211,18 +215,18 @@ export class Runtime {
         }
     }
 
-    static coerce_to_string(obj: RValue): string {
+    static coerce_to_string(obj: RValue): RValue {
         switch (obj.klass) {
             case StringClass:
             case SymbolClass:
-                return obj.get_data<string>();
+                return obj;
             default:
                 if (Object.respond_to(obj, "to_str")) {
                     const str = Object.send(obj, "to_str");
 
                     // make sure classes that inherit from String also work here
                     if (Kernel.is_a(str, StringClass)) {
-                        return str.get_data<string>();
+                        return str;
                     } else {
                         const obj_class_name = obj.klass.get_data<Class>().name;
                         const to_str_class_name = str.klass.get_data<Class>().name;
@@ -552,6 +556,7 @@ export class RValue {
     public frozen: boolean;
 
     private singleton_class: RValue | undefined;
+    private context_?: {[key: string | number]: any};
 
     constructor(klass: RValue, data?: any) {
         this.klass = klass;
@@ -617,6 +622,18 @@ export class RValue {
 
     has_singleton_class(): boolean {
         return this.singleton_class !== undefined;
+    }
+
+    get_context<T extends {[key: string | number]: any}>(): T {
+        if (!this.context_) {
+            this.context_ = {};
+        }
+
+        return this.context_ as T;
+    }
+
+    has_context(): boolean {
+        return !!this.context_;
     }
 }
 
@@ -829,24 +846,6 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
     });
 });
 
-export class String {
-    static new(str: string): RValue {
-        return new RValue(StringClass, str);
-    }
-
-    static get_encoding(str: RValue): Encoding {
-        return this.get_encoding_rval(str).get_data<Encoding>();
-    }
-
-    static get_encoding_rval(str: RValue): RValue {
-        return str.iv_exists("@__encoding") ? str.iv_get("@__encoding") : Encoding.default;
-    }
-
-    static set_encoding(str: RValue, encoding: RValue): void {
-        str.iv_set("@__encoding", encoding);
-    }
-}
-
 (ClassClass.get_data<Class>()).tap( (klass: Class) => {
     // Apparently `allocate' and `new' are... instance methods? Go figure.
     klass.define_native_method("allocate", (self: RValue): RValue => {
@@ -930,7 +929,7 @@ export class String {
     });
 
     klass.define_native_method("__send__", (self: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData): RValue => {
-        const method_name = Runtime.coerce_to_string(args[0]);
+        const method_name = Runtime.coerce_to_string(args[0]).get_data<string>();
         let send_call_data;
 
         if (call_data) {
@@ -951,7 +950,7 @@ export class String {
 });
 
 Runtime.constants["RUBY_VERSION"] = String.new("3.2.2");
-Runtime.constants["RUBY_ENGINE"] = String.new("YARV-JS");
+Runtime.constants["RUBY_ENGINE"] = String.new("Garnet.js");
 
 export class Float {
     static new(value: number): RValue {
@@ -1140,7 +1139,7 @@ export const init = async () => {
     })();
 
     Runtime.constants["RUBY_DESCRIPTION"] = String.new(
-        `YARV-JS ${Runtime.constants["RUBY_VERSION"].get_data<string>()} [${Runtime.constants["RUBY_PLATFORM"].get_data<string>()}]`
+        `Garnet.js ${Runtime.constants["RUBY_VERSION"].get_data<string>()} [${Runtime.constants["RUBY_PLATFORM"].get_data<string>()}]`
     );
 }
 

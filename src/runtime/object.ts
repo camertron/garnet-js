@@ -1,9 +1,9 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
-import { ArgumentError, FrozenError, NoMethodError } from "../errors";
+import { FrozenError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Callable, Class, ClassClass, KernelModule, ModuleClass, ObjectClass, RValue, Runtime, StringClass, String, SymbolClass, Qtrue, Qfalse, ProcClass, Qnil, Module } from "../runtime";
-import { NativeProc } from "./proc";
+import { Callable, Class, ClassClass, KernelModule, ModuleClass, ObjectClass, RValue, Runtime, StringClass, SymbolClass, Qtrue, Qfalse, ProcClass, Qnil, Module } from "../runtime";
 import { Symbol } from "./symbol";
+import { String } from "../runtime/string";
 
 export class Object {
     static send(receiver: RValue, call_data_: MethodCallData | string, args: RValue[] = [], block?: RValue): RValue {

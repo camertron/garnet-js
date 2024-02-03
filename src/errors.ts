@@ -1,4 +1,5 @@
-import { Array, ArrayClass, Class, Module, ObjectClass, Qnil, Qtrue, RValue, Runtime, String } from "./runtime";
+import { Array, ArrayClass, Class, Module, ObjectClass, Qnil, Qtrue, RValue, Runtime } from "./runtime";
+import { String } from "./runtime/string";
 
 export const init = () => {
     const ExceptionClass = Runtime.define_class("Exception", ObjectClass, (klass: Class) => {
@@ -45,6 +46,7 @@ export const init = () => {
     const RuntimeErrorClass = Runtime.define_class("RuntimeError", StandardErrorClass);
     const IndexErrorClass = Runtime.define_class("IndexError", StandardErrorClass);
     const RangeErrorClass = Runtime.define_class("RangeError", StandardErrorClass);
+    const EncodingErrorClass = Runtime.define_class("EncodingError", StandardErrorClass);
     const KeyErrorClass = Runtime.define_class("KeyError", IndexErrorClass);
     const FrozenErrorClass = Runtime.define_class("FrozenError", RuntimeErrorClass);
     const NoMethodErrorClass = Runtime.define_class("NoMethodError", NameErrorClass);
@@ -97,7 +99,7 @@ export class StandardError extends RubyError {
 
     constructor(message: string) {
         super(message);
-        this.name = "NotImplementedError";
+        this.name = "StandardError";
     }
 
     get ruby_class(): RValue {
@@ -301,5 +303,31 @@ export class SystemExit extends RubyError {
 
     get ruby_class() {
         return SystemExit.ruby_class ||= Runtime.constants["SystemExit"];
+    }
+}
+
+export class EncodingCompatibilityError extends RubyError {
+    private static ruby_class: RValue | null;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "Encoding::CompatibilityError";
+    }
+
+    get ruby_class(): RValue {
+        return EncodingCompatibilityError.ruby_class ||= Runtime.constants["Encoding"].get_data<Module>().constants["CompatibilityError"];
+    }
+}
+
+export class EncodingConverterNotFoundError extends RubyError {
+    private static ruby_class: RValue | null;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "Encoding::ConverterNotFoundError";
+    }
+
+    get ruby_class(): RValue {
+        return EncodingConverterNotFoundError.ruby_class ||= Runtime.constants["Encoding"].get_data<Module>().constants["ConverterNotFoundError"];
     }
 }

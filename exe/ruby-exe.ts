@@ -1,11 +1,11 @@
 import { argv } from "process";
-import * as YARV from "../src/yarv";
-import { ExecutionContext, Runtime, vmfs, Array, String } from "../src/yarv";
+import * as Garnet from "../src/garnet";
+import { ExecutionContext, Runtime, vmfs, Array, String } from "../src/garnet";
 import path from "path";
 import fs from "fs";
 import { Dir } from "../src/runtime/dir";
 
-await YARV.init();
+await Garnet.init();
 
 let code: string | null = null;
 let code_path: string = "<code>";
@@ -69,5 +69,5 @@ if (!code) {
     process.exit(0);
 }
 
-await YARV.evaluate(code, code_path);
-await YARV.deinit();
+await Garnet.evaluate(code, code_path);
+await Garnet.deinit();

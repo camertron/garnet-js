@@ -2,10 +2,11 @@ import { MethodCallData } from "../call_data";
 import { Compiler } from "../compiler";
 import { ArgumentError, NameError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Array, String, Module, ModuleClass, RValue, Runtime, SymbolClass, Visibility, Qnil, StringClass, Class, Qtrue, Qfalse, NativeCallable, ClassClass } from "../runtime";
+import { Array, Module, ModuleClass, RValue, Runtime, SymbolClass, Visibility, Qnil, StringClass, Class, Qtrue, Qfalse, NativeCallable, ClassClass } from "../runtime";
 import { Kernel } from "./kernel";
 import { Object } from "./object";
 import { Proc } from "./proc";
+import { String } from "../runtime/string";
 
 let inited = false;
 
@@ -183,12 +184,12 @@ export const init = () => {
     });
 
     mod.define_native_method("remove_method", (self: RValue, args: RValue[]): RValue => {
-        self.get_data<Module>().remove_method(Runtime.coerce_to_string(args[0]));
+        self.get_data<Module>().remove_method(Runtime.coerce_to_string(args[0]).get_data<string>());
         return self;
     });
 
     mod.define_native_method("undef_method", (self: RValue, args: RValue[]): RValue => {
-        self.get_data<Module>().undef_method(Runtime.coerce_to_string(args[0]));
+        self.get_data<Module>().undef_method(Runtime.coerce_to_string(args[0]).get_data<string>());
         return self;
     });
 

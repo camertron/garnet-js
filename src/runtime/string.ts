@@ -1,5 +1,5 @@
-import { ArgumentError, IndexError, NotImplementedError, RangeError } from "../errors";
-import { Array as RubyArray, Class, Qnil, RValue, StringClass, String as RubyString, IntegerClass, Runtime, Float, Qtrue, Qfalse, RegexpClass, NumericClass } from "../runtime";
+import { ArgumentError, EncodingConverterNotFoundError, IndexError, NotImplementedError, RangeError } from "../errors";
+import { Array as RubyArray, Class, Qnil, RValue, StringClass, IntegerClass, Runtime, Float, Qtrue, Qfalse, RegexpClass, NumericClass } from "../runtime";
 import { hash_string } from "../util/string_utils";
 import { Integer } from "./integer";
 import { Regexp } from "./regexp";
@@ -7,7 +7,115 @@ import { Range } from "./range";
 import { Object } from "./object";
 import { ExecutionContext } from "../execution_context";
 import { Encoding } from "./encoding";
-import { Kernel } from "./kernel";
+import { String as RubyString } from "../runtime/string";
+
+// 7-bit strings are implicitly valid.
+// If both the valid _and_ 7bit bits are set, the string is broken.e
+export const CR_7BIT = 16;
+export const CR_VALID = 32;
+export const CR_UNKNOWN = 0;
+export const CR_BROKEN = CR_7BIT | CR_VALID;
+export const CR_MASK = CR_7BIT | CR_VALID;
+
+type StringContext = {
+    encoding_rval?: RValue;
+    flags?: number;
+}
+
+export class String {
+    static new(str: string): RValue {
+        return new RValue(StringClass, str);
+    }
+
+    static get_encoding(str: RValue): Encoding {
+        return this.get_encoding_rval(str).get_data<Encoding>();
+    }
+
+    static get_encoding_rval(str: RValue): RValue {
+        const context = this.get_context(str);
+
+        if (!context.encoding_rval) {
+            context.encoding_rval = Encoding.default;
+        }
+
+        return context.encoding_rval;
+    }
+
+    static set_encoding(str: RValue, encoding: RValue): void {
+        this.get_context(str).encoding_rval = encoding;
+    }
+
+    static get_code_range(str: RValue): number {
+        const context = this.get_context(str);
+
+        if (!context.flags) {
+            context.flags = CR_UNKNOWN;
+        }
+
+        return context.flags & CR_MASK;
+    }
+
+    static set_code_range(str: RValue, code_range: number) {
+        const context = this.get_context(str);
+        this.clear_code_range(str);
+        this.set_flags(str, this.get_flags(str) | (code_range & CR_MASK));
+    }
+
+    static clear_code_range(str: RValue) {
+        this.set_flags(str, this.get_flags(str) & ~CR_MASK);
+    }
+
+    static get_context(str: RValue): StringContext {
+        return str.get_context<StringContext>();
+    }
+
+    static scan_for_code_range(str: RValue): number {
+        const cr = this.get_code_range(str);
+
+        if (cr == CR_UNKNOWN) {
+            const new_cr = this.code_range_scan(str, 0, str.get_data<string>().length);
+            this.set_code_range(str, cr);
+        }
+
+        return cr;
+    }
+
+    static ascii_only(str: RValue): boolean {
+        const encoding = this.get_encoding(str);
+        const code_range = this.get_code_range(str);
+        return encoding.ascii_compatible && code_range == CR_7BIT;
+    }
+
+    private static code_range_scan(str: RValue, p: number, len: number): number {
+        return this.search_non_ascii(str, p, p + len) != -1 ? CR_VALID : CR_7BIT;
+    }
+
+    private static search_non_ascii(str: RValue, p: number, end: number): number {
+        const data = str.get_data<string>();
+
+        while (p < end) {
+            if (!Encoding.is_ascii(data.codePointAt(p)!)) return p;
+            p ++;
+        }
+
+        return -1;
+    }
+
+    private static get_flags(str: RValue): number {
+        const context = this.get_context(str);
+
+        if (!context.flags) {
+            context.flags = CR_UNKNOWN;
+        }
+
+        return context.flags;
+    }
+
+    private static set_flags(str: RValue, flags: number) {
+        const context = str.get_context<StringContext>();
+        context.flags = flags;
+    }
+}
 
 let inited = false;
 
@@ -477,7 +585,7 @@ export const init = () => {
 
             str.data = str.get_data<string>() + encoding.codepoint_to_utf16(num);
         } else {
-            str.data = str.get_data<string>() + Runtime.coerce_to_string(val);
+            Encoding.enc_cr_str_buf_cat(str, Runtime.coerce_to_string(val));
         }
     }
 
@@ -551,22 +659,46 @@ export const init = () => {
     });
 
     klass.define_native_method("encode!", (self: RValue, args: RValue[]): RValue => {
-        if (!Kernel.is_a(args[0], Runtime.constants["Encoding"])) {
-            throw new ArgumentError("String#encode! must be passed an Encoding instance for the time being");
+        const encoding_arg = Encoding.coerce(args[0]);
+
+        if (encoding_arg) {
+            const target_encoding = Encoding.supported_conversion(self, encoding_arg);
+
+            if (target_encoding) {
+                RubyString.set_encoding(self, target_encoding);
+                return self;
+            }
         }
 
-        RubyString.set_encoding(self, args[0]);
-        return self;
+        const self_encoding = RubyString.get_encoding_rval(self);
+
+        throw new EncodingConverterNotFoundError(
+            `code converter not found (${self_encoding.get_data<Encoding>().name} to ${args[0].get_data<string>()})`
+        );
     });
 
     klass.define_native_method("encode", (self: RValue, args: RValue[]): RValue => {
-        if (!Kernel.is_a(args[0], Runtime.constants["Encoding"])) {
-            throw new ArgumentError("String#encode must be passed an Encoding instance for the time being");
+        // if (ExecutionContext.current.globals["$cameron"] === Qtrue) {
+        //     debugger;
+        // }
+
+        const encoding_arg = Encoding.coerce(args[0]);
+
+        if (encoding_arg) {
+            const target_encoding = Encoding.supported_conversion(self, encoding_arg);
+
+            if (target_encoding) {
+                const new_str = RubyString.new(self.get_data<string>());
+                RubyString.set_encoding(new_str, target_encoding);
+                return new_str;
+            }
         }
 
-        const new_str = RubyString.new(self.get_data<string>());
-        RubyString.set_encoding(new_str, args[0]);
-        return new_str;
+        const self_encoding = RubyString.get_encoding_rval(self);
+
+        throw new EncodingConverterNotFoundError(
+            `code converter not found (${self_encoding.get_data<Encoding>().name} to ${args[0].get_data<string>()})`
+        );
     });
 
     inited = true;

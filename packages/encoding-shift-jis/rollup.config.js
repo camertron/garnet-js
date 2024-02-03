@@ -14,20 +14,13 @@ if (process.env.RELEASE != null) {
 
 export default [
   {
-    input: "src/garnet.ts",
+    input: "src/encoding-shift-jis.ts",
     output: {
       file: pkg.module,
       format: "es",
       sourcemap: true
     },
     inlineDynamicImports: true,
-    plugins: plugins,
-    onwarn: (warning, warn) => {
-      if (warning.code === "CIRCULAR_DEPENDENCY") {
-        return;
-      }
-
-      warn(warning);
-    }
+    plugins: plugins
   }
 ]

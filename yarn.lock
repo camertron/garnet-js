@@ -415,22 +415,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@camertron/yarv-js@file:./::locator=%40camertron%2Fyarv-js%40workspace%3A.":
+"@camertron/garnet-js@file:./::locator=%40camertron%2Fgarnet-js%40workspace%3A.":
   version: 0.1.0
-  resolution: "@camertron/yarv-js@file:./#./::hash=126265&locator=%40camertron%2Fyarv-js%40workspace%3A."
+  resolution: "@camertron/garnet-js@file:./#./::hash=8ade4c&locator=%40camertron%2Fgarnet-js%40workspace%3A."
   dependencies:
     "@bjorn3/browser_wasi_shim": "npm:^0.2.17"
-  checksum: f4400dfdb22881d3150bda529e17ae4d14a52d46054c0ea173bba08b59307a0557a4ad572e302342e902e66a274569d3da54590bc11a5aff9f10effce7bf6e9f
+  checksum: 42eafed8a085e474992c7b5871d796585a0d70125d2d39aff26dac5cb0c63e2749c60fe2da2a82a81c260a702957baa085d24111d817e99c41637a70b210186e
   languageName: node
   linkType: hard
 
-"@camertron/yarv-js@workspace:.":
+"@camertron/garnet-js@workspace:.":
   version: 0.0.0-use.local
-  resolution: "@camertron/yarv-js@workspace:."
+  resolution: "@camertron/garnet-js@workspace:."
   dependencies:
     "@bjorn3/browser_wasi_shim": "npm:^0.2.17"
-    "@camertron/yarv-js": ./
+    "@camertron/garnet-js": ./
     "@garnet-js/encoding-euc-jp": "link:./packages/encoding-euc-jp"
+    "@garnet-js/encoding-shift-jis": "link:./packages/encoding-shift-jis"
     "@rollup/plugin-node-resolve": "npm:^14.0.1"
     "@rollup/plugin-typescript": "npm:^8.5.0"
     "@ruby/prism": "file:./demo/prism.tgz"
@@ -619,9 +620,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@garnet-js/encoding-euc-jp@link:./packages/encoding-euc-jp::locator=%40camertron%2Fyarv-js%40workspace%3A.":
+"@garnet-js/encoding-euc-jp@link:./packages/encoding-euc-jp::locator=%40camertron%2Fgarnet-js%40workspace%3A.":
   version: 0.0.0-use.local
-  resolution: "@garnet-js/encoding-euc-jp@link:./packages/encoding-euc-jp::locator=%40camertron%2Fyarv-js%40workspace%3A."
+  resolution: "@garnet-js/encoding-euc-jp@link:./packages/encoding-euc-jp::locator=%40camertron%2Fgarnet-js%40workspace%3A."
+  languageName: node
+  linkType: soft
+
+"@garnet-js/encoding-shift-jis@link:./packages/encoding-shift-jis::locator=%40camertron%2Fgarnet-js%40workspace%3A.":
+  version: 0.0.0-use.local
+  resolution: "@garnet-js/encoding-shift-jis@link:./packages/encoding-shift-jis::locator=%40camertron%2Fgarnet-js%40workspace%3A."
   languageName: node
   linkType: soft
 
@@ -1026,9 +1033,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@ruby/prism@file:./demo/prism.tgz::locator=%40camertron%2Fyarv-js%40workspace%3A.":
+"@ruby/prism@file:./demo/prism.tgz::locator=%40camertron%2Fgarnet-js%40workspace%3A.":
   version: 0.19.0
-  resolution: "@ruby/prism@file:./demo/prism.tgz#./demo/prism.tgz::hash=fe4757&locator=%40camertron%2Fyarv-js%40workspace%3A."
+  resolution: "@ruby/prism@file:./demo/prism.tgz#./demo/prism.tgz::hash=fe4757&locator=%40camertron%2Fgarnet-js%40workspace%3A."
   checksum: 924eb30ec57ba7fce51b3d17808761e03dd52b831e5e1629b56c874a87d5f9ea5590cd0b769fdceca73eecddd9fafcdfb8c5530f6e35c17fc084f28df3413deb
   languageName: node
   linkType: hard

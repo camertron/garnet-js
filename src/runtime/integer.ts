@@ -1,7 +1,8 @@
 import { RangeError } from "../errors";
-import { Class, Float, FloatClass, IntegerClass, NumericClass, Qfalse, Qnil, Qtrue, RValue, Runtime, String } from "../runtime";
+import { Class, Float, FloatClass, IntegerClass, NumericClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { obj_id_hash } from "../util/object_id";
 import { Encoding } from "./encoding";
+import { String } from "../runtime/string";
 
 export class Integer {
     static INT2FIX0: RValue;

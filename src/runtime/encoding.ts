@@ -1,49 +1,246 @@
-import { Class, ObjectClass, RValue, Runtime, String as RubyString } from "../runtime";
+import { Class, ObjectClass, Qfalse, Qtrue, RValue, Runtime, StringClass } from "../runtime";
 import { isLittlEndian } from "../util/endianness";
+import { CR_7BIT, CR_UNKNOWN, CR_VALID, String as RubyString } from "../runtime/string";
+import { EncodingCompatibilityError } from "../errors";
+import { ExecutionContext } from "../execution_context";
 
 export abstract class Encoding {
-    private static us_ascii_: RValue;
-    private static utf_8_: RValue;
-    private static utf_16le_: RValue;
-    private static utf_16be_: RValue;
-    private static binary_: RValue;
+    private static default_: RValue;
 
     public name: string;
 
-    static get us_ascii(): RValue {
-        return this.us_ascii_ ||= Runtime.constants["Encoding"].get_data<Class>().constants["US_ASCII"];
+    static get encoding_class(): Class {
+        return this.encoding_class_rval.get_data<Class>();
     }
 
-    static get utf_8(): RValue {
-        return this.utf_8_ ||= Runtime.constants["Encoding"].get_data<Class>().constants["UTF_8"];
-    }
-
-    static get utf_16le(): RValue {
-        return this.utf_16le_ ||= Runtime.constants["Encoding"].get_data<Class>().constants["UTF_16LE"];
-    }
-
-    static get utf_16be(): RValue {
-        return this.utf_16be_ ||= Runtime.constants["Encoding"].get_data<Class>().constants["UTF_16BE"];
-    }
-
-    static get binary(): RValue {
-        return this.binary_ ||= Runtime.constants["Encoding"].get_data<Class>().constants["BINARY"];
+    static get encoding_class_rval(): RValue {
+        return Runtime.constants["Encoding"];
     }
 
     static get default(): RValue {
         if (isLittlEndian()) {
-            return this.utf_16le;
+            this.default_ = this.encoding_class.constants["UTF_16LE"];
         } else {
-            return this.utf_16be;
+            this.default_ = this.encoding_class.constants["UTF_16BE"];
         }
+
+        return this.default_;
+    }
+
+    static get us_ascii(): RValue {
+        return this.get("US_ASCII")!;
+    }
+
+    static get binary(): RValue {
+        return this.get("BINARY")!;
+    }
+
+    static get(name: string): RValue | undefined {
+        return encoding_map.get(name);
+    }
+
+    // accepts an Encoding instance or an encoded string and returns an Encoding
+    static extract(obj: RValue): RValue | undefined {
+        if (obj.klass === this.encoding_class_rval) {
+            return obj;
+        } else if (obj.klass === StringClass) {
+            return RubyString.get_encoding_rval(obj);
+        }
+    }
+
+    // accepts an Encoding instance or a string like "UTF-8" and returns an Encoding
+    static coerce(obj: RValue): RValue | undefined {
+        if (obj.klass === this.encoding_class_rval) {
+            return obj;
+        } else if (obj.klass === StringClass) {
+            return this.get(obj.get_data<string>());
+        } else {
+            return undefined;
+        }
+    }
+
+    static is_ascii(codepoint: number) {
+        return codepoint >= 0 && codepoint < 128;
+    }
+
+    static supported_conversion(obj1: RValue, obj2: RValue): RValue | null {
+        const compat_encoding = this.are_compatible(obj1, obj2);
+        if (compat_encoding) return compat_encoding;
+
+        const e1 = this.extract(obj1);
+        const e2 = this.extract(obj2);
+
+        if (!e1 || !e2) return null;
+
+        if (encoding_conversions.has(`${e1.get_data<Encoding>().name}:${e2.get_data<Encoding>().name}`)) {
+            return e2;
+        }
+
+        return null;
+    }
+
+    static are_compatible(obj1: RValue, obj2: RValue): RValue | null {
+        let enc1 = Encoding.extract(obj1);
+        let enc2 = Encoding.extract(obj2);
+
+        if (enc1 == null || enc2 == null) return null;
+        if (enc1 == enc2) return enc1;
+
+        if (obj2.klass === StringClass && (obj2.get_data<string>().length == 0)) return enc1;
+        if (obj1.klass === StringClass && (obj1.get_data<string>().length == 0)) {
+            return enc1.get_data<Encoding>().ascii_compatible && obj2.klass === StringClass && (RubyString.ascii_only(obj2)) ? enc1 : enc2;
+        }
+
+        if (!enc1.get_data<Encoding>().ascii_compatible || !enc2.get_data<Encoding>().ascii_compatible) return null;
+
+        if (obj2.klass !== StringClass && enc2 === Encoding.us_ascii) return enc1;
+        if (obj1.klass !== StringClass && enc1 === Encoding.us_ascii) return enc2;
+
+        if (obj1.klass !== StringClass) {
+            const obj_tmp = obj1; // swap1 obj1 & obj2
+            obj1 = obj2;
+            obj2 = obj_tmp;
+
+            const enc_tmp = enc1;  // swap their encodings
+            enc1 = enc2;
+            enc2 = enc_tmp;
+        }
+
+        if (obj1.klass === StringClass) {
+            const cr1 = RubyString.scan_for_code_range(obj1);
+
+            if (obj2.klass === StringClass) {
+                const cr2 = RubyString.scan_for_code_range(obj2);
+                return this.are_compatible_(enc1, cr1, enc2, cr2);
+            }
+
+            if (cr1 == CR_7BIT) return enc2;
+        }
+
+        return null;
+    }
+
+    private static are_compatible_(enc1: RValue, cr1: number, enc2: RValue, cr2: number): RValue | null {
+        if (cr1 != cr2) {
+            // may need to handle ENC_CODERANGE_BROKEN
+            if (cr1 == CR_7BIT) return enc2;
+            if (cr2 == CR_7BIT) return enc1;
+        }
+
+        if (cr2 == CR_7BIT) return enc1;
+        if (cr1 == CR_7BIT) return enc2;
+
+        return null;
+    }
+
+    static enc_asciicompat(enc: RValue): boolean {
+        return enc.get_data<Encoding>().min_length == 1;
+    }
+
+    static enc_cr_str_buf_cat(str: RValue, str2: RValue): number {
+        const str_enc = RubyString.get_encoding_rval(str);
+        const str2_enc = RubyString.get_encoding_rval(str2);
+        let str2_cr = RubyString.get_code_range(str2);
+        let res_enc: RValue;
+        let str_cr, res_cr;
+        let incompatible = false;
+
+        str_cr = str.get_data<string>().length > 0 ? RubyString.get_code_range(str) : CR_7BIT;
+
+        if (str_enc == str2_enc) {
+            if (str_cr === CR_UNKNOWN) {
+                str2_cr = CR_UNKNOWN;
+            } else if (str2_cr === CR_UNKNOWN) {
+                str2_cr = RubyString.scan_for_code_range(str2);
+            }
+        } else {
+            if (!this.enc_asciicompat(str_enc) || !this.enc_asciicompat(str2_enc)) {
+                if (str2.get_data<string>().length == 0) return str2_cr;
+                if (str.get_data<string>().length == 0) {
+                    str.data = str.get_data<string>() + str2.get_data<string>();
+                    RubyString.set_encoding(str, str2_enc);
+                    RubyString.set_code_range(str, str2_cr);
+                    return str2_cr;
+                }
+
+                incompatible = true;
+            }
+
+            if (!incompatible) {
+                if (str2_cr === CR_UNKNOWN) {
+                    str2_cr = RubyString.scan_for_code_range(str2);
+                }
+
+                if (str_cr == CR_UNKNOWN) {
+                    if (str_enc === Encoding.us_ascii || str2_cr !== CR_7BIT) {
+                        str_cr = RubyString.scan_for_code_range(str);
+                    }
+                }
+            }
+        }
+
+        if (incompatible ||
+                (str_enc !== str2_enc &&
+                str_cr != CR_7BIT &&
+                str2_cr != CR_7BIT)) {
+            throw new EncodingCompatibilityError(`incompatible encodings: ${str_enc.get_data<Encoding>().name} and ${str2_enc.get_data<Encoding>().name}`);
+        }
+
+        if (str_cr === CR_UNKNOWN) {
+            res_enc = str_enc;
+            res_cr = CR_UNKNOWN;
+        } else if (str_cr === CR_7BIT) {
+            if (str2_cr == CR_7BIT) {
+                res_enc = str_enc;
+                res_cr = CR_7BIT;
+            } else {
+                res_enc = str2_enc;
+                res_cr = str2_cr;
+            }
+        } else if (str_cr === CR_VALID) {
+            res_enc = str_enc;
+            if (str2_cr === CR_7BIT || str2_cr === CR_VALID) {
+                res_cr = str_cr;
+            } else {
+                res_cr = str2_cr;
+            }
+        } else { // str_cr must be BROKEN at this point
+            res_enc = str_enc;
+            res_cr = str_cr;
+            if (0 < str2.get_data<string>().length) res_cr = CR_UNKNOWN;
+        }
+
+        // MRI checks for len < 0 here, but I don't think that's possible for us
+
+        str.data = str.get_data<string>() + str2.get_data<string>();
+        RubyString.set_encoding(str, res_enc);
+        RubyString.set_code_range(str, res_cr);
+
+        return str2_cr;
     }
 
     abstract codepoint_valid(codepoint: number): boolean;
     abstract codepoint_to_utf16(codepoint: number): string;
+    abstract conversion_targets: string[];
+
+    public min_length: number;
+    public max_length: number;
+    public ascii_compatible: boolean;
+
+    constructor(min_length: number, max_length: number) {
+        this.min_length = min_length;
+        this.max_length = max_length;
+        this.ascii_compatible = this.min_length == 1;
+    }
 }
 
 export class USASCIIEncoding extends Encoding {
     public name: string = "US-ASCII";
+    public conversion_targets = ["BINARY", "US-ASCII", "UTF-8", "UTF-16LE", "UTF-16BE", "UTF-32"];
+
+    constructor() {
+        super(1, 1);
+    }
 
     codepoint_valid(codepoint: number): boolean {
         return codepoint >= 0x0 && codepoint < 0x100;
@@ -56,6 +253,11 @@ export class USASCIIEncoding extends Encoding {
 
 export class BinaryEncoding extends Encoding {
     public name: string = "BINARY";
+    public conversion_targets = ["US-ASCII"];
+
+    constructor() {
+        super(1, 1);
+    }
 
     codepoint_valid(codepoint: number): boolean {
         return codepoint >= 0x0 && codepoint < 0x100;
@@ -67,6 +269,8 @@ export class BinaryEncoding extends Encoding {
 }
 
 export abstract class UnicodeEncoding extends Encoding {
+    public conversion_targets = ["US-ASCII", "UTF-8", "UTF-16LE", "UTF-16BE", "UTF-32", "SHIFT-JIS", "EUC-JP"];
+
     codepoint_valid(codepoint: number): boolean {
         return codepoint >= 0 && codepoint < 0x110000
     }
@@ -78,14 +282,52 @@ export abstract class UnicodeEncoding extends Encoding {
 
 export class UTF8Encoding extends UnicodeEncoding {
     public name: string = "UTF-8";
+
+    constructor() {
+        super(1, 4);
+    }
 }
 
 export class UTF16LEEncoding extends UnicodeEncoding {
     public name: string = "UTF-16LE";
+
+    constructor() {
+        super(2, 2);
+    }
 }
 
 export class UTF16BEEncoding extends UnicodeEncoding {
     public name: string = "UTF-16BE";
+
+    constructor() {
+        super(2, 2);
+    }
+}
+
+export class UTF32Encoding extends UnicodeEncoding {
+    public name: string = "UTF-32";
+
+    constructor() {
+        super(4, 4);
+    }
+}
+
+const encoding_map: Map<string, RValue> = new Map();
+const encoding_conversions: Set<string> = new Set();
+
+export const register_encoding = (const_name: string, other_names: string[], encoding: Encoding) => {
+    const encoding_class = Runtime.constants["Encoding"];
+    const encoding_rval = new RValue(encoding_class, encoding);
+    encoding_class.get_data<Class>().constants[const_name] = encoding_rval;
+    encoding_map.set(const_name, encoding_rval);
+
+    for (const name of other_names) {
+        encoding_map.set(name, encoding_rval);
+    }
+
+    for (const target of encoding.conversion_targets) {
+        encoding_conversions.add(`${encoding.name}:${target}`);
+    }
 }
 
 let inited = false;
@@ -99,15 +341,22 @@ export const init = () => {
 
         klass.define_native_method("inspect", (self: RValue): RValue => {
             return RubyString.new(`#<Encoding:${self.get_data<Encoding>().name}>`);
-        })
+        });
+
+        klass.define_native_method("compatible?", (self: RValue, args: RValue[]): RValue => {
+            return Encoding.are_compatible(self, args[0]) ? Qtrue : Qfalse;
+        });
     });
 
-    const encoding = EncodingClass.get_data<Class>();
-    encoding.constants["US_ASCII"] = new RValue(EncodingClass, new USASCIIEncoding());
-    encoding.constants["BINARY"] = new RValue(EncodingClass, new BinaryEncoding());
-    encoding.constants["UTF_8"] = new RValue(EncodingClass, new UTF8Encoding());
-    encoding.constants["UTF_16LE"] = new RValue(EncodingClass, new UTF16LEEncoding());
-    encoding.constants["UTF_16BE"] = new RValue(EncodingClass, new UTF16BEEncoding());
+    register_encoding("US_ASCII", ["US-ASCII"], new USASCIIEncoding());
+    register_encoding("BINARY", [], new BinaryEncoding());
+    register_encoding("UTF_8", ["UTF-8"], new UTF8Encoding());
+    register_encoding("UTF_16LE", ["UTF-16LE"], new UTF16LEEncoding());
+    register_encoding("UTF_16BE", ["UTF-16BE"], new UTF16BEEncoding());
+    register_encoding("UTF_32", ["UTF-32"], new UTF32Encoding());
+
+    Runtime.define_class_under(EncodingClass, "CompatibilityError", Runtime.constants["EncodingError"]);
+    Runtime.define_class_under(EncodingClass, "ConverterNotFoundError", Runtime.constants["EncodingError"]);
 
     inited = true;
 };

@@ -1,9 +1,11 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
-import { ExecutionContext } from "../execution_context";
-import { Array, ArrayClass, Class, IntegerClass, Qfalse, Qnil, Qtrue, RValue, Runtime, String, StringClass } from "../runtime";
+import { BreakError, ExecutionContext } from "../execution_context";
+import { Array, ArrayClass, Class, IntegerClass, Qfalse, Qnil, Qtrue, RValue, Runtime, StringClass } from "../runtime";
 import { hash_combine } from "../util/hash_utils";
 import { Integer } from "./integer";
 import { Object } from "./object";
+import { String } from "../runtime/string";
+import { Range } from "./range";
 
 let inited = false;
 
@@ -26,10 +28,20 @@ export const init = () => {
 
     klass.define_native_method("each", (self: RValue, args: RValue[], block?: RValue): RValue => {
         if (block) {
-            const elements = self.get_data<Array>().elements;
+            try {
+                const elements = self.get_data<Array>().elements;
 
-            for (const element of elements) {
-                Object.send(block, "call", [element]);
+                for (const element of elements) {
+                    Object.send(block, "call", [element]);
+                }
+            } catch (e) {
+                if (e instanceof BreakError) {
+                    // return break value
+                    return e.value;
+                } else {
+                    // an error occurred
+                    throw e;
+                }
             }
         } else {
             // @TODO: return an Enumerator
@@ -38,13 +50,52 @@ export const init = () => {
         return self;
     });
 
+    klass.define_native_method("reject", (self: RValue, _args: RValue[], block?: RValue): RValue => {
+        const elements = self.get_data<Array>().elements;
+
+        if (block) {
+            try {
+                const results: RValue[] = [];
+
+                for (const element of elements) {
+                    if (!Object.send(block, "call", [element]).is_truthy()) {
+                        results.push(element);
+                    }
+                };
+
+                return Array.new(results);
+            } catch (e) {
+                if (e instanceof BreakError) {
+                    // reject returns nil if a break occurs in the block
+                    return Qnil;
+                } else {
+                    // an error occurred
+                    throw e;
+                }
+            }
+        } else {
+            // @TODO: return an Enumerator
+            return Qnil;
+        }
+    });
+
     klass.define_native_method("index", (self: RValue, args: RValue[], block?: RValue): RValue => {
         const elements = self.get_data<Array>().elements;
 
         if (block) {
-            for (let i = 0; i < elements.length; i ++) {
-                if (Object.send(block, "call", [elements[i]]).is_truthy()) {
-                    return Integer.get(i);
+            try {
+                for (let i = 0; i < elements.length; i ++) {
+                    if (Object.send(block, "call", [elements[i]]).is_truthy()) {
+                        return Integer.get(i);
+                    }
+                }
+            } catch (e) {
+                if (e instanceof BreakError) {
+                    // return break value
+                    return e.value;
+                } else {
+                    // an error occurred
+                    throw e;
                 }
             }
         } else {
@@ -90,14 +141,44 @@ export const init = () => {
 
     klass.define_native_method("[]", (self: RValue, args: RValue[], block?: RValue): RValue => {
         const elements = self.get_data<Array>().elements;
-        const index = args[0].get_data<number>();
 
-        if (args.length > 1) {
-            Runtime.assert_type(args[1], IntegerClass);
-            const length = args[1].get_data<number>();
-            return Array.new(elements.slice(index, index + length));
+        if (args[0].klass == Runtime.constants["Range"]) {
+            const range = args[0].get_data<Range>();
+
+            Runtime.assert_type(range.begin, IntegerClass);
+            Runtime.assert_type(range.end, IntegerClass);
+
+            let start_pos = range.begin.get_data<number>();
+
+            if (start_pos < 0) {
+                start_pos = elements.length + start_pos;
+            }
+
+            let end_pos = range.end.get_data<number>();
+
+            if (end_pos < 0) {
+                end_pos = elements.length + end_pos;
+            }
+
+            if (start_pos > end_pos) {
+                return Array.new([]);
+            }
+
+            if (range.exclude_end) {
+                return Array.new(elements.slice(start_pos, end_pos));
+            } else {
+                return Array.new(elements.slice(start_pos, end_pos + 1));
+            }
         } else {
-            return elements[index] || Qnil;
+            const index = args[0].get_data<number>();
+
+            if (args.length > 1) {
+                Runtime.assert_type(args[1], IntegerClass);
+                const length = args[1].get_data<number>();
+                return Array.new(elements.slice(index, index + length));
+            } else {
+                return elements[index] || Qnil;
+            }
         }
     });
 
