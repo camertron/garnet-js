@@ -1,12 +1,13 @@
 import { Class, NumericClass, RValue, Runtime, Float } from "../runtime";
 import { String } from "../runtime/string";
+import { Object } from "../runtime/object";
 
 let inited = false;
 
 export const init = () => {
     if (inited) return;
 
-    const klass = Runtime.constants["Float"].get_data<Class>();
+    const klass = Object.find_constant("Float")!.get_data<Class>();
 
     klass.define_native_method("inspect", (self: RValue): RValue => {
         return String.new(self.get_data<number>().toString());

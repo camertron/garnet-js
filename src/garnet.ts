@@ -1,4 +1,4 @@
-import { RValue, Runtime, init as initRuntime } from "./runtime";
+import { Class, ObjectClass, RValue, Runtime, init as initRuntime } from "./runtime";
 import { ExecutionContext } from "./execution_context";
 import { vmfs } from "./vmfs";
 import { Compiler, ParseLocal, ParseOptions } from "./compiler";
@@ -51,12 +51,12 @@ export async function deinit() {
     ExecutionContext.current = null;
 }
 
-export async function evaluate(code: string, path?: string, compiler_options?: CompilerOptions): Promise<RValue> {
+export async function evaluate(code: string, path?: string, line: number = 1, compiler_options?: CompilerOptions): Promise<RValue> {
     if (!ExecutionContext.current) {
         throw new Error("The Ruby VM has not been initialized. Please call Garnet.init().");
     }
 
-    const insns = Compiler.compile_string(code, path || "<code>", compiler_options);
+    const insns = Compiler.compile_string(code, path || "<code>", line, compiler_options);
 
     try {
         return ExecutionContext.current.run_top_frame(insns);
@@ -78,7 +78,7 @@ export async function evaluate(code: string, path?: string, compiler_options?: C
                 }
             }
 
-            if (Object.send(e, "is_a?", [Runtime.constants["Exception"]]).is_truthy()) {
+            if (Object.send(e, "is_a?", [Object.find_constant("Exception")!]).is_truthy()) {
                 console.log(Object.send(e, "full_message").get_data<string>());
             }
         }

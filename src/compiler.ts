@@ -3,11 +3,13 @@ import { MethodCallData, BlockCallData, CallDataFlag } from "./call_data";
 import { CatchBreak, InstructionSequence, Label, CatchTableStack, CatchNext } from "./instruction_sequence";
 import { CompilerOptions } from "./compiler_options";
 import {
+    AliasMethodNode,
     AndNode,
     ArgumentsNode,
     ArrayNode,
     AssocNode,
     AssocSplatNode,
+    BackReferenceReadNode,
     BeginNode,
     BlockArgumentNode,
     BlockNode,
@@ -18,6 +20,7 @@ import {
     CaseNode,
     ClassNode,
     ClassVariableReadNode,
+    ClassVariableWriteNode,
     ConstantPathNode,
     ConstantReadNode,
     ConstantWriteNode,
@@ -58,7 +61,9 @@ import {
     NextNode,
     NilNode,
     Node,
+    NumberedParametersNode,
     NumberedReferenceReadNode,
+    OptionalKeywordParameterNode,
     OptionalParameterNode,
     OrNode,
     ParametersNode,
@@ -66,6 +71,7 @@ import {
     ProgramNode,
     RangeNode,
     RegularExpressionNode,
+    RequiredKeywordParameterNode,
     RequiredParameterNode,
     RescueNode,
     RestParameterNode,
@@ -73,6 +79,7 @@ import {
     SelfNode,
     SingletonClassNode,
     SourceFileNode,
+    SourceLineNode,
     SplatNode,
     StatementsNode,
     StringNode,
@@ -121,11 +128,12 @@ export class Compiler extends Visitor {
     private local_depth: number;
     private local_catch_table_stack: CatchTableStack;
     private current_line: number;
+    private line_offset: number;  // offset to add to all line numbers, used by class_eval and friends
     private used_stack: boolean[];
 
     public static parse: (code: string) => ParseResult;
 
-    constructor(source: string, path: string, compiler_options?: CompilerOptions) {
+    constructor(source: string, path: string, line: number, compiler_options?: CompilerOptions) {
         super();
 
         this.source = source;
@@ -133,29 +141,33 @@ export class Compiler extends Visitor {
         this.compiler_options = compiler_options || new CompilerOptions();
         this.local_depth = 0;
         this.local_catch_table_stack = new CatchTableStack();
-        this.current_line = 0;
+        this.line_offset = line;
         this.used_stack = [];
     }
 
-    static compile(source: string, path: string, ast: any, compiler_options?: CompilerOptions): InstructionSequence {
-        const compiler = new Compiler(source, path, compiler_options);
+    static compile(source: string, path: string, ast: any, line_offset: number = 0, compiler_options?: CompilerOptions): InstructionSequence {
+        const compiler = new Compiler(source, path, line_offset, compiler_options);
 
         return compiler.with_used<InstructionSequence>(true, () => {
             return compiler.visitProgramNode(ast.value);
         })
     }
 
-    static compile_string(source: string, path: string, compiler_options?: CompilerOptions) {
+    static compile_string(source: string, path: string, line_offset: number = 0, compiler_options?: CompilerOptions) {
         const ast = Compiler.parse(source);
-        return this.compile(source, path, ast, compiler_options);
+        return this.compile(source, path, ast, line_offset, compiler_options);
     }
 
     visit(node: Node) {
         let line = this.start_line_for_loc(node.location)
 
         if (line && line != this.current_line) {
-            this.iseq.push(line);
+            this.iseq.push(line + this.line_offset);
             this.current_line = line;
+        }
+
+        if (Object.getOwnPropertyNames(Compiler.prototype).indexOf(`visit${node.constructor.name}`) === -1) {
+            throw new Error(`I don't know how to handle ${node.constructor.name} nodes yet, please help me!`);
         }
 
         super.visit(node);
@@ -283,11 +295,20 @@ export class Compiler extends Visitor {
                         break;
 
                     case "KeywordHashNode":
-                        flags |= CallDataFlag.KWARG;
+                        argc --;
+
                         (argument as KeywordHashNode).elements.forEach((element) => {
                             switch (element.constructor.name) {
                                 case "AssocNode":
-                                    kw_arg.push(((element as AssocNode).key as SymbolNode).unescaped);
+                                    flags |= CallDataFlag.KWARG;
+                                    const assoc_node = element as AssocNode;
+                                    kw_arg.push((assoc_node.key as SymbolNode).unescaped);
+                                    break;
+
+                                case "AssocSplatNode":
+                                    flags |= CallDataFlag.KW_SPLAT;
+                                    kw_arg.push("**");
+                                    break;
                             }
                         });
                         break;
@@ -337,9 +358,12 @@ export class Compiler extends Visitor {
             const begin_label = this.iseq.label();
             const end_label = this.iseq.label();
 
-            node.locals.forEach((local: string) => {
-                this.iseq.local_table.plain(local);
-            });
+            // contrary to the type signature, node.locals can be undefined
+            if (node.locals) {
+                node.locals.forEach((local: string) => {
+                    this.iseq.local_table.plain(local);
+                });
+            }
 
             if (node.parameters) {
                 this.with_used(true, () => this.visit(node.parameters!));
@@ -496,7 +520,7 @@ export class Compiler extends Visitor {
                 this.visit(element);
 
                 if (this.used) {
-                    const call_data = MethodCallData.create("core#hash_merge_kwd", 2)
+                    const call_data = MethodCallData.create("hash_merge_kwd", 2)
                     this.iseq.send(call_data, null);
                 }
             } else {
@@ -558,7 +582,7 @@ export class Compiler extends Visitor {
         }
     }
 
-    // (required, optional = nil, *rest, post)
+    // (required, optional = nil, *rest, post, keywords:, **keywordRest)
     override visitParametersNode(node: ParametersNode) {
         this.with_used(true, () => this.visitAll(node.requireds));
         this.iseq.argument_options.lead_num = node.requireds.length;
@@ -579,11 +603,43 @@ export class Compiler extends Visitor {
             this.iseq.argument_options.post_num = node.posts.length;
         }
 
+        if (node.keywords) {
+            this.iseq.argument_options.keyword = [];
+            this.iseq.argument_options.keyword_bits_index = this.iseq.local_table.keyword_bits();
+            this.with_used(true, () => this.visitAll(node.keywords));
+            this.iseq.argument_size += this.iseq.argument_options.keyword.length;
+        }
+
+        if (node.keywordRest) {
+            this.iseq.argument_options.keyword_rest_start = this.iseq.argument_size;
+        }
+
         if (node.block) {
             this.iseq.argument_options.block_start = this.iseq.argument_size;
             this.with_used(true, () => this.visit(node.block!));
             this.iseq.argument_size ++;
         }
+    }
+
+    override visitRequiredKeywordParameterNode(node: RequiredKeywordParameterNode) {
+        this.iseq.argument_options.keyword!.push([node.name, null]);
+        this.iseq.local_table.plain(node.name);
+    }
+
+    override visitOptionalKeywordParameterNode(node: OptionalKeywordParameterNode) {
+        this.iseq.argument_options.keyword!.push([node.name, Qnil]);
+        const keyword_index = this.iseq.argument_options.keyword!.length - 1;
+
+        const skip_label = this.iseq.label();
+        const keyword_bits_index = this.iseq.argument_options.keyword_bits_index!;
+        const local_index = this.iseq.local_table.plain(node.name);
+
+        this.iseq.checkkeyword(keyword_bits_index, keyword_index);
+        this.iseq.branchif(skip_label);
+        this.visit(node.value);
+        this.iseq.setlocal(local_index, 0);
+
+        this.iseq.push(skip_label);
     }
 
     override visitRequiredParameterNode(node: RequiredParameterNode) {
@@ -1163,28 +1219,34 @@ export class Compiler extends Visitor {
     }
 
     override visitKeywordHashNode(node: KeywordHashNode) {
-        if (node.elements.length > 0) {
-            if (node.elements[0].constructor.name === "AssocSplatNode") {
-                const splat_node = node.elements[0] as AssocSplatNode;
-                if (splat_node.value) {
-                    this.with_used(true, () => this.visit(splat_node.value!));
-                }
-            } else if (node.elements[0].constructor.name === "AssocNode") {
-                (node.elements as AssocNode[]).forEach((element) => {
-                    this.with_used(true, () => this.visit(element.key));
-
-                    if (element.value) {
-                        this.with_used(true, () => this.visit(element.value!));
-                    } else {
-                        // I _think_ we're supposed to find a local here with the same name as
-                        // the key, but not sure
-                        this.iseq.putnil();
-                    }
-                });
-
-                this.iseq.newhash(node.elements.length * 2);
-            }
+        // The CallData object maintains information about the kwargs
+        // a method was called with, meaning we don't have to visit the
+        // keys here, just the values. The send instruction will sort
+        // everything out.
+        for (const element of node.elements) {
+            const value = (element as AssocNode | AssocSplatNode).value;
+            if (value) this.visit(value);
         }
+
+        // if (node.elements.length > 0) {
+        //     for (const element of node.elements) {
+        //         if (element.constructor.name === "AssocSplatNode") {
+        //             const splat_node = element as AssocSplatNode;
+        //             if (splat_node.value) {
+        //                 this.with_used(true, () => this.visit(splat_node.value!));
+        //             }
+        //         } else if (element.constructor.name === "AssocNode") {
+        //             const assoc_node = element as AssocNode;
+        //             if (assoc_node.value) {
+        //                 // The CallData object maintains information about the kwargs
+        //                 // a method was called with, meaning we don't have to visit the
+        //                 // keys here, just the values. The send instruction will sort
+        //                 // everything out.
+        //                 this.with_used(true, () => this.visit(assoc_node.value!));
+        //             }
+        //         }
+        //     }
+        // }
     }
 
     override visitInstanceVariableOrWriteNode(node: InstanceVariableOrWriteNode) {
@@ -1507,6 +1569,12 @@ export class Compiler extends Visitor {
         }
     }
 
+    override visitSourceLineNode(_node: SourceLineNode) {
+        if (this.used) {
+            this.iseq.putobject({value: this.current_line, type: "Integer"});
+        }
+    }
+
     override visitIndexOperatorWriteNode(node: IndexOperatorWriteNode) {
         if (node.arguments_) {
             const argc = node.arguments_.arguments_.length;
@@ -1587,6 +1655,37 @@ export class Compiler extends Visitor {
             this.iseq.defined(DefinedType.YIELD, "", String.new("yield"));
         } else {
             this.iseq.putobject({type: "RValue", value: String.new("expression")});
+        }
+    }
+
+    override visitClassVariableWriteNode(node: ClassVariableWriteNode) {
+        this.with_used(true, () => this.visit(node.value));
+        if (this.used) this.iseq.dup();
+        this.iseq.setclassvariable(node.name);
+    }
+
+    override visitClassVariableReadNode(node: ClassVariableReadNode) {
+        if (this.used) {
+            this.iseq.getclassvariable(node.name);
+        }
+    }
+
+    override visitNumberedParametersNode(node: NumberedParametersNode) {
+        this.iseq.getlocal(node.maximum - 1, 0);
+    }
+
+    override visitAliasMethodNode(node: AliasMethodNode) {
+        this.iseq.putspecialobject(SpecialObjectType.VMCORE);
+        this.iseq.putspecialobject(SpecialObjectType.CBASE)
+        this.with_used(true, () => this.visit(node.newName));
+        this.with_used(true, () => this.visit(node.oldName));
+        this.iseq.send(MethodCallData.create("set_method_alias", 3), null);
+        if (!this.used) this.iseq.pop();
+    }
+
+    override visitBackReferenceReadNode(node: BackReferenceReadNode) {
+        if (this.used) {
+            this.iseq.getspecial(GetSpecialType.BACKREF, node.name.slice(1).charCodeAt(0) << 1 | 1);
         }
     }
 

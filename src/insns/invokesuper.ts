@@ -4,7 +4,7 @@ import { ExecutionContext, ExecutionResult } from "../execution_context";
 import { MethodFrame } from "../frame";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { Class } from "../runtime";
+import { Class, ClassClass, Module, ModuleClass } from "../runtime";
 import { Object } from "../runtime/object";
 import { Proc } from "../runtime/proc";
 
@@ -21,11 +21,11 @@ export default class InvokeSuper extends Instruction {
 
     call(context: ExecutionContext): ExecutionResult {
         const self = context.pop()!;
-        const superclass = self.klass.get_data<Class>().superclass;
-        const method_frame = (context.frame! as MethodFrame);
+        const method_frame = context.frame as MethodFrame;
+        const owner = (context.frame as MethodFrame).owner!;
 
-        if (superclass) {
-            const method = Object.find_method_under(superclass, method_frame.call_data.mid);
+        if (owner) {
+            const method = Object.find_method_under(owner, method_frame.call_data.mid, false);
             let block = undefined;
 
             if (this.block_iseq) {
@@ -44,7 +44,7 @@ export default class InvokeSuper extends Instruction {
                     call_data = this.call_data;
                 }
 
-                const result = method.call(context, self, method_frame.args, block, call_data);
+                const result = method.call(context, self, method_frame.args, method_frame.kwargs, block, call_data);
                 context.push(result);
                 return null;
             }

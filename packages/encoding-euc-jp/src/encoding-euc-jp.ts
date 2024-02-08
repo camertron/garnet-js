@@ -1,4 +1,4 @@
-import { Class, Encoding, RValue, Runtime, register_encoding } from "@camertron/garnet-js/src/garnet";
+import { Encoding, Runtime, register_encoding } from "@camertron/garnet-js/src/garnet";
 import { to_unicode } from "./unicode-map"
 
 let inited = false;

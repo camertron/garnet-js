@@ -55,6 +55,9 @@ import { LocalTable, Lookup } from "./local_table";
 import { CompilerOptions } from "./compiler_options";
 import { RValue } from "./runtime";
 import { String as RubyString } from "./runtime/string";
+import CheckKeyword from "./insns/checkkeyword";
+import SetClassVariable from "./insns/setclassvariable";
+import GetClassVariable from "./insns/getclassvariable";
 
 class Node {
     public instruction: Instruction;
@@ -342,6 +345,9 @@ type ArgumentOptions = {
     post_start: number | null,
     post_num: number | null,
     block_start: number | null;
+    keyword: [string, RValue | null][] | null;
+    keyword_bits_index: number | null;
+    keyword_rest_start: number | null;
 }
 
 export class InstructionSequence {
@@ -378,7 +384,10 @@ export class InstructionSequence {
             rest_start: null,
             post_start: null,
             post_num: null,
-            block_start: null
+            block_start: null,
+            keyword: null,
+            keyword_bits_index: null,
+            keyword_rest_start: null
         };
 
         this.local_table = new LocalTable();
@@ -480,6 +489,14 @@ export class InstructionSequence {
         this.push(new GetInstanceVariable(name, 0))
     }
 
+    setclassvariable(name: string) {
+        this.push(new SetClassVariable(name));
+    }
+
+    getclassvariable(name: string) {
+        this.push(new GetClassVariable(name));
+    }
+
     getspecial(type: GetSpecialType, number: number) {
         this.push(new GetSpecial(type, number));
     }
@@ -502,6 +519,10 @@ export class InstructionSequence {
 
     branchunless(label: Label) {
         this.push(new BranchUnless(label));
+    }
+
+    checkkeyword(keyword_bits_index: number, keyword_index: number) {
+        this.push(new CheckKeyword(keyword_bits_index, keyword_index));
     }
 
     dup() {

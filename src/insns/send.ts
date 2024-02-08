@@ -2,7 +2,8 @@ import { MethodCallData, CallDataFlag } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { ArrayClass, ProcClass, Qfalse, Qnil, Qtrue } from "../runtime";
+import { ArrayClass, Kwargs, ProcClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
+import { Hash } from "../runtime/hash";
 import { Object } from "../runtime/object"
 import { Proc } from "../runtime/proc";
 
@@ -25,10 +26,31 @@ export default class Send extends Instruction {
             block = context.pop();
         }
 
-        const argc = this.call_data.argc + 1;
-        const [receiver, ...args] = context.popn(argc);
+        let kwargs: Kwargs | undefined = undefined;
+        const has_kw_splat = this.call_data.has_flag(CallDataFlag.KW_SPLAT);
 
-        const result = Object.send(receiver, this.call_data, args, block);
+        if (this.call_data.has_flag(CallDataFlag.KWARG) || has_kw_splat) {
+            kwargs = new Map();
+
+            const keyword_values = context.popn(this.call_data.kw_arg!.length);
+
+            for (let i = 0; i < this.call_data.kw_arg!.length; i ++) {
+                const keyword = this.call_data.kw_arg![i];
+
+                if (keyword === "**" && has_kw_splat) {
+                    const splatted_hash = keyword_values[i].get_data<Hash>();
+                    splatted_hash.each((k: RValue, v: RValue) => {
+                        kwargs!.set(k.get_data<string>(), v);
+                    });
+                } else {
+                    kwargs.set(keyword, keyword_values[i]);
+                }
+            }
+        }
+
+        const args = context.popn(this.call_data.argc);
+        const receiver = context.pop()!;
+        const result = Object.send(receiver, this.call_data, args, kwargs, block);
         context.push(result);
         return null;
     }

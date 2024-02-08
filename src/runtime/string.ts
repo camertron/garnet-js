@@ -2,12 +2,13 @@ import { ArgumentError, EncodingConverterNotFoundError, IndexError, NotImplement
 import { Array as RubyArray, Class, Qnil, RValue, StringClass, IntegerClass, Runtime, Float, Qtrue, Qfalse, RegexpClass, NumericClass } from "../runtime";
 import { hash_string } from "../util/string_utils";
 import { Integer } from "./integer";
-import { Regexp } from "./regexp";
+import { MatchData, Regexp } from "./regexp";
 import { Range } from "./range";
 import { Object } from "./object";
 import { ExecutionContext } from "../execution_context";
 import { Encoding } from "./encoding";
 import { String as RubyString } from "../runtime/string";
+import { CharSelector } from "./char-selector";
 
 // 7-bit strings are implicitly valid.
 // If both the valid _and_ 7bit bits are set, the string is broken.e
@@ -80,6 +81,15 @@ export class String {
         return cr;
     }
 
+    static inspect(str: string) {
+        const escaped_str = str
+            .replace(/\"/g, "\\\"")
+            .replace(/\r/g, "\\r")
+            .replace(/\n/g, "\\n");
+
+        return `"${escaped_str}"`;
+    }
+
     static ascii_only(str: RValue): boolean {
         const encoding = this.get_encoding(str);
         const code_range = this.get_code_range(str);
@@ -122,7 +132,7 @@ let inited = false;
 export const init = () => {
     if (inited) return;
 
-    const klass = Runtime.constants["String"].get_data<Class>();
+    const klass = Object.find_constant("String")!.get_data<Class>();
 
     klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
         const str = args[0];
@@ -133,6 +143,11 @@ export const init = () => {
         }
 
         return Qnil;
+    });
+
+    klass.define_native_method("+@", (self: RValue): RValue => {
+        // return unfrozen string
+        return String.new(self.get_data<string>());
     });
 
     klass.define_native_method("hash", (self: RValue): RValue => {
@@ -147,11 +162,7 @@ export const init = () => {
 
     klass.define_native_method("inspect", (self: RValue): RValue => {
         const str = self.get_data<string>();
-        const escaped_str = str
-            .replace(/\"/g, "\\\"")
-            .replace(/\r/g, "\\r")
-            .replace(/\n/g, "\\n");
-        return RubyString.new(`"${escaped_str}"`);
+        return RubyString.new(String.inspect(str));
     });
 
     klass.define_native_method("*", (self: RValue, args: RValue[]): RValue => {
@@ -174,16 +185,17 @@ export const init = () => {
         return RubyArray.new(str.split(delim).map((elem) => RubyString.new(elem)));
     });
 
-    klass.define_native_method("gsub", (self: RValue, args: RValue[], block?: RValue): RValue => {
+    klass.define_native_method("gsub", (self: RValue, args: RValue[]): RValue => {
         const str = self.get_data<string>();
         const pattern = args[0].get_data<Regexp | string>();
         const replacement = args[1].get_data<string>();
 
         if (pattern instanceof Regexp) {
-            const matches: [number, number][] = [];
+            const matches: MatchData[] = [];
 
-            pattern.scan(str, (match: [number, number][]): boolean => {
-                matches.push(match[0]);
+            pattern.scan(str, (match_data: MatchData): boolean => {
+                matches.push(match_data);
+                Regexp.set_svars(match_data);
                 return true;
             });
 
@@ -191,17 +203,36 @@ export const init = () => {
             let last_pos = 0;
 
             for (let i = 0; i < matches.length; i ++) {
-                chunks.push(str.slice(last_pos, matches[i][0]));
+                chunks.push(matches[i].match(0));
                 chunks.push(replacement);
-                last_pos = matches[i][1];
+                last_pos = matches[i].end(0);
             }
 
             chunks.push(str.slice(last_pos, str.length));
 
             return RubyString.new(chunks.join(""));
+        } else {
+            // @TODO: handle string argument
         }
 
         return self;
+    });
+
+    klass.define_native_method("match?", (self: RValue, args: RValue[]): RValue => {
+        let pattern: Regexp;
+
+        if (args[0].klass === RegexpClass) {
+            pattern = args[0].get_data<Regexp>();
+        } else {
+            const re_str = Runtime.coerce_to_string(args[0]).get_data<string>();
+            pattern = Regexp.compile(re_str, "");
+        }
+
+        if (pattern.search(self.get_data<string>()) === null) {
+            return Qfalse;
+        }
+
+        return Qtrue;
     });
 
     klass.define_native_method("to_i", (self: RValue): RValue => {
@@ -392,7 +423,7 @@ export const init = () => {
     klass.define_native_method("[]", (self: RValue, args: RValue[]): RValue => {
         const data = self.get_data<string>();
 
-        if (args[0].klass == Runtime.constants["Range"]) {
+        if (args[0].klass == Object.find_constant("Range")!) {
             const range = args[0].get_data<Range>();
 
             Runtime.assert_type(range.begin, IntegerClass);
@@ -450,7 +481,7 @@ export const init = () => {
         let replacement_pos = 1;
         let start_pos, end_pos
 
-        if (args[0].klass == Runtime.constants["Range"]) {
+        if (args[0].klass == Object.find_constant("Range")!) {
             const range = args[0].get_data<Range>();
 
             Runtime.assert_type(range.begin, IntegerClass);
@@ -562,7 +593,13 @@ export const init = () => {
         if (args[0].klass === RegexpClass) {
             const regexp = args[0].get_data<Regexp>();
             const result = regexp.search(self.get_data<string>());
-            return result ? Integer.get(result) : Qnil;
+
+            if (result) {
+                Regexp.set_svars(result);
+                return Integer.get(result.begin(0));
+            } else {
+                return Qnil;
+            }
         } else {
             return Object.send(args[0], "=~", [self]);
         }
@@ -678,10 +715,6 @@ export const init = () => {
     });
 
     klass.define_native_method("encode", (self: RValue, args: RValue[]): RValue => {
-        // if (ExecutionContext.current.globals["$cameron"] === Qtrue) {
-        //     debugger;
-        // }
-
         const encoding_arg = Encoding.coerce(args[0]);
 
         if (encoding_arg) {
@@ -699,6 +732,31 @@ export const init = () => {
         throw new EncodingConverterNotFoundError(
             `code converter not found (${self_encoding.get_data<Encoding>().name} to ${args[0].get_data<string>()})`
         );
+    });
+
+    klass.define_native_method("tr", (self: RValue, args: RValue[]): RValue => {
+        const selector_str = Runtime.coerce_to_string(args[0]).get_data<string>();
+        const replacements = Runtime.coerce_to_string(args[1]).get_data<string>();
+        const selector = CharSelector.from(selector_str);
+        const data = self.get_data<string>();
+        const chars = [];
+
+        for (let i = 0; i < data.length; i ++) {
+            const char = data.charAt(i);
+            const idx = selector.indexOf(char);
+
+            if (idx != null) {
+                if (idx === -1 || idx >= replacements.length) {
+                    chars.push(replacements.charAt(replacements.length - 1));
+                } else {
+                    chars.push(replacements.charAt(idx));
+                }
+            } else {
+                chars.push(char);
+            }
+        }
+
+        return String.new(chars.join(""));
     });
 
     inited = true;

@@ -1,20 +1,23 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
 import { BreakError, ExecutionContext } from "../execution_context";
-import { Array, ArrayClass, Class, IntegerClass, Qfalse, Qnil, Qtrue, RValue, Runtime, StringClass } from "../runtime";
+import { Array, ArrayClass, Class, IntegerClass, Kwargs, Qfalse, Qnil, Qtrue, RValue, Runtime, StringClass } from "../runtime";
 import { hash_combine } from "../util/hash_utils";
 import { Integer } from "./integer";
 import { Object } from "./object";
 import { String } from "../runtime/string";
 import { Range } from "./range";
+import { Hash } from "./hash";
+import { ArgumentError, TypeError } from "../errors";
+import { Proc } from "./proc";
 
 let inited = false;
 
 export const init = () => {
     if (inited) return;
 
-    const klass = Runtime.constants["Array"].get_data<Class>();
+    const klass = Object.find_constant("Array")!.get_data<Class>();
 
-    klass.include(Runtime.constants["Enumerable"]);
+    klass.include(Object.find_constant("Enumerable")!);
 
     klass.define_native_method("inspect", (self: RValue): RValue => {
         const elements = self.get_data<Array>().elements;
@@ -26,7 +29,7 @@ export const init = () => {
         return String.new(`[${strings.join(", ")}]`);
     });
 
-    klass.define_native_method("each", (self: RValue, args: RValue[], block?: RValue): RValue => {
+    klass.define_native_method("each", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
         if (block) {
             try {
                 const elements = self.get_data<Array>().elements;
@@ -50,7 +53,7 @@ export const init = () => {
         return self;
     });
 
-    klass.define_native_method("reject", (self: RValue, _args: RValue[], block?: RValue): RValue => {
+    klass.define_native_method("reject", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
         const elements = self.get_data<Array>().elements;
 
         if (block) {
@@ -79,7 +82,7 @@ export const init = () => {
         }
     });
 
-    klass.define_native_method("index", (self: RValue, args: RValue[], block?: RValue): RValue => {
+    klass.define_native_method("index", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
         const elements = self.get_data<Array>().elements;
 
         if (block) {
@@ -113,7 +116,7 @@ export const init = () => {
         return Qnil;
     });
 
-    klass.define_native_method("all?", (self: RValue, args: RValue[], block?: RValue): RValue => {
+    klass.define_native_method("all?", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
         const elements = self.get_data<Array>().elements;
 
         if (args.length > 0) {
@@ -139,10 +142,10 @@ export const init = () => {
         return Qtrue;
     });
 
-    klass.define_native_method("[]", (self: RValue, args: RValue[], block?: RValue): RValue => {
+    klass.define_native_method("[]", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
         const elements = self.get_data<Array>().elements;
 
-        if (args[0].klass == Runtime.constants["Range"]) {
+        if (args[0].klass == Object.find_constant("Range")!) {
             const range = args[0].get_data<Range>();
 
             Runtime.assert_type(range.begin, IntegerClass);
@@ -183,7 +186,7 @@ export const init = () => {
     });
 
     // @TODO: fill array with Qnils
-    klass.define_native_method("[]=", (self: RValue, args: RValue[], block?: RValue): RValue => {
+    klass.define_native_method("[]=", (self: RValue, args: RValue[]): RValue => {
         const elements = self.get_data<Array>().elements;
         const index = args[0].get_data<number>();
         const new_value = args[1];
@@ -248,7 +251,7 @@ export const init = () => {
         }
     });
 
-    klass.define_native_method("unshift", (self: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData): RValue => {
+    klass.define_native_method("unshift", (self: RValue, args: RValue[], _kwargs?: Kwargs, _block?: RValue, call_data?: MethodCallData): RValue => {
         const elements = self.get_data<Array>().elements;
 
         if (call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
@@ -276,7 +279,7 @@ export const init = () => {
         return self;
     });
 
-    klass.define_native_method("push", (self: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData): RValue => {
+    klass.define_native_method("push", (self: RValue, args: RValue[], _kwargs?: Kwargs, _block?: RValue, call_data?: MethodCallData): RValue => {
         const elements = self.get_data<Array>().elements;
 
         // this is wrong but I don't know how to fix it, since I need to know which args are splatted
@@ -369,12 +372,55 @@ export const init = () => {
         let hash = elements.length;
 
         for (const element of elements) {
-            const elem_hash = Object.send(element, "hash")
+            const elem_hash = Object.send(element, "hash");
             Runtime.assert_type(elem_hash, IntegerClass);
             hash = hash_combine(hash, elem_hash.get_data<number>());
         }
 
         return Integer.get(hash);
+    });
+
+    const add_tuple_to_hash = (tuple: RValue, idx: number, hash: Hash) => {
+        if (tuple.klass === ArrayClass) {
+            const elements = tuple.get_data<Array>().elements;
+
+            if (elements.length === 2) {
+                hash.set(elements[0], elements[1]);
+            } else {
+                throw new ArgumentError(`wrong array length at ${idx} (expected 2, was ${elements.length})`);
+            }
+        } else {
+            throw new TypeError(`wrong element type ${tuple.klass.get_data<Class>().name} (expected array)`);
+        }
+    }
+
+    klass.define_native_method("to_h", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        const hash = new Hash();
+        const elements = self.get_data<Array>().elements;
+
+        if (block) {
+            const proc = block.get_data<Proc>();
+            let idx = 0;
+
+            try {
+                for (idx = 0; idx < elements.length; idx ++) {
+                    const tuple = proc.call(ExecutionContext.current, [elements[idx]]);
+                    add_tuple_to_hash(tuple, idx, hash);
+                }
+            } catch (e) {
+                if (e instanceof BreakError) {
+                    add_tuple_to_hash(e.value, idx, hash);
+                } else {
+                    throw e;
+                }
+            }
+        } else {
+            for (let idx = 0; idx < elements.length; idx ++) {
+                add_tuple_to_hash(elements[idx], idx, hash);
+            }
+        }
+
+        return Hash.from_hash(hash);
     });
 
     inited = true;

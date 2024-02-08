@@ -1,5 +1,6 @@
 import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { spaceship_compare } from "./comparable";
+import { Object } from "../runtime/object";
 
 export class Range {
     public begin: RValue;
@@ -7,7 +8,7 @@ export class Range {
     public exclude_end: boolean;
 
     static new(begin: RValue, end: RValue, exclude_end: boolean): RValue {
-        return new RValue(Runtime.constants["Range"], new Range(begin, end, exclude_end));
+        return new RValue(Object.find_constant("Range")!, new Range(begin, end, exclude_end));
     }
 
     constructor(begin: RValue, end: RValue, exclude_end: boolean) {

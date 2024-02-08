@@ -1,13 +1,21 @@
 import { KeyError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { RValue, Class, Qtrue, Qfalse, Qnil, HashClass, ProcClass, Runtime, Array as RubyArray } from "../runtime";
+import { RValue, Class, Qtrue, Qfalse, Qnil, HashClass, ProcClass, Runtime, Array as RubyArray, Kwargs } from "../runtime";
 import { Object } from "./object";
 import { Proc } from "./proc";
 import { String } from "../runtime/string";
+import { Integer } from "./integer";
+import { hash_combine } from "../util/hash_utils";
 
 export class Hash {
     static new(default_value?: RValue, default_proc?: RValue): RValue {
         const val = new RValue(HashClass, new Hash(default_value, default_proc));
+        val.get_data<Hash>().self = val;
+        return val;
+    }
+
+    static from_hash(hash: Hash) {
+        const val = new RValue(HashClass, hash);
         val.get_data<Hash>().self = val;
         return val;
     }
@@ -81,6 +89,14 @@ export class Hash {
         this.values = new Map(other.values);
     }
 
+    each(cb: (k: RValue, v: RValue) => void) {
+        for (const key of this.keys.keys()) {
+            const k = this.keys.get(key)!;
+            const v = this.values.get(key)!;
+            cb(k, v);
+        }
+    }
+
     private get_hash_code(obj: RValue): number {
         if (this.compare_by_identity) {
             return obj.object_id;
@@ -95,9 +111,9 @@ let inited = false;
 export const init = () => {
     if (inited) return;
 
-    const klass = Runtime.constants["Hash"].get_data<Class>();
+    const klass = Object.find_constant("Hash")!.get_data<Class>();
 
-    klass.define_native_singleton_method("new", (_self: RValue, args: RValue[], block?: RValue): RValue => {
+    klass.define_native_singleton_method("new", (_self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
         return Hash.new(args[0], block);
     });
 
@@ -167,12 +183,27 @@ export const init = () => {
         return self.get_data<Hash>().compare_by_identity ? Qtrue : Qfalse;
     });
 
-    klass.define_native_method("each", (self: RValue, _args: RValue[], block?: RValue): RValue => {
+    klass.define_native_method("each", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
         const hash = self.get_data<Hash>();
 
         if (block) {
             for (const key of hash.keys.values()) {
                 block.get_data<Proc>().call(ExecutionContext.current, [key, hash.get(key)]);
+            }
+
+            return self;
+        } else {
+            // @TODO: return an Enumerator
+            return Qnil;
+        }
+    });
+
+    klass.define_native_method("each_key", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        const hash = self.get_data<Hash>();
+
+        if (block) {
+            for (const key of hash.keys.values()) {
+                block.get_data<Proc>().call(ExecutionContext.current, [key]);
             }
 
             return self;
@@ -207,7 +238,7 @@ export const init = () => {
         return RubyArray.new(keys);
     });
 
-    klass.define_native_method("fetch", (self: RValue, args: RValue[], block?: RValue): RValue => {
+    klass.define_native_method("fetch", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
         const hash = self.get_data<Hash>();
         const key = args[0];
         const value = hash.get(key);
@@ -222,7 +253,7 @@ export const init = () => {
         }
     });
 
-    klass.define_native_method("delete", (self: RValue, args: RValue[], block?: RValue): RValue => {
+    klass.define_native_method("delete", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
         const hash = self.get_data<Hash>();
         const key = args[0];
         const value = hash.delete(key);
@@ -233,6 +264,25 @@ export const init = () => {
         } else {
             return Qnil;
         }
+    });
+
+    klass.define_native_method("size", (self: RValue, _args: RValue[]): RValue => {
+        return Integer.get(self.get_data<Hash>().keys.size);
+    });
+
+    klass.alias_method("length", "size");
+
+    klass.define_native_method("hash", (self: RValue, _args: RValue[]): RValue => {
+        const data = self.get_data<Hash>();
+        let hash = data.keys.size;
+
+        data.each((k: RValue, v: RValue) => {
+            const k_hash = Object.send(k, "hash").get_data<number>();
+            const v_hash = Object.send(v, "hash").get_data<number>();
+            hash = hash_combine(hash_combine(hash, k_hash), v_hash);
+        });
+
+        return Integer.get(hash);
     });
 
     inited = true;

@@ -1,10 +1,4 @@
-export interface Local {
-    name: string
-}
-
-// A local representing a block passed into the current instruction
-// sequence.
-class BlockLocal implements Local {
+export abstract class Local {
     public name: string;
 
     constructor(name: string) {
@@ -12,12 +6,18 @@ class BlockLocal implements Local {
     }
 }
 
-// A regular local variable.
-class PlainLocal implements Local {
-    public name: string;
+// A local representing a block passed into the current instruction
+// sequence.
+class BlockLocal extends Local {
+}
 
-    constructor(name: string) {
-        this.name = name;
+// A regular local variable.
+class PlainLocal extends Local {
+}
+
+class KeywordBitsLocal extends Local {
+    constructor() {
+        super("keyword_bits");
     }
 }
 
@@ -78,14 +78,14 @@ export class LocalTable {
         }
     }
 
-    has(name: string): boolean {
+    indexOf(name: string): number | null {
         for (let i = 0; i < this.locals.length; i ++) {
             if (this.locals[i].name == name) {
-                return true;
+                return i;
             }
         }
 
-        return false;
+        return null;
     }
 
     names(): string[] {
@@ -100,18 +100,40 @@ export class LocalTable {
         return this.locals.length;
     }
 
-    // Add a BlockLocal to the local table.
-    block(name: string) {
-        if (!this.has(name)) {
+    // Add a BlockLocal to the local table. Returns the index.
+    block(name: string): number {
+        let idx = this.indexOf(name);
+
+        if (idx === null) {
             this.locals.push(new BlockLocal(name));
+            idx = this.locals.length - 1;
         }
+
+        return idx;
     }
 
-    // Add a PlainLocal to the local table.
-    plain(name: string) {
-        if (!this.has(name)) {
+    // Add a PlainLocal to the local table. Returns the index.
+    plain(name: string): number {
+        let idx = this.indexOf(name);
+
+        if (idx === null) {
             this.locals.push(new PlainLocal(name))
+            idx = this.locals.length - 1;
         }
+
+        return idx;
+    }
+
+    // Add a KeywordBitsLocal to the local table. Returns the index.
+    keyword_bits(): number {
+        let idx = this.indexOf("keyword_bits");
+
+        if (idx === null) {
+            this.locals.push(new KeywordBitsLocal());
+            idx = this.locals.length - 1;
+        }
+
+        return idx;
     }
 
     // This is the offset from the top of the stack where this local variable

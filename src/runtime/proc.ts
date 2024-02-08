@@ -2,8 +2,9 @@ import { BlockCallData } from "../call_data";
 import { ExecutionContext } from "../execution_context";
 import { BlockFrame } from "../frame";
 import { InstructionSequence } from "../instruction_sequence";
-import { RValue, Class, ProcClass, NativeMethod, Callable, Runtime } from "../runtime";
+import { RValue, Class, ProcClass, NativeMethod, Callable, Runtime, Kwargs } from "../runtime";
 import { Binding } from "./binding";
+import { Object } from "../runtime/object";
 
 export abstract class Proc {
     public binding: Binding;
@@ -18,7 +19,7 @@ export abstract class Proc {
         return new RValue(ProcClass, new InterpretedProc(iseq, binding));
     }
 
-    abstract call(context: ExecutionContext, args: RValue[], call_data?: BlockCallData): RValue;
+    abstract call(context: ExecutionContext, args: RValue[], kwargs?: Kwargs, call_data?: BlockCallData): RValue;
     abstract with_binding(new_binding: Binding): Proc;
 }
 
@@ -33,8 +34,8 @@ export class NativeProc extends Proc {
         this.binding = binding;
     }
 
-    call(_context: ExecutionContext, args: RValue[], _call_data?: BlockCallData): RValue {
-        return this.callable(this.binding.self, args);
+    call(_context: ExecutionContext, args: RValue[], kwargs?: Kwargs, _call_data?: BlockCallData): RValue {
+        return this.callable(this.binding.self, args, kwargs);
     }
 
     with_binding(new_binding: Binding): NativeProc {
@@ -53,9 +54,9 @@ export class InterpretedProc extends Proc {
         this.binding = binding;
     }
 
-    call(context: ExecutionContext, args: RValue[], call_data?: BlockCallData): RValue {
+    call(context: ExecutionContext, args: RValue[], kwargs?: Kwargs, call_data?: BlockCallData): RValue {
         call_data ||= BlockCallData.create(args.length);
-        return context.run_block_frame(call_data, this.iseq, this.binding, args);
+        return context.run_block_frame(call_data, this.iseq, this.binding, args, kwargs);
     }
 
     with_binding(new_binding: Binding): InterpretedProc {
@@ -68,11 +69,11 @@ let inited = false;
 export const init = () => {
     if (inited) return;
 
-    const klass = Runtime.constants["Proc"].get_data<Class>();
+    const klass = Object.find_constant("Proc")!.get_data<Class>();
 
-    klass.define_native_method("call", (self: RValue, args: RValue[]): RValue => {
+    klass.define_native_method("call", (self: RValue, args: RValue[], kwargs?: Kwargs): RValue => {
         const ec = ExecutionContext.current
-        return self.get_data<Proc>().call(ec, args, (ec.frame as BlockFrame).call_data);
+        return self.get_data<Proc>().call(ec, args, kwargs, (ec.frame as BlockFrame).call_data);
     });
 
     klass.alias_method("[]", "call");

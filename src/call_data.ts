@@ -28,7 +28,7 @@ export class MethodCallData extends CallData {
     public mid: string;
     public argc: number;
     public flag: number;
-    public kw_arg: any;
+    public kw_arg: string[] | null;
 
     constructor(mid: string, argc: number, flag: number, kw_arg: string[] | null) {
         super();

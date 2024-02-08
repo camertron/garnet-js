@@ -1,11 +1,13 @@
 import { BlockCallData, CallData, CallDataFlag, MethodCallData } from "./call_data";
-import { LocalJumpError, NativeError, RubyError } from "./errors";
+import { ArgumentError, LocalJumpError, NativeError, RubyError } from "./errors";
 import { BlockFrame, ClassFrame, Frame, MethodFrame, RescueFrame, TopFrame } from "./frame";
 import Instruction from "./instruction";
 import { CatchBreak, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
 import { Local } from "./local_table";
-import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, ArrayClass, ProcClass } from "./runtime";
+import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, ArrayClass, ProcClass, Kwargs, Qtrue, Qfalse, Runtime } from "./runtime";
 import { Binding } from "./runtime/binding";
+import { Hash } from "./runtime/hash";
+import { Object } from "./runtime/object";
 import { String } from "./runtime/string";
 
 export type ExecutionResult = JumpResult | LeaveResult | null;
@@ -337,12 +339,12 @@ export class ExecutionContext {
         return result;
     }
 
-    run_block_frame(call_data: BlockCallData, iseq: InstructionSequence, binding: Binding, args: RValue[]): RValue {
+    run_block_frame(call_data: BlockCallData, iseq: InstructionSequence, binding: Binding, args: RValue[], kwargs?: Kwargs): RValue {
         const original_stack = this.stack;
 
         return this.with_stack(binding.stack, () => {
             return this.run_frame(new BlockFrame(call_data, iseq, binding, original_stack), () => {
-                return this.setup_arguments(call_data, iseq, args, null);
+                return this.setup_arguments(call_data, iseq, args, kwargs, undefined);
             });
         });
     }
@@ -362,7 +364,7 @@ export class ExecutionContext {
         return this.run_frame(new ClassFrame(iseq, this.frame!, this.stack.length, klass));
     }
 
-    run_method_frame(call_data: MethodCallData, nesting: RValue[], iseq: InstructionSequence, self: RValue, args: RValue[], block?: RValue): RValue {
+    run_method_frame(call_data: MethodCallData, nesting: RValue[], iseq: InstructionSequence, self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, owner?: RValue): RValue {
         const method_frame = new MethodFrame(
             iseq,
             nesting,
@@ -371,12 +373,14 @@ export class ExecutionContext {
             self,
             call_data,
             args,
-            block
+            kwargs,
+            block,
+            owner
         );
 
         try {
             return this.run_frame(method_frame, () => {
-                return this.setup_arguments(call_data, iseq, args, block);
+                return this.setup_arguments(call_data, iseq, args, kwargs, block);
             });
         } catch (e) {
             if (e instanceof ReturnError) {
@@ -425,7 +429,7 @@ export class ExecutionContext {
         return this.frame!.nesting![this.frame!.nesting.length - 1];
     }
 
-    private setup_arguments(call_data: CallData, iseq: InstructionSequence, args: RValue[], block?: RValue | null): Label | null {
+    private setup_arguments(call_data: CallData, iseq: InstructionSequence, args: RValue[], kwargs?: Kwargs, block?: RValue | null): Label | null {
         let locals = [...args];
         let local_index = 0;
         let start_label: Label | null = null;
@@ -509,55 +513,76 @@ export class ExecutionContext {
             local_index ++;
         }
 
-        // @TODO: support keyword arguments
-        // const keyword_option = iseq.argument_options.keyword;
-        // if (keyword_option) {
-        //     // First, set up the keyword bits array.
-        //     const keyword_bits = keyword_option.map((config) => {
-        //         kwargs.contains(config instanceof Array ? config[0] : config)
-        //     });
+        const keyword_option = iseq.argument_options.keyword;
+        if (keyword_option) {
+            // First, set up the keyword bits array.
+            const keyword_bits = keyword_option.map((keyword) => !!kwargs && kwargs.has(keyword[0]));
 
-        //     for (let i = 0; i < iseq.local_table.locals.length; i ++) {
-        //         const local = iseq.local_table.locals[i];
+            for (let i = 0; i < iseq.local_table.locals.length; i ++) {
+                const local = iseq.local_table.locals[i];
 
-        //         // If this is the keyword bits local, then set it appropriately.
-        //         if (local.name instanceof Number) {
-        //             this.local_set(i, 0, keyword_bits)
-        //             continue;
-        //         }
+                // If this is the keyword bits local, then set it appropriately.
+                if (local.name === "keyword_bits") {
+                    const keyword_bits_rval = RubyArray.new(keyword_bits.map((bit) => bit ? Qtrue : Qfalse));
+                    this.local_set(i, 0, keyword_bits_rval);
+                    continue;
+                }
 
-        //         // First, find the configuration for this local in the keywords
-        //         // list if it exists.
-        //         const name = local.name
-        //         const config = (() => {
-        //             for (let j = 0; j < keyword_option.length; j ++) {
-        //                 const keyword = keyword_option[j];
-        //                 if (keyword instanceof Array ? keyword[0] == name : keyword == name) {
-        //                     return keyword;
-        //                 }
-        //             }
+                // First, find the configuration for this local in the keywords
+                // list if it exists.
+                const name = local.name;
+                const config = (() => {
+                    for (let j = 0; j < keyword_option.length; j ++) {
+                        const keyword = keyword_option[j];
+                        if (keyword[0] == name) {
+                            return keyword;
+                        }
+                    }
 
-        //             return null;
-        //         })();
+                    return null;
+                })();
 
-        //         // If the configuration doesn't exist, then the local is not a
-        //         // keyword local.
-        //         if (!config) {
-        //             continue;
-        //         }
+                // If the configuration doesn't exist, then the local is not a
+                // keyword local.
+                if (!config) {
+                    continue;
+                }
 
-        //         if (!(config instanceof Array)) {
-        //             // required keyword
-        //             this.local_set(i, 0, kwargs.fetch(name));
-        //         } else if (config[1]) {
-        //             // optional keyword with embedded default value
-        //             this.local_set(i, 0, kwargs.fetch(name, config[1]));
-        //         } else {
-        //             // optional keyword with expression default value
-        //             this.local_set(i, 0, kwargs[name]);
-        //         }
-        //     }
-        // }
+                if (config[1] === null) {
+                    // required keyword
+                    if (kwargs && kwargs.has(name)) {
+                        this.local_set(i, 0, kwargs.get(name)!);
+                    } else {
+                        throw new ArgumentError(`missing keyword: ${Object.send(Runtime.intern(name), "inspect")}`);
+                    }
+                } else {
+                    // optional keyword with expression default value
+                    this.local_set(i, 0, kwargs ? kwargs.get(name) || Qnil : Qnil);
+                }
+
+                if (kwargs) kwargs.delete(name);
+                local_index ++;
+            }
+        }
+
+        if (iseq.argument_options.keyword_rest_start != null) {
+            const kwargs_hash = new Hash();
+
+            if (kwargs) {
+                for (const [k, v] of kwargs.entries()) {
+                    kwargs_hash.set(Runtime.intern(k), v);
+                }
+            }
+
+            this.local_set(local_index, 0, Hash.from_hash(kwargs_hash));
+            local_index ++;
+        }
+
+        // Add any remaining (positional) locals, as they can be referenced using numbered parameter syntax, eg _n
+        while (locals.length > 0) {
+            this.local_set(local_index, 0, locals.shift()!);
+            local_index ++;
+        }
 
         if (iseq.argument_options.block_start != null) {
             this.local_set(local_index, 0, block ? block : Qnil);
@@ -576,7 +601,6 @@ export class ExecutionContext {
 
     peek(): RValue {
         return this.stack[this.stack.length - 1];
-        // return this.stack.get(this.stack.length - 1);
     }
 
     get stack_len(): number {

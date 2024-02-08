@@ -1,7 +1,7 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { Class, Runtime } from "../runtime";
+import { Class, Qnil, Runtime } from "../runtime";
 
 export enum DefineClassFlags {
     TYPE_CLASS = 0,
@@ -31,7 +31,8 @@ export default class DefineClass extends Instruction {
         if (this.name == "singletonclass") {
             context.push(context.run_class_frame(this.iseq, object.get_data<Class>().get_singleton_class()));
         } else {
-            const constant = object.get_data<Class>().find_constant(this.name);
+            // const constant = object.get_data<Class>().find_constant(this.name, false);
+            const constant = object.get_data<Class>().constants[this.name];
 
             if (constant) {
                 context.push(context.run_class_frame(this.iseq, constant));

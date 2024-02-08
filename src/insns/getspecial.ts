@@ -4,7 +4,7 @@ import Instruction from "../instruction";
 
 export enum GetSpecialType {
     LASTLINE = 0,       // $_
-    BACKREF = 1,        // $~
+    BACKREF = 1,        // $&
     FLIPFLOP_START = 2  // flipflop
 }
 
@@ -25,10 +25,11 @@ export default class GetSpecial extends Instruction {
                 throw new NotImplementedError("getspecial LASTLINE");
 
             case GetSpecialType.BACKREF:
-                throw new NotImplementedError("getspecial SVAR_BACKREF");
+                context.push(context.frame_svar()!.svars["$&"]);
+                break;
 
             case GetSpecialType.FLIPFLOP_START:
-                context.frame_svar()!.svars[GetSpecialType.FLIPFLOP_START];
+                context.push(context.frame_svar()!.svars[GetSpecialType.FLIPFLOP_START]);
                 break;
         }
 

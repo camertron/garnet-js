@@ -30,7 +30,7 @@ let inited = false;
 export const init = () => {
     if (inited) return;
 
-    const klass = Runtime.constants["Symbol"].get_data<Class>();
+    const klass = Object.find_constant("Symbol")!.get_data<Class>();
 
     klass.define_native_method("inspect", (self: RValue): RValue => {
         const str = self.get_data<string>();
@@ -52,6 +52,8 @@ export const init = () => {
     klass.define_native_method("to_s", (self: RValue): RValue => {
         return String.new(self.get_data<string>());
     });
+
+    klass.alias_method("name", "to_s");
 
     klass.define_native_method("to_sym", (self: RValue): RValue => {
         return self;

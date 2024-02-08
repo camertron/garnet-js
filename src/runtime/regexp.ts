@@ -1,7 +1,10 @@
-import { RuntimeError } from "../errors";
-import { Class, Qnil, RValue, RegexpClass, Runtime } from "../runtime";
+import { IndexError, RuntimeError } from "../errors";
+import { ExecutionContext } from "../execution_context";
+import { Array, Class, IntegerClass, ObjectClass, Qnil, RValue, RegexpClass, Runtime } from "../runtime";
+import { String as RubyString } from "../runtime/string";
 import * as WASM from "../wasm";
 import { Integer } from "./integer";
+import { Object } from "./object";
 
 let onigmo: Onigmo, onig_memory: DataView;
 let inited = false;
@@ -16,9 +19,62 @@ export const init = async () => {
 
     regexp.define_native_method("=~", (self: RValue, args: RValue[]): RValue => {
         const str = Runtime.coerce_to_string(args[0]);
+        const str_data = str.get_data<string>();
         const regexp = self.get_data<Regexp>();
-        const result = regexp.search(str.get_data<string>());
-        return result ? Integer.get(result) : Qnil;
+        const result = regexp.search(str_data);
+
+        if (result) {
+            Regexp.set_svars(result);
+            return Integer.get(result.captures[0][0]);
+        } else {
+            return Qnil;
+        }
+    });
+
+    Runtime.define_class("MatchData", ObjectClass, (klass: Class) => {
+        klass.define_native_method("captures", (self: RValue): RValue => {
+            const match_data = self.get_data<MatchData>();
+            const captures = [];
+
+            for (let i = 1; i < match_data.captures.length; i ++) {
+                const [begin, end] = match_data.captures[i];
+                captures.push(RubyString.new(match_data.str.slice(begin, end)));
+            }
+
+            return Array.new(captures);
+        });
+
+        klass.define_native_method("begin", (self: RValue, args: RValue[]): RValue => {
+            const match_data = self.get_data<MatchData>();
+            Runtime.assert_type(args[0], IntegerClass);
+            const index = args[0].get_data<number>();
+            return Integer.get(match_data.begin(index));
+        });
+
+        klass.define_native_method("end", (self: RValue, args: RValue[]): RValue => {
+            const match_data = self.get_data<MatchData>();
+            Runtime.assert_type(args[0], IntegerClass);
+            const index = args[0].get_data<number>();
+            return Integer.get(match_data.end(index));
+        });
+
+        klass.define_native_method("match", (self: RValue, args: RValue[]): RValue => {
+            const match_data = self.get_data<MatchData>();
+            Runtime.assert_type(args[0], IntegerClass);
+            const index = args[0].get_data<number>();
+            return RubyString.new(match_data.match(index));
+        });
+
+        klass.define_native_method("inspect", (self: RValue, args: RValue[]): RValue => {
+            const match_data = self.get_data<MatchData>();
+            const fragments = [`#<MatchData ${RubyString.inspect(match_data.match(0))}`];
+
+            for (let i = 1; i < match_data.captures.length; i ++) {
+                fragments.push(`${i}:${RubyString.inspect(match_data.match(i))}`);
+            }
+
+            return RubyString.new(`${fragments.join(" ")}>`);
+        });
     });
 
     inited = true;
@@ -283,6 +339,70 @@ const ONIG_NO_SUPPORT_CONFIG = -2;
 // general constants
 const ONIG_MAX_ERROR_MESSAGE_LEN = 90
 
+export class MatchData {
+    static from_region(str: string, region: Region) {
+        const captures: [number, number][] = [];
+
+        for (let i = 0; i < region.num_regs; i ++) {
+            captures.push([region.beg_at(i) / 2, region.end_at(i) / 2]);
+        }
+
+        return new MatchData(str, captures);
+    }
+
+    private static constant_: RValue | null = null;
+
+    static get constant(): RValue {
+        if (!this.constant_) {
+            this.constant_ = Object.find_constant("MatchData")!
+        }
+
+        return this.constant_;
+    }
+
+    public str: string;
+    public captures: [number, number][];
+    private rval: RValue | null = null;
+
+    constructor(str: string, captures: [number, number][]) {
+        this.str = str;
+        this.captures = captures;
+    }
+
+    to_rval() {
+        if (!this.rval) {
+            this.rval = new RValue(MatchData.constant, this);
+        }
+
+        return this.rval;
+    }
+
+    begin(index: number): number {
+        if (index >= this.captures.length) {
+            throw new IndexError(`index ${index} out of matches`);
+        }
+
+        return this.captures[index][0];
+    }
+
+    end(index: number): number {
+        if (index >= this.captures.length) {
+            throw new IndexError(`index ${index} out of matches`);
+        }
+
+        return this.captures[index][1];
+    }
+
+    match(index: number): string {
+        if (index >= this.captures.length) {
+            throw new IndexError(`index ${index} out of matches`);
+        }
+
+        const [begin, end] = this.captures[index];
+        return this.str.slice(begin, end);
+    }
+}
+
 export class Regexp {
     static new(pattern: string, options: string): RValue {
         return new RValue(RegexpClass, this.compile(pattern, options));
@@ -337,38 +457,48 @@ export class Regexp {
         return err_msg.to_string();
     }
 
+    static set_svars(match_data: MatchData) {
+        const ec = ExecutionContext.current;
+        ec.frame_svar()!.svars["$~"] = match_data.to_rval();
+        ec.frame_svar()!.svars["$&"] = RubyString.new(match_data.match(0));
+    }
+
     private regexp: Address;
 
     constructor(regexp: Address) {
         this.regexp = regexp;
     }
 
-    search(str: string, pos: number = 0): number | null {
+    search(str: string, pos: number = 0): MatchData | null {
         if (pos >= str.length) {
             return null;
         }
 
         const str_ptr = UTF16String.create(str);
-        const region_ptr = onigmo.exports.onig_region_new();
+        const region = new Region(onigmo.exports.onig_region_new());
 
         const exit_code_or_position = onigmo.exports.onig_search(
-            this.regexp, str_ptr.start, str_ptr.end, str_ptr.start + (pos * 2), str_ptr.end, region_ptr, ONIG_OPTION_NONE
+            this.regexp, str_ptr.start, str_ptr.end, str_ptr.start + (pos * 2), str_ptr.end, region.address, ONIG_OPTION_NONE
         );
 
-        onigmo.exports.free(str_ptr.start);
-        onigmo.exports.onig_region_free(region_ptr, RegionFreeScheme.CONTENTS_ONLY);
+        let result: MatchData | null = null;
 
         if (exit_code_or_position <= -2) {
             const error_msg = Regexp.error_code_to_string(exit_code_or_position);
             throw new RuntimeError(error_msg);
         } else if (exit_code_or_position == ONIG_MISMATCH) {
-            return null;
+            result = null;
         } else {
-            return exit_code_or_position;
+            result = MatchData.from_region(str, region);
         }
+
+        onigmo.exports.free(str_ptr.start);
+        onigmo.exports.onig_region_free(region.address, RegionFreeScheme.CONTENTS_ONLY);
+
+        return result;
     }
 
-    scan(str: string, callback: (matches: [number, number][]) => boolean): void {
+    scan(str: string, callback: (match_data: MatchData) => boolean): void {
         const str_ptr = UTF16String.create(str);
         const region = new Region(onigmo.exports.onig_region_new());
         let last_pos = 0;
@@ -385,13 +515,7 @@ export class Regexp {
                 break;
             }
 
-            const regs: [number, number][] = [];
-
-            for (let i = 0; i < region.num_regs; i ++) {
-                regs.push([region.beg_at(i) / 2, region.end_at(i) / 2]);
-            }
-
-            if (!callback(regs)) {
+            if (!callback(MatchData.from_region(str, region))) {
                 break;
             }
 

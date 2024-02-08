@@ -11,7 +11,7 @@ export const init = () => {
     const env_hash = new Hash();
     const env = new RValue(ObjectClass);
 
-    env.get_singleton_class().get_data<Class>().methods["[]"] = new NativeCallable((self: RValue, args: RValue[]): RValue => {
+    env.get_singleton_class().get_data<Class>().define_native_method("[]", (_self: RValue, args: RValue[]): RValue => {
         Runtime.assert_type(args[0], StringClass);
 
         const result = env_hash.get(args[0]);
@@ -29,14 +29,14 @@ export const init = () => {
         return result;
     });
 
-    env.get_singleton_class().get_data<Class>().methods["[]="] = new NativeCallable((self: RValue, args: RValue[]): RValue => {
+    env.get_singleton_class().get_data<Class>().define_native_method("[]=", (_self: RValue, args: RValue[]): RValue => {
         Runtime.assert_type(args[0], StringClass);
         Runtime.assert_type(args[1], StringClass);
         env_hash.set(args[0], args[1]);
         return args[1];
     });
 
-    Runtime.constants["ENV"] = env
+    ObjectClass.get_data<Class>().constants["ENV"] = env
 
     inited = true;
 };

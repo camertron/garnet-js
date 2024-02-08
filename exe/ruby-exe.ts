@@ -2,8 +2,12 @@ import { argv } from "process";
 import * as Garnet from "../src/garnet";
 import { ExecutionContext, Runtime, vmfs, Array, String } from "../src/garnet";
 import path from "path";
+import { fileURLToPath } from 'url';
 import fs from "fs";
 import { Dir } from "../src/runtime/dir";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 await Garnet.init();
 
@@ -11,7 +15,11 @@ let code: string | null = null;
 let code_path: string = "<code>";
 let script_argv: string[] = [];
 
+// current directory
 ExecutionContext.current.push_onto_load_path(process.env.PWD!);
+// path to stdlib
+ExecutionContext.current.push_onto_load_path(path.resolve(path.join(__dirname, "..", "src", "lib")));
+
 Dir.setwd(process.env.PWD!);
 
 for (let i = 0; i < argv.length; i ++) {
@@ -50,7 +58,7 @@ for (let i = 0; i < argv.length; i ++) {
     }
 }
 
-Runtime.constants["ARGV"] = Array.new(
+Garnet.ObjectClass.get_data<Garnet.Class>().constants["ARGV"] = Array.new(
     script_argv.map((arg) => {
         return String.new(arg);
     })

@@ -1,4 +1,5 @@
 import { Array, ArrayClass, Class, Module, ObjectClass, Qnil, Qtrue, RValue, Runtime } from "./runtime";
+import { Object } from "./runtime/object";
 import { String } from "./runtime/string";
 
 export const init = () => {
@@ -47,6 +48,7 @@ export const init = () => {
     const IndexErrorClass = Runtime.define_class("IndexError", StandardErrorClass);
     const RangeErrorClass = Runtime.define_class("RangeError", StandardErrorClass);
     const EncodingErrorClass = Runtime.define_class("EncodingError", StandardErrorClass);
+    const ThreadErrorClass = Runtime.define_class("ThreadErrorError", StandardErrorClass);
     const KeyErrorClass = Runtime.define_class("KeyError", IndexErrorClass);
     const FrozenErrorClass = Runtime.define_class("FrozenError", RuntimeErrorClass);
     const NoMethodErrorClass = Runtime.define_class("NoMethodError", NameErrorClass);
@@ -103,7 +105,7 @@ export class StandardError extends RubyError {
     }
 
     get ruby_class(): RValue {
-        return StandardError.ruby_class ||= Runtime.constants["StandardError"];
+        return StandardError.ruby_class ||= Object.find_constant("StandardError")!;
     }
 }
 
@@ -116,7 +118,7 @@ export class NotImplementedError extends RubyError {
     }
 
     get ruby_class(): RValue {
-        return NotImplementedError.ruby_class ||= Runtime.constants["NotImplementedError"];
+        return NotImplementedError.ruby_class ||= Object.find_constant("NotImplementedError")!;
     }
 }
 
@@ -129,7 +131,7 @@ export class NameError extends RubyError {
     }
 
     get ruby_class(): RValue {
-        return NameError.ruby_class ||= Runtime.constants["NameError"];
+        return NameError.ruby_class ||= Object.find_constant("NameError")!;
     }
 }
 
@@ -142,7 +144,7 @@ export class LocalJumpError extends RubyError {
     }
 
     get ruby_class(): RValue {
-        return LocalJumpError.ruby_class ||= Runtime.constants["LocalJumpError"];
+        return LocalJumpError.ruby_class ||= Object.find_constant("LocalJumpError")!;
     }
 }
 
@@ -155,7 +157,7 @@ export class NoMethodError extends RubyError {
     }
 
     get ruby_class(): RValue {
-        return NoMethodError.ruby_class ||= Runtime.constants["NoMethodError"];;
+        return NoMethodError.ruby_class ||= Object.find_constant("NoMethodError")!;
     }
 }
 
@@ -168,7 +170,7 @@ export class ArgumentError extends RubyError {
     }
 
     get ruby_class(): RValue {
-        return ArgumentError.ruby_class ||= Runtime.constants["ArgumentError"];
+        return ArgumentError.ruby_class ||= Object.find_constant("ArgumentError")!;
     }
 }
 
@@ -181,7 +183,7 @@ export class TypeError extends RubyError {
     }
 
     get ruby_class(): RValue {
-        return TypeError.ruby_class ||= Runtime.constants["TypeError"];
+        return TypeError.ruby_class ||= Object.find_constant("TypeError")!;
     }
 }
 
@@ -194,7 +196,7 @@ export class LoadError extends RubyError {
     }
 
     get ruby_class(): RValue {
-        return LoadError.ruby_class ||= Runtime.constants["LoadError"];
+        return LoadError.ruby_class ||= Object.find_constant("LoadError")!;
     }
 }
 
@@ -207,7 +209,7 @@ export class RuntimeError extends RubyError {
     }
 
     get ruby_class(): RValue {
-        return RuntimeError.ruby_class ||= Runtime.constants["RuntimeError"];
+        return RuntimeError.ruby_class ||= Object.find_constant("RuntimeError")!;
     }
 }
 
@@ -220,7 +222,7 @@ export class IndexError extends RubyError {
     }
 
     get ruby_class(): RValue {
-        return IndexError.ruby_class ||= Runtime.constants["IndexError"];
+        return IndexError.ruby_class ||= Object.find_constant("IndexError")!;
     }
 }
 
@@ -233,7 +235,7 @@ export class RangeError extends RubyError {
     }
 
     get ruby_class(): RValue {
-        return RangeError.ruby_class ||= Runtime.constants["RangeError"];
+        return RangeError.ruby_class ||= Object.find_constant("RangeError")!;
     }
 }
 
@@ -246,7 +248,7 @@ export class KeyError extends RubyError {
     }
 
     get ruby_class(): RValue {
-        return KeyError.ruby_class ||= Runtime.constants["KeyError"];
+        return KeyError.ruby_class ||= Object.find_constant("KeyError")!;
     }
 }
 
@@ -259,7 +261,7 @@ export class FrozenError extends RubyError {
     }
 
     get ruby_class(): RValue {
-        return FrozenError.ruby_class ||= Runtime.constants["FrozenError"];
+        return FrozenError.ruby_class ||= Object.find_constant("FrozenError")!;
     }
 }
 
@@ -272,7 +274,7 @@ export class SyntaxError extends RubyError {
     }
 
     get ruby_class(): RValue {
-        return SyntaxError.ruby_class ||= Runtime.constants["SyntaxError"];
+        return SyntaxError.ruby_class ||= Object.find_constant("SyntaxError")!;
     }
 }
 
@@ -285,7 +287,7 @@ export class ErrnoENOENT extends RubyError {
     }
 
     get ruby_class() {
-        return ErrnoENOENT.ruby_class ||= Runtime.constants["Errno"].get_data<Module>().constants["ENOENT"];
+        return ErrnoENOENT.ruby_class ||= Object.find_constant("Errno")!.get_data<Module>().find_constant("ENOENT")!;
     }
 }
 
@@ -302,7 +304,7 @@ export class SystemExit extends RubyError {
     }
 
     get ruby_class() {
-        return SystemExit.ruby_class ||= Runtime.constants["SystemExit"];
+        return SystemExit.ruby_class ||= Object.find_constant("SystemExit")!;
     }
 }
 
@@ -315,7 +317,7 @@ export class EncodingCompatibilityError extends RubyError {
     }
 
     get ruby_class(): RValue {
-        return EncodingCompatibilityError.ruby_class ||= Runtime.constants["Encoding"].get_data<Module>().constants["CompatibilityError"];
+        return EncodingCompatibilityError.ruby_class ||= Object.find_constant("Encoding")!.get_data<Module>().find_constant("CompatibilityError")!;
     }
 }
 
@@ -328,6 +330,19 @@ export class EncodingConverterNotFoundError extends RubyError {
     }
 
     get ruby_class(): RValue {
-        return EncodingConverterNotFoundError.ruby_class ||= Runtime.constants["Encoding"].get_data<Module>().constants["ConverterNotFoundError"];
+        return EncodingConverterNotFoundError.ruby_class ||= Object.find_constant("Encoding")!.get_data<Module>().find_constant("ConverterNotFoundError")!;
+    }
+}
+
+export class ThreadError extends RubyError {
+    private static ruby_class: RValue | null;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "ThreadError";
+    }
+
+    get ruby_class(): RValue {
+        return ThreadError.ruby_class ||= Object.find_constant("ThreadError")!;
     }
 }

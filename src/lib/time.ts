@@ -1,12 +1,13 @@
 import { NotImplementedError } from "../errors";
 import { Class, Float, NumericClass, ObjectClass, RValue, Runtime } from "../runtime";
 import { Kernel } from "../runtime/kernel";
+import { Object } from "../runtime/object";
 
 class Time {
     public date: Date;
 
     static new(date: Date) {
-        return new RValue(Runtime.constants["Time"], new Time(date));
+        return new RValue(Object.find_constant("Time")!, new Time(date));
     }
 
     constructor(date: Date) {
@@ -16,7 +17,7 @@ class Time {
 
 export const init = () => {
     Runtime.define_class("Time", ObjectClass, (klass: Class) => {
-        klass.include(Runtime.constants["Comparable"]);
+        klass.include(Object.find_constant("Comparable")!);
 
         klass.define_native_singleton_method("now", (self: RValue, args: RValue[]): RValue => {
             return Time.new(new Date());

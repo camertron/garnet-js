@@ -1,12 +1,12 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
 import { FrozenError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Callable, Class, ClassClass, KernelModule, ModuleClass, ObjectClass, RValue, Runtime, StringClass, SymbolClass, Qtrue, Qfalse, ProcClass, Qnil, Module } from "../runtime";
+import { Callable, Class, ClassClass, KernelModule, ModuleClass, ObjectClass, RValue, Runtime, StringClass, SymbolClass, Qtrue, Qfalse, ProcClass, Qnil, Module, Kwargs } from "../runtime";
 import { Symbol } from "./symbol";
 import { String } from "../runtime/string";
 
 export class Object {
-    static send(receiver: RValue, call_data_: MethodCallData | string, args: RValue[] = [], block?: RValue): RValue {
+    static send(receiver: RValue, call_data_: MethodCallData | string, args: RValue[] = [], kwargs?: Kwargs, block?: RValue): RValue {
         let method = null;
         let method_name: string;
         let call_data: MethodCallData | undefined;
@@ -36,6 +36,7 @@ export class Object {
                 ExecutionContext.current,
                 receiver,
                 args,
+                kwargs,
                 block,
                 call_data
             );
@@ -52,7 +53,7 @@ export class Object {
                 method_missing_call_data = MethodCallData.create("method_missing", args.length + 1, flags);
             }
 
-            return Object.send(receiver, method_missing_call_data, [String.new(method_name), ...args], block);
+            return Object.send(receiver, method_missing_call_data, [String.new(method_name), ...args], kwargs, block);
         }
     }
 
@@ -65,10 +66,10 @@ export class Object {
         return this.find_method_under(obj.klass, method_name) ? true : false;
     }
 
-    static find_method_under(mod: RValue, method_name: string): Callable | null {
+    static find_method_under(mod: RValue, method_name: string, include_self: boolean = true): Callable | null {
         let found_method = null;
 
-        Runtime.each_unique_ancestor(mod, (ancestor: RValue): boolean => {
+        Runtime.each_unique_ancestor(mod, include_self, (ancestor: RValue): boolean => {
             const ancestor_mod = ancestor.get_data<Module>();
 
             if (ancestor_mod.undefined_methods.has(method_name)) {
@@ -106,6 +107,10 @@ export class Object {
             throw new FrozenError(`can't modify frozen ${obj.klass.get_data<Class>().name}: ${inspect_str}`);
         }
     }
+
+    static find_constant(name: string): RValue | null {
+        return ObjectClass.get_data<Class>().find_constant(name);
+    }
 }
 
 export const init = () => {
@@ -119,15 +124,15 @@ export const init = () => {
             return Object.send(self.klass.get_data<Class>().get_singleton_class(), method_name.get_data<string>(), args);
         });
 
-        klass.define_native_method("send", (self: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData) => {
+        klass.define_native_method("send", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData) => {
             const method_name = args[0];
 
             if (method_name.klass === StringClass || method_name.klass === SymbolClass) {
                 if (call_data) {
                     const new_call_data = MethodCallData.create(method_name.get_data<string>(), call_data.argc - 1, call_data.flag, call_data.kw_arg);
-                    return Object.send(self, new_call_data, args.slice(1), block);
+                    return Object.send(self, new_call_data, args.slice(1), kwargs, block);
                 } else {
-                    return Object.send(self, method_name.get_data<string>(), args.slice(1), block);
+                    return Object.send(self, method_name.get_data<string>(), args.slice(1), kwargs, block);
                 }
             } else {
                 throw new TypeError(`${Object.send(method_name, "inspect").get_data<string>()} is not a symbol nor a string`);

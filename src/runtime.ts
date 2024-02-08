@@ -24,13 +24,13 @@ import { init as fileInit } from "./runtime/file";
 import { init as dirInit } from "./runtime/dir";
 import { init as comparableInit } from "./runtime/comparable";
 import { init as numericInit } from "./runtime/numeric";
-import { init as rb_config_init } from "./stdlib/rbconfig"
+import { init as rb_config_init } from "./lib/rbconfig"
 import { init as enumerableInit } from "./runtime/enumerable";
 import { init as rangeInit } from "./runtime/range";
 import { init as bindingInit } from "./runtime/binding";
 import { init as signalInit } from "./runtime/signal";
-import { init as timeInit } from "./stdlib/time";
-import { init as threadInit } from './stdlib/thread';
+import { init as timeInit } from "./lib/time";
+import { init as threadInit } from './lib/thread';
 import { init as regexpInit} from "./runtime/regexp";
 import { init as encodingInit } from "./runtime/encoding";
 import { obj_id_hash } from "./util/object_id";
@@ -39,7 +39,8 @@ import { String } from "./runtime/string";
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
 
-export type NativeMethod = (self: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData) => RValue;
+export type NativeMethod = (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData) => RValue;
+export type Kwargs = Map<string, RValue>;
 
 // used as the type for keys of the symbols weak map
 type SymbolType = {
@@ -52,23 +53,24 @@ type NativeExtension = {
 }
 
 export class Runtime {
-    static constants: {[key: string]: RValue} = {};
     static symbols: WeakMap<SymbolType, RValue> = new WeakMap();
     static native_extensions: {[key: string]: NativeExtension} = {};
 
     static define_module(name: string, cb?: ModuleDefinitionCallback): RValue {
-        if (!this.constants[name]) {
+        const obj = ObjectClass.get_data<Class>();
+
+        if (!obj.constants[name]) {
             const module = new Module(name)
             const module_rval = new RValue(ModuleClass, module);
             module.rval = module_rval;
-            this.constants[name] = module_rval;
+            obj.constants[name] = module_rval;
         }
 
         if (cb) {
-            cb(this.constants[name].get_data<Module>());
+            cb(obj.constants[name].get_data<Module>());
         }
 
-        return this.constants[name];
+        return obj.constants[name];
     }
 
     static define_module_under(parent: RValue, name: string, cb?: ModuleDefinitionCallback): RValue {
@@ -89,7 +91,9 @@ export class Runtime {
     }
 
     static define_class(name: string, superclass: RValue, cb?: ClassDefinitionCallback): RValue {
-        if (!this.constants[name]) {
+        const obj = ObjectClass.get_data<Class>();
+
+        if (!obj.constants[name]) {
             if (superclass == Qnil) {
                 superclass = ObjectClass;
             }
@@ -97,14 +101,14 @@ export class Runtime {
             const klass = new Class(name, superclass);
             const klass_rval = new RValue(ClassClass, klass);
             klass.rval = klass_rval;
-            this.constants[name] = klass_rval;
+            obj.constants[name] = klass_rval;
         }
 
         if (cb) {
-            cb(this.constants[name].get_data<Class>());
+            cb(obj.constants[name].get_data<Class>());
         }
 
-        return this.constants[name];
+        return obj.constants[name];
     }
 
     static define_class_under(parent: RValue, name: string, superclass: RValue, cb?: ClassDefinitionCallback): RValue {
@@ -147,37 +151,37 @@ export class Runtime {
         return symbol;
     }
 
-    static each_unique_ancestor(mod: RValue, cb: (ancestor: RValue) => boolean) {
-        this.each_ancestor(mod, new Set(), cb);
+    static each_unique_ancestor(mod: RValue, include_self: boolean = true, cb: (ancestor: RValue) => boolean) {
+        this.each_ancestor(mod, new Set(), include_self, cb);
     }
 
     // Return false from cb() to exit early. Returning false from cb() will cause
     // each_ancestor to return false as well; otherwise it will return true.
-    private static each_ancestor(mod: RValue, seen: Set<RValue>, cb: (ancestor: RValue) => boolean): boolean {
-        if (!mod) {
-            debugger;
-        }
-
+    // Pass false for include_self to skip checking mod and prepended modules, i.e. if you're trying to
+    // find a method somewhere above mod on the ancestry chain
+    private static each_ancestor(mod: RValue, seen: Set<RValue>, include_self: boolean, cb: (ancestor: RValue) => boolean): boolean {
         if (seen.has(mod)) return true;
 
         seen.add(mod);
 
         const module = mod.get_data<Module>();
 
-        for (let prepended_module of module.prepends) {
-            if (!cb(prepended_module)) {
+        if (include_self) {
+            for (let prepended_module of module.prepends) {
+                if (!cb(prepended_module)) {
+                    return false;
+                }
+            }
+
+            if (mod.has_singleton_class()) {
+                if (!this.each_ancestor(mod.get_singleton_class(), seen, true, cb)) {
+                    return false;
+                }
+            }
+
+            if (!cb(mod)) {
                 return false;
             }
-        }
-
-        if (mod.has_singleton_class()) {
-            if (!this.each_ancestor(mod.get_singleton_class(), seen, cb)) {
-                return false;
-            }
-        }
-
-        if (!cb(mod)) {
-            return false;
         }
 
         for (let included_module of module.includes) {
@@ -192,7 +196,7 @@ export class Runtime {
                     return false;
                 }
 
-                if (!this.each_ancestor(module.superclass, seen, cb)) {
+                if (!this.each_ancestor(module.superclass, seen, true, cb)) {
                     return false;
                 }
             }
@@ -344,39 +348,47 @@ export enum Visibility {
 export abstract class Callable {
     public visibility: Visibility;
 
-    abstract call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue, call_data?: CallData): RValue;
+    abstract call(context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: CallData): RValue;
 }
 
 export class InterpretedCallable extends Callable {
     public name: string;
     public iseq: InstructionSequence;
+    public owner?: RValue;
 
-    constructor(name: string, iseq: InstructionSequence, visibility: Visibility) {
+    constructor(name: string, iseq: InstructionSequence, visibility: Visibility, owner?: RValue) {
         super();
 
         this.name = name;
         this.iseq = iseq;
         this.visibility = visibility;
+        this.owner = owner;
+
+        if (!owner) {
+            debugger;
+        }
     }
 
-    call(context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData): RValue {
+    call(context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData): RValue {
         call_data ||= MethodCallData.create(this.name, args.length);
-        return context.run_method_frame(call_data, context.frame!.nesting, this.iseq, receiver, args, block);
+        return context.run_method_frame(call_data, context.frame!.nesting, this.iseq, receiver, args, kwargs, block, this.owner);
     }
 }
 
 export class NativeCallable extends Callable {
     private method: NativeMethod;
+    public owner?: Module;
 
-    constructor(method: NativeMethod, visibility: Visibility = Visibility.public) {
+    constructor(method: NativeMethod, visibility: Visibility = Visibility.public, owner?: Module) {
         super();
 
         this.method = method;
         this.visibility = visibility;
+        this.owner = owner;
     }
 
-    call(_context: ExecutionContext, receiver: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData): RValue {
-        return this.method(receiver, args, block, call_data);
+    call(_context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData): RValue {
+        return this.method(receiver, args, kwargs, block, call_data);
     }
 }
 
@@ -392,6 +404,7 @@ export class Module {
     private undefined_methods_: Set<string>;
     private includes_: RValue[];
     private prepends_: RValue[];
+    private autoloads_: Map<string, string>;
 
     private rval_: RValue;
     private name_rval_: RValue;
@@ -449,12 +462,24 @@ export class Module {
         return this.prepends_;
     }
 
+    get autoloads(): Map<string, string> {
+        if (!this.autoloads_) {
+            this.autoloads_ = new Map();
+        }
+
+        return this.autoloads_;
+    }
+
+    add_autoload(constant: string, file: string) {
+        this.autoloads.set(constant, file);
+    }
+
     define_method(name: string, body: InstructionSequence) {
-        this.methods[name] = new InterpretedCallable(name, body, this.default_visibility);
+        this.methods[name] = new InterpretedCallable(name, body, this.default_visibility, this.rval);
     }
 
     define_native_method(name: string, body: NativeMethod, visibility?: Visibility) {
-        this.methods[name] = new NativeCallable(body, visibility);
+        this.methods[name] = new NativeCallable(body, visibility, this);
     }
 
     define_singleton_method(name: string, body: InstructionSequence) {
@@ -477,18 +502,38 @@ export class Module {
         this.undefined_methods.add(name);
     }
 
-    find_constant(name: string, inherit: boolean = true): RValue | null {
+    // Constant lookup searches for constants that are defined in `Module.nesting`,
+    // `Module.nesting.first.ancestors`, and `Object.ancestors` if `Module.nesting.first`
+    // is nil or a module.
+    find_constant(name: string): RValue | null {
+        const constant = this.find_constant_in_module_nesting(name);
+        if (constant) return constant;
+
+        if (!this.nesting_parent || this.nesting_parent.klass === ModuleClass) {
+            return ObjectClass.get_data<Class>().constants[name];
+        } else {
+            return this.find_constant_in_ancestors(name);
+        }
+    }
+
+    private find_constant_in_module_nesting(name: string): RValue | null {
         let current_mod: Module | undefined = this;
 
         while (current_mod) {
-            const constant = current_mod.constants[name];
+            let constant = current_mod.constants[name];
+            if (constant) return constant;
 
-            if (constant) {
-                return constant;
-            }
+            if (current_mod.autoloads.has(name)) {
+                const file = current_mod.autoloads.get(name)!;
+                current_mod.autoloads.delete(name);
+                Runtime.require(file);
+                constant = current_mod.constants[name];
 
-            if (!inherit) {
-                return Qnil;
+                if (constant) {
+                    return constant;
+                } else {
+                    current_mod.autoloads.set(name, file);
+                }
             }
 
             if (!current_mod.nesting_parent) {
@@ -498,7 +543,23 @@ export class Module {
             current_mod = current_mod.nesting_parent.get_data<Module>();
         }
 
-        return ObjectClass.get_data<Class>().constants[name] || Runtime.constants[name];
+        return null;
+    }
+
+    private find_constant_in_ancestors(name: string): RValue | null {
+        let constant = null;
+
+        Runtime.each_unique_ancestor(this.rval, false, (ancestor: RValue): boolean => {
+            if (ancestor.get_data<Module>().name === name) {
+                constant = ancestor;
+                return false;
+            }
+
+            constant = ancestor.get_data<Module>().constants[name];
+            return constant ? false : true;
+        });
+
+        return constant;
     }
 
     include(mod: RValue) {
@@ -517,6 +578,7 @@ export class Module {
         if (!this.singleton_class) {
             const singleton_klass = new Class(`Class:${this.name}`, ModuleClass);
             this.singleton_class = new RValue(ClassClass.klass, singleton_klass);
+            singleton_klass.rval = this.singleton_class;
         }
 
         return this.singleton_class;
@@ -615,6 +677,7 @@ export class RValue {
             const name = `#<${this.klass.get_data<Class>().name}:${Object.object_id_to_str(this.object_id)}>`
             const klass = new Class(`#<Class:${name}>`, this.klass, true);
             this.singleton_class = new RValue(ClassClass, klass);
+            klass.rval = this.singleton_class;
         }
 
         return this.singleton_class;
@@ -665,6 +728,7 @@ export class Class extends Module {
 
             const singleton_klass = new Class(`Class:${this.name}`, superclass_singleton, true);
             this.singleton_class = new RValue(ClassClass, singleton_klass);
+            singleton_klass.rval = this.singleton_class;
         }
 
         return this.singleton_class;
@@ -681,27 +745,27 @@ const module_class = new Class("Module", null);
 const class_class = new Class("Class", null);
 
 // This is some nasty hackery to be able to set Class's class to Class.
-export const ClassClass       = Runtime.constants["Class"]       = new RValue(null as unknown as RValue, class_class);
+export const ClassClass       = object_class.constants["Class"]       = new RValue(null as unknown as RValue, class_class);
 ClassClass.klass = ClassClass;
 
-export const ModuleClass      = Runtime.constants["Module"]      = new RValue(ClassClass, module_class);
+export const ModuleClass      = object_class.constants["Module"]      = new RValue(ClassClass, module_class);
 class_class.superclass = ModuleClass;
 
-export const BasicObjectClass = Runtime.constants["BasicObject"] = new RValue(ClassClass, basic_object_class);
-export const ObjectClass      = Runtime.constants["Object"]      = new RValue(ClassClass, object_class);
-export const StringClass      = Runtime.constants["String"]      = new RValue(ClassClass, new Class("String", ObjectClass));
-export const ArrayClass       = Runtime.constants["Array"]       = new RValue(ClassClass, new Class("Array", ObjectClass));
-export const HashClass        = Runtime.constants["Hash"]        = new RValue(ClassClass, new Class("Hash", ObjectClass));
-export const NumericClass     = Runtime.constants["Numeric"]     = new RValue(ClassClass, new Class("Numeric", ObjectClass));
-export const IntegerClass     = Runtime.constants["Integer"]     = new RValue(ClassClass, new Class("Integer", NumericClass));
-export const FloatClass       = Runtime.constants["Float"]       = new RValue(ClassClass, new Class("Float", NumericClass));
-export const SymbolClass      = Runtime.constants["Symbol"]      = new RValue(ClassClass, new Class("Symbol", ObjectClass));
-export const ProcClass        = Runtime.constants["Proc"]        = new RValue(ClassClass, new Class("Proc", ObjectClass));
-export const NilClass         = Runtime.constants["NilClass"]    = new RValue(ClassClass, new Class("NilClass", ObjectClass));
-export const TrueClass        = Runtime.constants["TrueClass"]   = new RValue(ClassClass, new Class("TrueClass", ObjectClass));
-export const FalseClass       = Runtime.constants["FalseClass"]  = new RValue(ClassClass, new Class("FalseClass", ObjectClass));
-export const RegexpClass      = Runtime.constants["Regexp"]      = new RValue(ClassClass, new Class("Regexp", ObjectClass));
-export const KernelModule     = Runtime.constants["Kernel"]      = new RValue(ModuleClass, new Module("Kernel"));
+export const BasicObjectClass = object_class.constants["BasicObject"] = new RValue(ClassClass, basic_object_class);
+export const ObjectClass      = object_class.constants["Object"]      = new RValue(ClassClass, object_class);
+export const StringClass      = object_class.constants["String"]      = new RValue(ClassClass, new Class("String", ObjectClass));
+export const ArrayClass       = object_class.constants["Array"]       = new RValue(ClassClass, new Class("Array", ObjectClass));
+export const HashClass        = object_class.constants["Hash"]        = new RValue(ClassClass, new Class("Hash", ObjectClass));
+export const NumericClass     = object_class.constants["Numeric"]     = new RValue(ClassClass, new Class("Numeric", ObjectClass));
+export const IntegerClass     = object_class.constants["Integer"]     = new RValue(ClassClass, new Class("Integer", NumericClass));
+export const FloatClass       = object_class.constants["Float"]       = new RValue(ClassClass, new Class("Float", NumericClass));
+export const SymbolClass      = object_class.constants["Symbol"]      = new RValue(ClassClass, new Class("Symbol", ObjectClass));
+export const ProcClass        = object_class.constants["Proc"]        = new RValue(ClassClass, new Class("Proc", ObjectClass));
+export const NilClass         = object_class.constants["NilClass"]    = new RValue(ClassClass, new Class("NilClass", ObjectClass));
+export const TrueClass        = object_class.constants["TrueClass"]   = new RValue(ClassClass, new Class("TrueClass", ObjectClass));
+export const FalseClass       = object_class.constants["FalseClass"]  = new RValue(ClassClass, new Class("FalseClass", ObjectClass));
+export const RegexpClass      = object_class.constants["Regexp"]      = new RValue(ClassClass, new Class("Regexp", ObjectClass));
+export const KernelModule     = object_class.constants["Kernel"]      = new RValue(ModuleClass, new Module("Kernel"));
 
 // Normally assigning rval is done by Runtime.define_class and friends, but since we have to
 // construct RValues manually above, the rval property has to be set manually as well.
@@ -745,8 +809,12 @@ export const VMCoreClass = Runtime.define_class("VMCore", ObjectClass, (klass: C
         throw new NotImplementedError("hash_merge_ptr is not implemented yet");
     });
 
-    klass.define_native_method("set_method_alias", (self: RValue, args: RValue[]): RValue => {
-        throw new NotImplementedError("set_method_alias is not implemented yet");
+    klass.define_native_method("set_method_alias", (_self: RValue, args: RValue[]): RValue => {
+        const klass = args[0].get_data<Class>();
+        const new_name = args[1].get_data<string>();
+        const old_name = args[2].get_data<string>();
+        klass.alias_method(new_name, old_name);
+        return Qnil;
     });
 
     klass.define_native_method("set_variable_alias", (self: RValue, args: RValue[]): RValue => {
@@ -761,7 +829,7 @@ export const VMCoreClass = Runtime.define_class("VMCore", ObjectClass, (klass: C
         throw new NotImplementedError("undef_method is not implemented yet");
     });
 
-    klass.define_native_method("lambda", (self: RValue, args: RValue[], block?: RValue): RValue => {
+    klass.define_native_method("lambda", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
         return block!;
     });
 });
@@ -906,7 +974,7 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
         return self.object_id != args[0].object_id ? Qtrue : Qfalse;
     });
 
-    klass.define_native_method("instance_exec", (self: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData): RValue => {
+    klass.define_native_method("instance_exec", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData): RValue => {
         const proc = block!.get_data<Proc>();
         const binding = proc.binding.with_self(self);
         let block_call_data: BlockCallData | undefined = undefined;
@@ -915,7 +983,7 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
             block_call_data = BlockCallData.create(call_data.argc, call_data.flag, call_data.kw_arg);
         }
 
-        return proc.with_binding(binding).call(ExecutionContext.current, args, block_call_data);
+        return proc.with_binding(binding).call(ExecutionContext.current, args, kwargs, block_call_data);
     });
 
     klass.define_native_method("method_missing", (self: RValue, args: RValue[]): RValue => {
@@ -928,7 +996,7 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
         throw new NoMethodError(`undefined method \`${method_name}' for ${self.klass.get_data<Class>().name}`);
     });
 
-    klass.define_native_method("__send__", (self: RValue, args: RValue[], block?: RValue, call_data?: MethodCallData): RValue => {
+    klass.define_native_method("__send__", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData): RValue => {
         const method_name = Runtime.coerce_to_string(args[0]).get_data<string>();
         let send_call_data;
 
@@ -945,12 +1013,12 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
             );
         }
 
-        return Object.send(self, send_call_data, args, block);
+        return Object.send(self, send_call_data, args, kwargs, block);
     });
 });
 
-Runtime.constants["RUBY_VERSION"] = String.new("3.2.2");
-Runtime.constants["RUBY_ENGINE"] = String.new("Garnet.js");
+ObjectClass.get_data<Class>().constants["RUBY_VERSION"] = String.new("3.2.2");
+ObjectClass.get_data<Class>().constants["RUBY_ENGINE"] = String.new("Garnet.js");
 
 export class Float {
     static new(value: number): RValue {
@@ -1007,7 +1075,7 @@ export class NodeIO implements IO {
 }
 
 export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) => {
-    klass.define_native_method("puts", (self: RValue, args: RValue[], _block?: RValue, call_data?: MethodCallData): RValue => {
+    klass.define_native_method("puts", (self: RValue, args: RValue[], _kwargs?: Kwargs, _block?: RValue, call_data?: MethodCallData): RValue => {
         const io = self.get_data<IO>();
 
         for (const arg of args) {
@@ -1023,7 +1091,7 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
         return Qnil;
     });
 
-    klass.define_native_method("print", (self: RValue, args: RValue[], _block?: RValue, call_data?: MethodCallData): RValue => {
+    klass.define_native_method("print", (self: RValue, args: RValue[], _kwargs?: Kwargs, _block?: RValue, call_data?: MethodCallData): RValue => {
         const io = self.get_data<IO>();
 
         for (const arg of args) {
@@ -1050,8 +1118,8 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
     });
 });
 
-export const STDOUT = Runtime.constants["STDOUT"] = isNode ? NodeIO.new(process.stdout) : BrowserIO.new(console.log);
-export const STDERR = Runtime.constants["STDERR"] = isNode ? NodeIO.new(process.stderr) : BrowserIO.new(console.error);
+export const STDOUT = ObjectClass.get_data<Class>().constants["STDOUT"] = isNode ? NodeIO.new(process.stdout) : BrowserIO.new(console.log);
+export const STDERR = ObjectClass.get_data<Class>().constants["STDERR"] = isNode ? NodeIO.new(process.stderr) : BrowserIO.new(console.error);
 
 export class Array {
     static new(arr?: RValue[]): RValue {
@@ -1096,7 +1164,7 @@ export const init = async () => {
     encodingInit();
     arrayInit();
 
-    Runtime.constants["RUBY_PLATFORM"] = await (async () => {
+    ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"] = await (async () => {
         if (isNode) {
             let arch: string = process.arch;
             if (arch === "x64") arch = "x86_64";
@@ -1138,8 +1206,8 @@ export const init = async () => {
         }
     })();
 
-    Runtime.constants["RUBY_DESCRIPTION"] = String.new(
-        `Garnet.js ${Runtime.constants["RUBY_VERSION"].get_data<string>()} [${Runtime.constants["RUBY_PLATFORM"].get_data<string>()}]`
+    ObjectClass.get_data<Class>().constants["RUBY_DESCRIPTION"] = String.new(
+        `Garnet.js ${ObjectClass.get_data<Class>().constants["RUBY_VERSION"].get_data<string>()} [${ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"].get_data<string>()}]`
     );
 }
 

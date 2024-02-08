@@ -1,7 +1,7 @@
 import { NameError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Class, ClassClass, Module, Qnil } from "../runtime";
+import { Class, ClassClass, Module, ModuleClass, Qnil } from "../runtime";
 
 export default class GetConstant extends Instruction {
     public name: string;
@@ -28,7 +28,7 @@ export default class GetConstant extends Instruction {
             // a parent of Qnil (and nils allowed) means look up the constant in the
             // current scope, i.e. self
             if (parent == Qnil) {
-                if (context.frame!.self.klass === ClassClass) {
+                if (context.frame!.self.klass === ClassClass || context.frame!.self.klass === ModuleClass) {
                     return context.frame!.self.get_data<Class>().find_constant(this.name);
                 } else {
                     return context.frame!.self.klass.get_data<Class>().find_constant(this.name);

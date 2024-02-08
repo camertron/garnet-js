@@ -3,6 +3,7 @@ import { Class, Float, FloatClass, IntegerClass, NumericClass, Qfalse, Qnil, Qtr
 import { obj_id_hash } from "../util/object_id";
 import { Encoding } from "./encoding";
 import { String } from "../runtime/string";
+import { Object } from "../runtime/object";
 
 export class Integer {
     static INT2FIX0: RValue;
@@ -31,7 +32,7 @@ let inited = false;
 export const init = () => {
     if (inited) return
 
-    const klass = Runtime.constants["Integer"].get_data<Class>();
+    const klass = Object.find_constant("Integer")!.get_data<Class>();
 
     Integer.INT2FIX0 = Integer.new(0);
     Integer.INT2FIX1 = Integer.new(1);

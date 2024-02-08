@@ -1,7 +1,7 @@
 import { isNode } from "../env";
-import { ArgumentError, NotImplementedError, RubyError, RuntimeError, SystemExit, TypeError } from "../errors";
+import { ArgumentError, NameError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Array, Module, Qfalse, Qnil, Qtrue, RValue, StringClass, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, ArrayClass, InterpretedCallable, Callable, HashClass, SymbolClass, FloatClass } from "../runtime";
+import { Array, Module, Qfalse, Qnil, Qtrue, RValue, StringClass, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, ArrayClass, HashClass, SymbolClass, FloatClass, Kwargs } from "../runtime";
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
@@ -13,7 +13,7 @@ export class Kernel {
     static is_a(obj: RValue, mod: RValue): boolean {
         let found = false;
 
-        Runtime.each_unique_ancestor(obj.klass, (ancestor) => {
+        Runtime.each_unique_ancestor(obj.klass, true, (ancestor) => {
             if (mod == ancestor) {
                 found = true;
                 return false;
@@ -108,7 +108,7 @@ export const init = async () => {
                 break;
 
             case StringClass:
-                instance = Object.send(Runtime.constants["RuntimeError"], "new", [args[0]]);
+                instance = Object.send(Object.find_constant("RuntimeError")!, "new", [args[0]]);
                 break;
 
             default:
@@ -128,7 +128,7 @@ export const init = async () => {
         }
     });
 
-    mod.define_native_method("at_exit", (self: RValue, args: RValue[], block?: RValue): RValue => {
+    mod.define_native_method("at_exit", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
         if (block) {
             Kernel.exit_handlers.unshift(block);
             return block;
@@ -137,7 +137,7 @@ export const init = async () => {
         throw new ArgumentError("at_exit called without a block");
     });
 
-    mod.define_native_method("`", (self: RValue, args: RValue[], block?: RValue): RValue => {
+    mod.define_native_method("`", (self: RValue, args: RValue[]): RValue => {
         if (!isNode) {
             throw new RuntimeError("backticks are only supported in nodejs");
         }
@@ -188,7 +188,7 @@ export const init = async () => {
         return self.iv_get(Object.send(args[0], "to_s").get_data<string>());
     });
 
-    mod.define_native_method("lambda", (self: RValue, args: RValue[], block?: RValue): RValue => {
+    mod.define_native_method("lambda", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
         if (!block) {
             throw new ArgumentError("tried to create a Proc object without a block");
         }
@@ -294,5 +294,28 @@ export const init = async () => {
     mod.define_native_method("singleton_class", (self: RValue): RValue => {
         // @TODO: this needs to be smarter
         return self.get_singleton_class();
+    });
+
+    const CONSTANT_RE = /^[A-Z]\w*$/; // @TODO: is this right?
+
+    mod.define_native_method("autoload", (self: RValue, args: RValue[]): RValue => {
+        const constant = Runtime.coerce_to_string(args[0]).get_data<string>();
+        const file = Runtime.coerce_to_string(args[1]).get_data<string>();
+
+        if (!CONSTANT_RE.test(constant)) {
+            throw new NameError(`autoload must be constant name: ${constant}`);
+        }
+
+        self.get_data<Module>().add_autoload(constant, file);
+        return Qnil;
+    });
+
+    mod.define_native_method("extend", (self: RValue, args: RValue[]): RValue => {
+        for (const module of args) {
+            Runtime.assert_type(module, ModuleClass);
+            self.get_data<Module>().extend(module);
+        }
+
+        return self;
     });
 };

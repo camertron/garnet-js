@@ -2,7 +2,7 @@ import { Class, ObjectClass, Qfalse, Qtrue, RValue, Runtime, StringClass } from 
 import { isLittlEndian } from "../util/endianness";
 import { CR_7BIT, CR_UNKNOWN, CR_VALID, String as RubyString } from "../runtime/string";
 import { EncodingCompatibilityError } from "../errors";
-import { ExecutionContext } from "../execution_context";
+import { Object } from "../runtime/object";
 
 export abstract class Encoding {
     private static default_: RValue;
@@ -14,7 +14,7 @@ export abstract class Encoding {
     }
 
     static get encoding_class_rval(): RValue {
-        return Runtime.constants["Encoding"];
+        return Object.find_constant("Encoding")!;
     }
 
     static get default(): RValue {
@@ -316,7 +316,7 @@ const encoding_map: Map<string, RValue> = new Map();
 const encoding_conversions: Set<string> = new Set();
 
 export const register_encoding = (const_name: string, other_names: string[], encoding: Encoding) => {
-    const encoding_class = Runtime.constants["Encoding"];
+    const encoding_class = Object.find_constant("Encoding")!;
     const encoding_rval = new RValue(encoding_class, encoding);
     encoding_class.get_data<Class>().constants[const_name] = encoding_rval;
     encoding_map.set(const_name, encoding_rval);
@@ -355,8 +355,8 @@ export const init = () => {
     register_encoding("UTF_16BE", ["UTF-16BE"], new UTF16BEEncoding());
     register_encoding("UTF_32", ["UTF-32"], new UTF32Encoding());
 
-    Runtime.define_class_under(EncodingClass, "CompatibilityError", Runtime.constants["EncodingError"]);
-    Runtime.define_class_under(EncodingClass, "ConverterNotFoundError", Runtime.constants["EncodingError"]);
+    Runtime.define_class_under(EncodingClass, "CompatibilityError", Object.find_constant("EncodingError")!);
+    Runtime.define_class_under(EncodingClass, "ConverterNotFoundError", Object.find_constant("EncodingError")!);
 
     inited = true;
 };

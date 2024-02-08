@@ -35,7 +35,7 @@ export default class Throw extends Instruction {
             case ThrowType.NONE:
                 if (value.klass == NilClass) {
                     // do nothing
-                } else if (Object.send(value, "is_a?", [Runtime.constants["Exception"]]).is_truthy()) {
+                } else if (Object.send(value, "is_a?", [Object.find_constant("Exception")!]).is_truthy()) {
                     throw value;
                 } else {
                     throw new NotImplementedError("unexpected throw type and value combination");

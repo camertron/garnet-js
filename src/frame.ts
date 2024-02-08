@@ -1,7 +1,7 @@
 import { BlockCallData, MethodCallData } from "./call_data";
 import { ExecutionContext } from "./execution_context";
 import { InstructionSequence } from "./instruction_sequence";
-import { RValue, ObjectClass, Main } from "./runtime";
+import { RValue, ObjectClass, Main, Module, Kwargs } from "./runtime";
 import { Binding } from "./runtime/binding";
 
 export class Frame {
@@ -82,13 +82,17 @@ export class BlockFrame extends Frame {
 export class MethodFrame extends Frame {
     public call_data: MethodCallData;
     public args: RValue[];
+    public kwargs?: Kwargs;
     public block?: RValue;
+    public owner?: RValue;
 
-    constructor(iseq: InstructionSequence, nesting: RValue[], parent: Frame, stack_index: number, self: RValue, call_data: MethodCallData, args: RValue[], block?: RValue) {
+    constructor(iseq: InstructionSequence, nesting: RValue[], parent: Frame, stack_index: number, self: RValue, call_data: MethodCallData, args: RValue[], kwargs?: Kwargs, block?: RValue, owner?: RValue) {
         super(iseq, parent, stack_index, self, nesting);
         this.call_data = call_data;
         this.args = args;
+        this.kwargs = kwargs;
         this.block = block;
+        this.owner = owner;
     }
 }
 
