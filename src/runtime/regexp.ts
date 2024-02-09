@@ -6,14 +6,88 @@ import * as WASM from "../wasm";
 import { Integer } from "./integer";
 import { Object } from "./object";
 
-let onigmo: Onigmo, onig_memory: DataView;
+let onigmo: Onigmo;
 let inited = false;
+
+class OnigmoExportsWrapper {
+    private original_exports: OnigmoExports;
+
+    public memory: DataView;
+    public OnigEncodingUTF_16LE: number;
+    public OnigSyntaxRuby: number;
+    public OnigDefaultCaseFoldFlag: number;
+
+    constructor(original_exports: OnigmoExports) {
+        this.original_exports = original_exports;
+        this.memory = new DataView(this.original_exports.memory.buffer);
+        this.OnigEncodingUTF_16LE = original_exports.OnigEncodingUTF_16LE;
+        this.OnigSyntaxRuby = original_exports.OnigSyntaxRuby;
+        this.OnigDefaultCaseFoldFlag = original_exports.OnigDefaultCaseFoldFlag;
+    }
+
+    private ensure_enough_memory<R extends ReturnType<any>>(cb: () => R) {
+        try {
+            return cb();
+        } catch (e) {
+            if (e instanceof Error && e.name === "RuntimeError") {
+                // hopefully increasing by an entire page is always enough :/
+                this.original_exports.memory.grow(1);
+                this.memory = new DataView(this.original_exports.memory.buffer);
+                return cb();
+            }
+
+            throw e;
+        }
+    }
+
+    onig_new_deluxe(...params: Parameters<OnigmoExports["onig_new_deluxe"]>): ReturnType<OnigmoExports["onig_new_deluxe"]> {
+        return this.ensure_enough_memory(() => {
+            return this.original_exports.onig_new_deluxe(...params);
+        });
+    }
+
+    onig_search(...params: Parameters<OnigmoExports["onig_search"]>): ReturnType<OnigmoExports["onig_search"]> {
+        return this.ensure_enough_memory(() => {
+            return this.original_exports.onig_search(...params);
+        });
+    }
+
+    onig_free(...params: Parameters<OnigmoExports["onig_free"]>): ReturnType<OnigmoExports["onig_free"]> {
+        return this.original_exports.onig_free(...params);
+    }
+
+    onig_region_new(...params: Parameters<OnigmoExports["onig_region_new"]>): ReturnType<OnigmoExports["onig_region_new"]> {
+        return this.ensure_enough_memory(() => {
+            return this.original_exports.onig_region_new(...params);
+        });
+    }
+
+    onig_region_free(...params: Parameters<OnigmoExports["onig_region_free"]>): ReturnType<OnigmoExports["onig_region_free"]> {
+        return this.original_exports.onig_region_free(...params);
+    }
+
+    onig_error_code_to_str(...params: Parameters<OnigmoExports["onig_error_code_to_str"]>): ReturnType<OnigmoExports["onig_error_code_to_str"]> {
+        return this.ensure_enough_memory(() => {
+            return this.original_exports.onig_error_code_to_str(...params);
+        });
+    }
+
+    malloc(...params: Parameters<OnigmoExports["malloc"]>): ReturnType<OnigmoExports["malloc"]> {
+        return this.ensure_enough_memory(() => {
+            return this.original_exports.malloc(...params);
+        });
+    }
+
+    free(...params: Parameters<OnigmoExports["free"]>): ReturnType<OnigmoExports["free"]> {
+        return this.original_exports.free(...params);
+    }
+}
 
 export const init = async () => {
     if (inited) return;
 
-    onigmo = await WASM.load_module("onigmo") as unknown as Onigmo;
-    onig_memory = new DataView(onigmo.exports.memory.buffer);
+    const onigmo_instance = await WASM.load_module("onigmo");
+    onigmo = { exports: new OnigmoExportsWrapper(onigmo_instance.exports as unknown as OnigmoExports) };
 
     const regexp = RegexpClass.get_data<Class>();
 
@@ -111,7 +185,7 @@ class CompileInfo {
         ];
 
         for (let i = 0; i < in_order.length; i ++) {
-            onig_memory.setUint32(start_addr + (i * 4), in_order[i], true);
+            onigmo.exports.memory.setUint32(start_addr + (i * 4), in_order[i], true);
         }
 
         return new CompileInfo(start_addr);
@@ -141,7 +215,7 @@ class ErrorInfo {
         ]
 
         for (let i = 0; i < in_order.length; i ++) {
-            onig_memory.setUint32(start_addr + (i * 4), in_order[i], true);
+            onigmo.exports.memory.setUint32(start_addr + (i * 4), in_order[i], true);
         }
 
         return new ErrorInfo(start_addr);
@@ -164,19 +238,19 @@ class Region {
     }
 
     get allocated(): number {
-        return onig_memory.getUint32(this.address, true);
+        return onigmo.exports.memory.getUint32(this.address, true);
     }
 
     get num_regs(): number {
-        return onig_memory.getUint32(this.address + 4, true);
+        return onigmo.exports.memory.getUint32(this.address + 4, true);
     }
 
     get beg(): Address {
-        return onig_memory.getUint32(this.address + 8, true);
+        return onigmo.exports.memory.getUint32(this.address + 8, true);
     }
 
     get end(): Address {
-        return onig_memory.getUint32(this.address + 12, true);
+        return onigmo.exports.memory.getUint32(this.address + 12, true);
     }
 
     static create(fields: RegionFields): Region {
@@ -189,7 +263,7 @@ class Region {
         ]
 
         for (let i = 0; i < in_order.length; i ++) {
-            onig_memory.setUint32(start_addr + (i * 4), in_order[i], true);
+            onigmo.exports.memory.setUint32(start_addr + (i * 4), in_order[i], true);
         }
 
         return new Region(start_addr);
@@ -197,12 +271,12 @@ class Region {
 
     beg_at(index: number): number {
         const addr = this.beg + (index * 4);
-        return onig_memory.getUint32(addr, true);
+        return onigmo.exports.memory.getUint32(addr, true);
     }
 
     end_at(index: number): number {
         const addr = this.end + (index * 4);
-        return onig_memory.getUint32(addr, true);
+        return onigmo.exports.memory.getUint32(addr, true);
     }
 }
 
@@ -216,12 +290,12 @@ class RegexpPtr {
     }
 
     deref(): Address {
-        return onig_memory.getUint32(this.address, true);
+        return onigmo.exports.memory.getUint32(this.address, true);
     }
 
     static create() {
         const start_addr = onigmo.exports.malloc(this.size);
-        onig_memory.setUint32(start_addr, 0, true);
+        onigmo.exports.memory.setUint32(start_addr, 0, true);
         return new RegexpPtr(start_addr);
     }
 }
@@ -301,7 +375,7 @@ enum RegionFreeScheme {
 }
 
 export interface Onigmo {
-    exports: OnigmoExports
+    exports: OnigmoExportsWrapper
 }
 
 interface OnigmoExports {
