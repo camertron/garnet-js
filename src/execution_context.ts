@@ -46,6 +46,14 @@ export class BreakError extends ThrownError {
 export class NextError extends ThrownError {
 }
 
+export enum CallingConvention {
+    // Enforces passing all required positional arguments (applies to methods and lambdas)
+    METHOD_LAMBDA = 1,
+
+    // Assigns nil to missing positional arguments (applies to blocks and procs, but not lambdas converted to procs)
+    BLOCK_PROC = 1
+}
+
 // This is the object that gets passed around all of the instructions as they
 // are being executed.
 export class ExecutionContext {
@@ -76,6 +84,19 @@ export class ExecutionContext {
             '$stdout': STDOUT,
             '$stderr': STDERR,
         };
+
+        // The load path global is a "special" array with this singleton method (maybe others?)
+        this.globals['$:'].get_singleton_class().get_data<Class>().tap((klass: Class) => {
+            // This is used to look up "features," i.e. native extensions that are part of the
+            // Ruby stdlib. I'm not sure how to handle this sort of thing right now, so let's
+            // just return nil ¯\_(ツ)_/¯
+            klass.define_native_method("resolve_feature_path", (self: RValue): RValue => {
+                return Qnil;
+            });
+        })
+
+        // global aliases
+        this.globals['$LOAD_PATH'] = this.globals['$:'];
     }
 
     push_onto_load_path(path: string) {
@@ -339,12 +360,13 @@ export class ExecutionContext {
         return result;
     }
 
-    run_block_frame(call_data: BlockCallData, iseq: InstructionSequence, binding: Binding, args: RValue[], kwargs?: Kwargs): RValue {
+    // this is also used to call lambdas
+    run_block_frame(call_data: BlockCallData, calling_convention: CallingConvention, iseq: InstructionSequence, binding: Binding, args: RValue[], kwargs?: Kwargs): RValue {
         const original_stack = this.stack;
 
         return this.with_stack(binding.stack, () => {
             return this.run_frame(new BlockFrame(call_data, iseq, binding, original_stack), () => {
-                return this.setup_arguments(call_data, iseq, args, kwargs, undefined);
+                return this.setup_arguments(call_data, calling_convention, iseq, args, kwargs, undefined);
             });
         });
     }
@@ -380,7 +402,7 @@ export class ExecutionContext {
 
         try {
             return this.run_frame(method_frame, () => {
-                return this.setup_arguments(call_data, iseq, args, kwargs, block);
+                return this.setup_arguments(call_data, CallingConvention.METHOD_LAMBDA, iseq, args, kwargs, block);
             });
         } catch (e) {
             if (e instanceof ReturnError) {
@@ -429,7 +451,7 @@ export class ExecutionContext {
         return this.frame!.nesting![this.frame!.nesting.length - 1];
     }
 
-    private setup_arguments(call_data: CallData, iseq: InstructionSequence, args: RValue[], kwargs?: Kwargs, block?: RValue | null): Label | null {
+    private setup_arguments(call_data: CallData, calling_convention: CallingConvention, iseq: InstructionSequence, args: RValue[], kwargs?: Kwargs, block?: RValue | null): Label | null {
         let locals = [...args];
         let local_index = 0;
         let start_label: Label | null = null;
@@ -449,19 +471,42 @@ export class ExecutionContext {
             if (locals.length > 0 && locals[locals.length - 1].klass === ProcClass) {
                 block = locals.pop();
             } else {
-                // raise an error?
+                // this code path should not be possible, raise an error?
             }
         }
 
-        const post_num = iseq.argument_options.post_num || 0;
-
         // First, set up all of the leading arguments. These are positional and
         // required arguments at the start of the argument list.
-        const lead_num = iseq.argument_options.lead_num || 0;
+        let lead_num = iseq.argument_options.lead_num || 0;
+
+        // Apparently blocks and procs destructure one level of their args automatically.
+        // Eg. {}.map { |a, b| ... } automatically destructures [a, b] while {}.map { |a| ... } does not,
+        // and instead passes a two-element array to the block.
+        if (calling_convention === CallingConvention.BLOCK_PROC && locals[0]?.klass === ArrayClass) {
+            const elements = locals[0].get_data<RubyArray>().elements;
+
+            if (elements.length <= lead_num) {
+                for (let i = 0; i < lead_num; i ++) {
+                    this.local_set(local_index, 0, elements.shift() || Qnil);
+                    local_index ++;
+                }
+
+                elements.shift();
+                lead_num = 0;
+            }
+        }
+
         for (let i = 0; i < lead_num; i ++) {
-            this.local_set(local_index, 0, locals.shift()!);
+            // if calling a method or lambda, enforce required positional args
+            if (calling_convention === CallingConvention.METHOD_LAMBDA && locals.length === 0) {
+                throw new ArgumentError(`wrong number of arguments (given ${args.length}, expected ${lead_num})`);
+            }
+
+            this.local_set(local_index, 0, locals.shift() || Qnil);
             local_index ++;
         }
+
+        const post_num = iseq.argument_options.post_num || 0;
 
         // Next, set up all of the optional arguments. The opt array contains
         // the labels that the frame should start at if the optional is

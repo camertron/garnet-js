@@ -1,7 +1,7 @@
 import { InstructionSequence } from "./instruction_sequence";
 import { Compiler } from "./compiler";
-import { LoadError, TypeError, NoMethodError, NotImplementedError } from "./errors";
-import { ExecutionContext } from "./execution_context";
+import { LoadError, TypeError, NoMethodError, NotImplementedError, NameError } from "./errors";
+import { CallingConvention, ExecutionContext } from "./execution_context";
 import { init as arrayInit } from "./runtime/array";
 import { Integer, init as integerInit } from "./runtime/integer";
 import { Object } from "./runtime/object";
@@ -399,6 +399,7 @@ export class Module {
     public default_visibility: Visibility = Visibility.public;
 
     private constants_: {[key: string]: RValue};
+    private deprecated_constants: {[key: string]: RValue};
     private methods_: {[key: string]: Callable};
     private removed_methods_: Set<string>;
     private undefined_methods_: Set<string>;
@@ -491,7 +492,14 @@ export class Module {
     }
 
     alias_method(new_name: string, existing_name: string) {
-        this.methods[new_name] = this.methods[existing_name];
+        const method = Object.find_method_under(this.rval, existing_name, true);
+
+        if (method) {
+            this.methods[new_name] = method;
+        } else {
+            const type = this instanceof Class ? "class" : "module";
+            throw new NameError(`undefined method \`${existing_name}' for ${type} \`${this.name}'`);
+        }
     }
 
     remove_method(name: string) {
@@ -502,15 +510,37 @@ export class Module {
         this.undefined_methods.add(name);
     }
 
+    deprecate_constant(name: string, constant: RValue) {
+        if (!this.deprecated_constants) {
+            this.deprecated_constants = {};
+        }
+
+        this.deprecated_constants[name] = constant;
+    }
+
+    has_deprecated_constant(name: string, value: RValue): boolean {
+        if (this.deprecated_constants) {
+            return this.deprecated_constants[name] === value;
+        }
+
+        return false;
+    }
+
     // Constant lookup searches for constants that are defined in `Module.nesting`,
     // `Module.nesting.first.ancestors`, and `Object.ancestors` if `Module.nesting.first`
     // is nil or a module.
     find_constant(name: string): RValue | null {
-        const constant = this.find_constant_in_module_nesting(name);
+        let constant = this.find_constant_in_module_nesting(name);
         if (constant) return constant;
 
         if (!this.nesting_parent || this.nesting_parent.klass === ModuleClass) {
-            return ObjectClass.get_data<Class>().constants[name];
+            constant = ObjectClass.get_data<Class>().constants[name] || null;
+
+            if (constant && this.has_deprecated_constant(name, constant)) {
+                STDERR.get_data<IO>().puts(`warning: constant ${name} is deprecated`)
+            }
+
+            return constant;
         } else {
             return this.find_constant_in_ancestors(name);
         }
@@ -530,6 +560,10 @@ export class Module {
                 constant = current_mod.constants[name];
 
                 if (constant) {
+                    if (current_mod.has_deprecated_constant(name, constant)) {
+                        STDERR.get_data<IO>().puts(`warning: constant ${name} is deprecated`)
+                    }
+
                     return constant;
                 } else {
                     current_mod.autoloads.set(name, file);
@@ -547,7 +581,8 @@ export class Module {
     }
 
     private find_constant_in_ancestors(name: string): RValue | null {
-        let constant = null;
+        let constant: RValue | null = null;
+        let parent_mod: Module | null = null;
 
         Runtime.each_unique_ancestor(this.rval, false, (ancestor: RValue): boolean => {
             if (ancestor.get_data<Module>().name === name) {
@@ -555,9 +590,14 @@ export class Module {
                 return false;
             }
 
-            constant = ancestor.get_data<Module>().constants[name];
+            parent_mod = ancestor.get_data<Module>();
+            constant = parent_mod.constants[name];
             return constant ? false : true;
         });
+
+        if (parent_mod && (parent_mod as Module).has_deprecated_constant(name, constant!)) {
+            STDERR.get_data<IO>().puts(`warning: constant ${name} is deprecated`)
+        }
 
         return constant;
     }
@@ -830,6 +870,7 @@ export const VMCoreClass = Runtime.define_class("VMCore", ObjectClass, (klass: C
     });
 
     klass.define_native_method("lambda", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
+        block!.get_data<Proc>().calling_convention = CallingConvention.METHOD_LAMBDA;
         return block!;
     });
 });
@@ -1143,6 +1184,7 @@ export const init = async () => {
     integerInit();
     floatInit();
     symbolInit();
+    enumerableInit();
     hashInit();
     procInit();
     errorInit();
@@ -1154,7 +1196,6 @@ export const init = async () => {
     numericInit();
     await kernel_init();
     objectInit();
-    enumerableInit();
     rangeInit();
     bindingInit();
     signalInit();

@@ -1,5 +1,6 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
+import { Runtime } from "../runtime";
 import { Regexp } from "../runtime/regexp";
 
 export default class ToRegexp extends Instruction {
@@ -14,7 +15,8 @@ export default class ToRegexp extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        context.push(Regexp.new(context.popn(this.size).join(""), this.options));
+        const pattern = context.popn(this.size).map((elem) => Runtime.coerce_to_string(elem).get_data<string>()).join("");
+        context.push(Regexp.new(pattern, this.options));
         return null;
     }
 

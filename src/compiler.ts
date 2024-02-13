@@ -52,6 +52,7 @@ import {
     LambdaNode,
     LocalVariableAndWriteNode,
     LocalVariableOperatorWriteNode,
+    LocalVariableOrWriteNode,
     LocalVariableReadNode,
     LocalVariableTargetNode,
     LocalVariableWriteNode,
@@ -441,6 +442,27 @@ export class Compiler extends Visitor {
         this.iseq.setlocal(lookup.index, lookup.depth);
 
         this.iseq.push(label);
+    }
+
+    override visitLocalVariableOrWriteNode(node: LocalVariableOrWriteNode) {
+        const defined_label = this.iseq.label();
+        const done_label = this.iseq.label();
+
+        this.iseq.putobject({type: "TrueClass", value: true});
+        this.iseq.branchunless(defined_label);
+
+        const lookup = this.find_local_or_throw!(node.name, node.depth + this.local_depth);
+        this.iseq.getlocal(lookup.index, lookup.depth);
+        if (this.used) this.iseq.dup();
+        this.iseq.branchif(done_label);
+
+        if (this.used) this.iseq.pop();
+        this.iseq.push(defined_label);
+        this.with_used(true, () => this.visit(node.value));
+        if (this.used) this.iseq.dup();
+        this.iseq.setlocal(lookup.index, lookup.depth);
+
+        this.iseq.push(done_label);
     }
 
     override visitLocalVariableOperatorWriteNode(node: LocalVariableOperatorWriteNode) {

@@ -4,6 +4,7 @@ import { obj_id_hash } from "../util/object_id";
 import { Encoding } from "./encoding";
 import { String } from "../runtime/string";
 import { Object } from "../runtime/object";
+import { ExecutionContext } from "../execution_context";
 
 export class Integer {
     static INT2FIX0: RValue;

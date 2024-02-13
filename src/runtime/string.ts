@@ -1,5 +1,5 @@
 import { ArgumentError, EncodingConverterNotFoundError, IndexError, NotImplementedError, RangeError } from "../errors";
-import { Array as RubyArray, Class, Qnil, RValue, StringClass, IntegerClass, Runtime, Float, Qtrue, Qfalse, RegexpClass, NumericClass } from "../runtime";
+import { Array as RubyArray, Class, Qnil, RValue, StringClass, IntegerClass, Runtime, Float, Qtrue, Qfalse, RegexpClass, NumericClass, HashClass } from "../runtime";
 import { hash_string } from "../util/string_utils";
 import { Integer } from "./integer";
 import { MatchData, Regexp } from "./regexp";
@@ -9,6 +9,7 @@ import { ExecutionContext } from "../execution_context";
 import { Encoding } from "./encoding";
 import { String as RubyString } from "../runtime/string";
 import { CharSelector } from "./char-selector";
+import { Hash } from "./hash";
 
 // 7-bit strings are implicitly valid.
 // If both the valid _and_ 7bit bits are set, the string is broken.e
@@ -188,7 +189,7 @@ export const init = () => {
     klass.define_native_method("gsub", (self: RValue, args: RValue[]): RValue => {
         const str = self.get_data<string>();
         const pattern = args[0].get_data<Regexp | string>();
-        const replacement = args[1].get_data<string>();
+        const replacements = args[1];
 
         if (pattern instanceof Regexp) {
             const matches: MatchData[] = [];
@@ -202,13 +203,29 @@ export const init = () => {
             const chunks = [];
             let last_pos = 0;
 
-            for (let i = 0; i < matches.length; i ++) {
-                chunks.push(matches[i].match(0));
-                chunks.push(replacement);
-                last_pos = matches[i].end(0);
+            if (replacements.klass === HashClass) {
+                const replacement_hash = replacements.get_data<Hash>();
+
+                for (let i = 0; i < matches.length; i ++) {
+                    chunks.push(matches[i].match(0));
+                    chunks.push(replacement_hash.get(String.new(matches[i].match(0))).get_data<string>());
+                    last_pos = matches[i].end(0);
+                }
+            } else {
+                const replacement = replacements.get_data<string>();
+
+                for (let i = 0; i < matches.length; i ++) {
+                    chunks.push(matches[i].match(0));
+                    chunks.push(replacement);
+                    last_pos = matches[i].end(0);
+                }
             }
 
             chunks.push(str.slice(last_pos, str.length));
+
+            if (chunks.join("").includes("[object Object]")) {
+                debugger;
+            }
 
             return RubyString.new(chunks.join(""));
         } else {
@@ -572,12 +589,16 @@ export const init = () => {
     klass.alias_method("initialize_copy", "replace");
 
     klass.define_native_method("start_with?", (self: RValue, args: RValue[]): RValue => {
-        Runtime.assert_type(args[0] || Qnil, StringClass);
-
         const data = self.get_data<string>();
-        const search_str = args[0].get_data<string>();
 
-        return data.startsWith(search_str) ? Qtrue : Qfalse;
+        if (args[0]?.klass === RegexpClass) {
+            const match = args[0].get_data<Regexp>().search(data);
+            return match && match.begin(0) === 0 ? Qtrue : Qfalse;
+        } else {
+            Runtime.assert_type(args[0] || Qnil, StringClass);
+            const search_str = args[0].get_data<string>();
+            return data.startsWith(search_str) ? Qtrue : Qfalse;
+        }
     });
 
     klass.define_native_method("end_with?", (self: RValue, args: RValue[]): RValue => {
@@ -629,6 +650,9 @@ export const init = () => {
     klass.define_native_method("<<", (self: RValue, args: RValue[]): RValue => {
         Object.check_frozen(self);
         append_to(self, args[0]);
+        // if (self.get_data<string>().includes("[object Object]")) {
+        //     debugger;
+        // }
         return self;
     });
 

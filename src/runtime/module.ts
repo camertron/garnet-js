@@ -135,14 +135,7 @@ export const init = () => {
     mod.define_native_method("alias_method", (self: RValue, args: RValue[]): RValue => {
         const new_method_name = args[0].get_data<string>();
         const existing_method_name = args[1].get_data<string>();
-
-        if (!Object.find_method_under(self, existing_method_name)) {
-            const type = self.klass == ClassClass ? "class" : "module";
-            throw new NameError(`undefined method \`${existing_method_name}' for ${type} \`${self.get_data<Module>().name}'`)
-        }
-
         self.get_data<Module>().alias_method(new_method_name, existing_method_name);
-
         return Runtime.intern(new_method_name);
     });
 
@@ -215,6 +208,44 @@ export const init = () => {
 
     mod.define_native_method("private_constant", (self: RValue, args: RValue[]): RValue => {
         // @TODO: actually make constant private (what does that even mean??)
+        return self;
+    });
+
+    mod.define_native_method("module_function", (self: RValue, args: RValue[]): RValue => {
+        const mod = self.get_data<Module>();
+
+        for (const arg of args) {
+            const name = Runtime.coerce_to_string(arg).get_data<string>();
+            const method = Object.find_method_under(self, name, true);
+
+            if (method) {
+                mod.get_singleton_class().get_data<Class>().methods[name] = method;
+            } else {
+                throw new NameError(`undefined method \`${name}' for module \`${mod.name}'`);
+            }
+        }
+
+        if (args.length === 1) {
+            return args[0]
+        } else {
+            return Array.new(args);
+        }
+    });
+
+    mod.define_native_method("deprecate_constant", (self: RValue, args: RValue[]): RValue => {
+        const mod = self.get_data<Module>();
+
+        for (const arg of args) {
+            const name = Runtime.coerce_to_string(arg).get_data<string>();
+            const constant = mod.constants[name];
+
+            if (!constant) {
+                throw new NameError(`constant ${name} not defined`);
+            }
+
+            mod.deprecate_constant(name, constant);
+        }
+
         return self;
     });
 

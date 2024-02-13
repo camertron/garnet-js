@@ -1,11 +1,13 @@
 import { isNode } from "../env";
-import { ArgumentError, NameError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
-import { ExecutionContext } from "../execution_context";
+import { ArgumentError, LocalJumpError, NameError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
+import { BreakError, ExecutionContext } from "../execution_context";
 import { Array, Module, Qfalse, Qnil, Qtrue, RValue, StringClass, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, ArrayClass, HashClass, SymbolClass, FloatClass, Kwargs } from "../runtime";
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
 import { String } from "../runtime/string";
+import { Hash } from "./hash";
+import { Proc } from "./proc";
 
 export class Kernel {
     public static exit_handlers: RValue[] = [];
@@ -317,5 +319,26 @@ export const init = async () => {
         }
 
         return self;
+    });
+
+    mod.define_native_method("tap", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        if (block) {
+            try {
+                block.get_data<Proc>().call(ExecutionContext.current, [self]);
+                return self;
+            } catch (e) {
+                if (e instanceof BreakError) {
+                    return e.value;
+                }
+
+                throw e;
+            }
+        } else {
+            throw new LocalJumpError("no block given (yield)");
+        }
+    });
+
+    mod.define_native_method("block_given?", (_self: RValue): RValue => {
+        return ExecutionContext.current.frame_yield()?.block ? Qtrue : Qfalse;
     });
 };

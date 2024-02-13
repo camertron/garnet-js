@@ -4,7 +4,7 @@ import { ExecutionContext, ExecutionResult } from "../execution_context";
 import { MethodFrame } from "../frame";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { Class, ClassClass, Module, ModuleClass } from "../runtime";
+import { Class, ClassClass, Module, ModuleClass, Qtrue } from "../runtime";
 import { Object } from "../runtime/object";
 import { Proc } from "../runtime/proc";
 

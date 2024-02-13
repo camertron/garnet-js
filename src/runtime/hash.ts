@@ -1,11 +1,12 @@
-import { KeyError } from "../errors";
+import { ArgumentError, KeyError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { RValue, Class, Qtrue, Qfalse, Qnil, HashClass, ProcClass, Runtime, Array as RubyArray, Kwargs } from "../runtime";
+import { RValue, Class, Qtrue, Qfalse, Qnil, HashClass, ProcClass, Runtime, Array as RubyArray, Kwargs, ArrayClass } from "../runtime";
 import { Object } from "./object";
-import { Proc } from "./proc";
+import { InterpretedProc, Proc } from "./proc";
 import { String } from "../runtime/string";
 import { Integer } from "./integer";
 import { hash_combine } from "../util/hash_utils";
+import { CallData } from "../call_data";
 
 export class Hash {
     static new(default_value?: RValue, default_proc?: RValue): RValue {
@@ -43,6 +44,10 @@ export class Hash {
     get(key: RValue): RValue {
         const hash_code = this.get_hash_code(key);
 
+        if (ExecutionContext.current?.globals["$cameron"] === Qtrue) {
+            console.log(`Getting key: ${Object.send(key, "inspect").get_data<string>()} with hash code: ${hash_code}`);
+        }
+
         if (this.keys.has(hash_code)) {
             return this.values.get(hash_code)!;
         } else {
@@ -58,6 +63,9 @@ export class Hash {
 
     set(key: RValue, value: RValue): RValue {
         const hash_code = this.get_hash_code(key);
+        if (ExecutionContext.current?.globals["$cameron"] === Qtrue) {
+            console.log(`Setting key: ${Object.send(key, "inspect").get_data<string>()}, value: ${Object.send(value, "inspect").get_data<string>()} with hash code: ${hash_code}`);
+        }
         this.keys.set(hash_code, key);
         this.values.set(hash_code, value);
         return value;
@@ -112,6 +120,8 @@ export const init = () => {
     if (inited) return;
 
     const klass = Object.find_constant("Hash")!.get_data<Class>();
+
+    klass.include(Object.find_constant("Enumerable")!);
 
     klass.define_native_singleton_method("new", (_self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
         return Hash.new(args[0], block);
@@ -183,12 +193,14 @@ export const init = () => {
         return self.get_data<Hash>().compare_by_identity ? Qtrue : Qfalse;
     });
 
-    klass.define_native_method("each", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+    klass.define_native_method("each", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue, call_data?: CallData): RValue => {
         const hash = self.get_data<Hash>();
 
         if (block) {
+            const proc = block.get_data<Proc>();
+
             for (const key of hash.keys.values()) {
-                block.get_data<Proc>().call(ExecutionContext.current, [key, hash.get(key)]);
+                proc.call(ExecutionContext.current, [RubyArray.new([key, hash.get(key)])]);
             }
 
             return self;
@@ -283,6 +295,44 @@ export const init = () => {
         });
 
         return Integer.get(hash);
+    });
+
+    klass.define_native_singleton_method("[]", (_self: RValue, args: RValue[]): RValue => {
+        const hash = new Hash();
+
+        if (args.length === 1 && args[0].klass === HashClass) {
+            args[0].get_data<Hash>().each((k: RValue, v: RValue): void => {
+                hash.set(k, v);
+            });
+        } else if (args.length === 1 && args[0].klass === ArrayClass) {
+            const elements = args[0].get_data<RubyArray>().elements;
+
+            for (let i = 0; i < elements.length; i ++) {
+                const arg = elements[i];
+
+                if (arg.klass === ArrayClass) {
+                    const tuple_elements = arg.get_data<RubyArray>().elements;
+
+                    if (tuple_elements.length === 1 || tuple_elements.length === 2) {
+                        hash.set(tuple_elements[0], tuple_elements[1] || Qnil);
+                    } else {
+                        throw new ArgumentError(`invalid number of elements (${tuple_elements.length} for 1..2)`);
+                    }
+                } else {
+                    throw new ArgumentError(`wrong element type ${arg.klass.get_data<Class>().name} at ${i} (expected array)`)
+                }
+            }
+        } else {
+            if (args.length % 2 != 0) {
+                throw new ArgumentError("odd number of arguments for Hash");
+            }
+
+            for (let i = 0; i < args.length; i += 2) {
+                hash.set(args[i], args[i + 1]);
+            }
+        }
+
+        return Hash.from_hash(hash);
     });
 
     inited = true;

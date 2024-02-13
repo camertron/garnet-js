@@ -1,7 +1,7 @@
 import { NotImplementedError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Class, ModuleClass, Qnil, RValue, Runtime } from "../runtime";
+import { Class, Module, ModuleClass, Qnil, RValue, Runtime } from "../runtime";
 import { Object } from "../runtime/object";
 
 export enum DefinedType {
@@ -108,7 +108,11 @@ export default class Defined extends Instruction {
                 break;
 
             case DefinedType.CONST_FROM:
-                throw new NotImplementedError("defined TYPE_CONST_FROM");
+                if (object.get_data<Module>().find_constant(this.name)) {
+                    result = this.message;
+                }
+
+                break;
         }
 
         context.push(result || Qnil);

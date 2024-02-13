@@ -2,7 +2,7 @@ import { MethodCallData, CallDataFlag } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { ArrayClass, Kwargs, ProcClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
+import { Kwargs, RValue } from "../runtime";
 import { Hash } from "../runtime/hash";
 import { Object } from "../runtime/object"
 import { Proc } from "../runtime/proc";
@@ -52,6 +52,7 @@ export default class Send extends Instruction {
         const receiver = context.pop()!;
         const result = Object.send(receiver, this.call_data, args, kwargs, block);
         context.push(result);
+
         return null;
     }
 

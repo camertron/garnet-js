@@ -1,5 +1,5 @@
 import { BlockCallData } from "../call_data";
-import { ExecutionContext } from "../execution_context";
+import { CallingConvention, ExecutionContext } from "../execution_context";
 import { BlockFrame } from "../frame";
 import { InstructionSequence } from "../instruction_sequence";
 import { RValue, Class, ProcClass, NativeMethod, Callable, Runtime, Kwargs } from "../runtime";
@@ -8,6 +8,7 @@ import { Object } from "../runtime/object";
 
 export abstract class Proc {
     public binding: Binding;
+    public calling_convention: CallingConvention;
 
     static from_native_fn(context: ExecutionContext, method: NativeMethod, binding?: Binding): RValue {
         binding ||= context.get_binding();
@@ -27,11 +28,12 @@ export class NativeProc extends Proc {
     public callable: NativeMethod;
     public binding: Binding;
 
-    constructor(callable: NativeMethod, binding: Binding) {
+    constructor(callable: NativeMethod, binding: Binding, calling_convention: CallingConvention = CallingConvention.BLOCK_PROC) {
         super();
 
         this.callable = callable;
         this.binding = binding;
+        this.calling_convention = calling_convention;
     }
 
     call(_context: ExecutionContext, args: RValue[], kwargs?: Kwargs, _call_data?: BlockCallData): RValue {
@@ -47,16 +49,17 @@ export class InterpretedProc extends Proc {
     public iseq: InstructionSequence;
     public binding: Binding;
 
-    constructor(iseq: InstructionSequence, binding: Binding) {
+    constructor(iseq: InstructionSequence, binding: Binding, calling_convention: CallingConvention = CallingConvention.BLOCK_PROC) {
         super();
 
         this.iseq = iseq;
         this.binding = binding;
+        this.calling_convention = calling_convention;
     }
 
     call(context: ExecutionContext, args: RValue[], kwargs?: Kwargs, call_data?: BlockCallData): RValue {
         call_data ||= BlockCallData.create(args.length);
-        return context.run_block_frame(call_data, this.iseq, this.binding, args, kwargs);
+        return context.run_block_frame(call_data, this.calling_convention, this.iseq, this.binding, args, kwargs);
     }
 
     with_binding(new_binding: Binding): InterpretedProc {

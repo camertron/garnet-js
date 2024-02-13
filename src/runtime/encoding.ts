@@ -346,6 +346,15 @@ export const init = () => {
         klass.define_native_method("compatible?", (self: RValue, args: RValue[]): RValue => {
             return Encoding.are_compatible(self, args[0]) ? Qtrue : Qfalse;
         });
+
+        klass.define_native_method("ascii_compatible?", (self: RValue): RValue => {
+            return self.get_data<Encoding>().ascii_compatible ? Qtrue : Qfalse;
+        });
+
+        // @TODO: support dummy encodings?
+        klass.define_native_method("dummy?", (self: RValue): RValue => {
+            return Qfalse;
+        });
     });
 
     register_encoding("US_ASCII", ["US-ASCII"], new USASCIIEncoding());

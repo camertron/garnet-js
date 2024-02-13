@@ -1,6 +1,6 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Class, ClassClass, VMCore } from "../runtime";
+import { Class, ClassClass, ModuleClass, VMCore } from "../runtime";
 
 export enum SpecialObjectType {
     VMCORE = 1,
@@ -26,7 +26,7 @@ export default class PutSpecialObject extends Instruction {
             case SpecialObjectType.CBASE:
                 let value = context.frame!.self;
 
-                if (value.klass != ClassClass) {
+                if (value.klass != ClassClass && value.klass != ModuleClass) {
                     value = value.get_data<Class>().get_singleton_class();
                 }
 

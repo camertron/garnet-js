@@ -494,6 +494,9 @@ export class Regexp {
     }
 
     static compile(pat: string, options: string): Regexp {
+        if (pat.includes("[object Object]")) {
+            debugger;
+        }
         const compile_info = CompileInfo.create(Regexp.make_compile_info());
 
         const regexp_ptr = RegexpPtr.create();
@@ -511,7 +514,7 @@ export class Regexp {
             onigmo.exports.free(regexp_ptr.address);
             onigmo.exports.free(errorinfo.address);
 
-            return new Regexp(regexp);
+            return new Regexp(pat, regexp);
         } else {
             const err_msg = Regexp.error_code_to_string(error_code, errorinfo);
 
@@ -537,9 +540,11 @@ export class Regexp {
         ec.frame_svar()!.svars["$&"] = RubyString.new(match_data.match(0));
     }
 
+    public pattern: string;
     private regexp: Address;
 
-    constructor(regexp: Address) {
+    constructor(pattern: string, regexp: Address) {
+        this.pattern = pattern;
         this.regexp = regexp;
     }
 
