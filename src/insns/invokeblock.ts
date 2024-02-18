@@ -2,7 +2,7 @@ import { BlockCallData, CallDataFlag } from "../call_data";
 import { LocalJumpError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Callable, Kwargs, Qnil } from "../runtime";
+import { Kwargs, Qtrue } from "../runtime";
 import { Proc } from "../runtime/proc";
 
 export default class InvokeBlock extends Instruction {

@@ -249,6 +249,10 @@ export const init = () => {
         return self;
     });
 
+    mod.define_native_method("nesting", (self: RValue): RValue => {
+        return Array.new(ExecutionContext.current.frame?.nesting || []);
+    });
+
     inited = true;
 };
 

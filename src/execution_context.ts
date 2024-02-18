@@ -51,7 +51,7 @@ export enum CallingConvention {
     METHOD_LAMBDA = 1,
 
     // Assigns nil to missing positional arguments (applies to blocks and procs, but not lambdas converted to procs)
-    BLOCK_PROC = 1
+    BLOCK_PROC = 2
 }
 
 // This is the object that gets passed around all of the instructions as they
@@ -263,11 +263,11 @@ export class ExecutionContext {
                     } else if (result instanceof LeaveResult) {
                         // don't remove locals from top frames so they can be accessed by the
                         // next top frame, should there be one
-                        if (!(frame instanceof TopFrame)) {
+                        // if (!(frame instanceof TopFrame)) {
                             // this shouldn't be necessary, but is because we're not handling
                             // the stack correctly at the moment
                             this.stack.splice(frame.stack_index);
-                        }
+                        // }
 
                         // restore the previous frame
                         this.frame = previous || frame.parent;

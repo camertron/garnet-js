@@ -6,7 +6,6 @@ import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
 import { String } from "../runtime/string";
-import { Hash } from "./hash";
 import { Proc } from "./proc";
 
 export class Kernel {
@@ -340,5 +339,9 @@ export const init = async () => {
 
     mod.define_native_method("block_given?", (_self: RValue): RValue => {
         return ExecutionContext.current.frame_yield()?.block ? Qtrue : Qfalse;
+    });
+
+    mod.define_native_method("itself", (self: RValue): RValue => {
+        return self;
     });
 };

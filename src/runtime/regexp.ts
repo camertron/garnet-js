@@ -494,9 +494,6 @@ export class Regexp {
     }
 
     static compile(pat: string, options: string): Regexp {
-        if (pat.includes("[object Object]")) {
-            debugger;
-        }
         const compile_info = CompileInfo.create(Regexp.make_compile_info());
 
         const regexp_ptr = RegexpPtr.create();

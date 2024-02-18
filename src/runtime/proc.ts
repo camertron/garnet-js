@@ -5,6 +5,7 @@ import { InstructionSequence } from "../instruction_sequence";
 import { RValue, Class, ProcClass, NativeMethod, Callable, Runtime, Kwargs } from "../runtime";
 import { Binding } from "./binding";
 import { Object } from "../runtime/object";
+import { Integer } from "./integer";
 
 export abstract class Proc {
     public binding: Binding;
@@ -22,6 +23,7 @@ export abstract class Proc {
 
     abstract call(context: ExecutionContext, args: RValue[], kwargs?: Kwargs, call_data?: BlockCallData): RValue;
     abstract with_binding(new_binding: Binding): Proc;
+    abstract get arity(): number;
 }
 
 export class NativeProc extends Proc {
@@ -42,6 +44,12 @@ export class NativeProc extends Proc {
 
     with_binding(new_binding: Binding): NativeProc {
         return new NativeProc(this.callable, new_binding);
+    }
+
+    // @TODO: we need more info, but I'm unsure how to get it
+    // I think MRI requires you to supply an arity when you define the proc/method 😱
+    get arity(): number {
+        return 0;
     }
 }
 
@@ -65,6 +73,12 @@ export class InterpretedProc extends Proc {
     with_binding(new_binding: Binding): InterpretedProc {
         return new InterpretedProc(this.iseq, new_binding);
     }
+
+    // @TODO: flesh this out. For now, just returns the number of required positional args;
+    // calculating the actual arity is much more complicated.
+    get arity(): number {
+        return this.iseq.argument_options.lead_num || 0;
+    }
 }
 
 let inited = false;
@@ -77,6 +91,10 @@ export const init = () => {
     klass.define_native_method("call", (self: RValue, args: RValue[], kwargs?: Kwargs): RValue => {
         const ec = ExecutionContext.current
         return self.get_data<Proc>().call(ec, args, kwargs, (ec.frame as BlockFrame).call_data);
+    });
+
+    klass.define_native_method("arity", (self: RValue): RValue => {
+        return Integer.get(self.get_data<Proc>().arity);
     });
 
     klass.alias_method("[]", "call");

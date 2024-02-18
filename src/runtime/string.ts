@@ -186,11 +186,7 @@ export const init = () => {
         return RubyArray.new(str.split(delim).map((elem) => RubyString.new(elem)));
     });
 
-    klass.define_native_method("gsub", (self: RValue, args: RValue[]): RValue => {
-        const str = self.get_data<string>();
-        const pattern = args[0].get_data<Regexp | string>();
-        const replacements = args[1];
-
+    const gsub = (str: string, pattern: Regexp | string, replacements: RValue): string => {
         if (pattern instanceof Regexp) {
             const matches: MatchData[] = [];
 
@@ -207,7 +203,7 @@ export const init = () => {
                 const replacement_hash = replacements.get_data<Hash>();
 
                 for (let i = 0; i < matches.length; i ++) {
-                    chunks.push(matches[i].match(0));
+                    chunks.push(str.slice(last_pos, matches[i].begin(0)));
                     chunks.push(replacement_hash.get(String.new(matches[i].match(0))).get_data<string>());
                     last_pos = matches[i].end(0);
                 }
@@ -215,7 +211,7 @@ export const init = () => {
                 const replacement = replacements.get_data<string>();
 
                 for (let i = 0; i < matches.length; i ++) {
-                    chunks.push(matches[i].match(0));
+                    chunks.push(str.slice(last_pos, matches[i].begin(0)));
                     chunks.push(replacement);
                     last_pos = matches[i].end(0);
                 }
@@ -223,16 +219,32 @@ export const init = () => {
 
             chunks.push(str.slice(last_pos, str.length));
 
-            if (chunks.join("").includes("[object Object]")) {
-                debugger;
-            }
-
-            return RubyString.new(chunks.join(""));
+            return chunks.join("");
         } else {
-            // @TODO: handle string argument
+            throw new Error("gsub cannot handle string patterns yet");
         }
+    }
 
-        return self;
+    klass.define_native_method("gsub", (self: RValue, args: RValue[]): RValue => {
+        const str = self.get_data<string>();
+        const pattern = args[0].get_data<Regexp | string>();
+        const replacements = args[1];
+
+        return RubyString.new(gsub(str, pattern, replacements));
+    });
+
+    klass.define_native_method("gsub!", (self: RValue, args: RValue[]): RValue => {
+        const str = self.get_data<string>();
+        const pattern = args[0].get_data<Regexp | string>();
+        const replacements = args[1];
+        const new_str = gsub(str, pattern, replacements);
+
+        if (new_str === str) {
+            return Qnil;
+        } else {
+            self.data = new_str;
+            return self;
+        }
     });
 
     klass.define_native_method("match?", (self: RValue, args: RValue[]): RValue => {
@@ -650,9 +662,6 @@ export const init = () => {
     klass.define_native_method("<<", (self: RValue, args: RValue[]): RValue => {
         Object.check_frozen(self);
         append_to(self, args[0]);
-        // if (self.get_data<string>().includes("[object Object]")) {
-        //     debugger;
-        // }
         return self;
     });
 
@@ -704,6 +713,31 @@ export const init = () => {
             } else {
                 return RubyString.new(data);
             }
+        }
+    });
+
+    const leading_whitespace_re = /^[\0\t\n\v\f\r ]+/;
+    const trailing_whitespace_re = /[\0\t\n\v\f\r ]+$/;
+
+    const strip = (str: string): string => {
+        return str
+            .replace(leading_whitespace_re, "")
+            .replace(trailing_whitespace_re, "");
+    }
+
+    klass.define_native_method("strip", (self: RValue): RValue => {
+        return String.new(strip(self.get_data<string>()));
+    });
+
+    klass.define_native_method("strip!", (self: RValue): RValue => {
+        const old_str = self.get_data<string>();
+        const new_str = strip(old_str);
+
+        if (new_str === old_str) {
+            return Qnil;
+        } else {
+            self.data = new_str;
+            return self;
         }
     });
 

@@ -1,6 +1,6 @@
 import { ArgumentError, KeyError } from "../errors";
-import { ExecutionContext } from "../execution_context";
-import { RValue, Class, Qtrue, Qfalse, Qnil, HashClass, ProcClass, Runtime, Array as RubyArray, Kwargs, ArrayClass } from "../runtime";
+import { BreakError, ExecutionContext } from "../execution_context";
+import { RValue, Class, Qtrue, Qfalse, Qnil, HashClass, ProcClass, Runtime, Array as RubyArray, Kwargs, ArrayClass, KwargsHash } from "../runtime";
 import { Object } from "./object";
 import { InterpretedProc, Proc } from "./proc";
 import { String } from "../runtime/string";
@@ -223,6 +223,49 @@ export const init = () => {
             // @TODO: return an Enumerator
             return Qnil;
         }
+    });
+
+    klass.define_native_method("transform_keys", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
+        let replacement_hash: Hash | KwargsHash | null = null;
+
+        if (args.length > 0) {
+            Runtime.assert_type(args[0], HashClass);
+            replacement_hash = args[0].get_data<Hash>();
+        } else if (kwargs) {
+            replacement_hash = new KwargsHash(kwargs);
+        }
+
+        const hash = self.get_data<Hash>();
+        const result_hash = new Hash();
+        const proc = block?.get_data<Proc>();
+
+        try {
+            hash.each((k: RValue, v: RValue) => {
+                let replacement_k = undefined;
+
+                if (replacement_hash) {
+                    replacement_k = replacement_hash.get(k);
+                }
+
+                if (!replacement_k && proc) {
+                    replacement_k = proc.call(ExecutionContext.current, [k]);
+                }
+
+                if (!replacement_k) {
+                    replacement_k = k;
+                }
+
+                result_hash.set(replacement_k, v);
+            });
+        } catch (e) {
+            if (e instanceof BreakError) {
+                return e.value;
+            }
+
+            throw e;
+        }
+
+        return Hash.from_hash(result_hash);
     });
 
     klass.define_native_method("dup", (self: RValue): RValue => {

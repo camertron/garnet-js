@@ -708,7 +708,15 @@ export class Compiler extends Visitor {
 
     override visitBlockArgumentNode(node: BlockArgumentNode) {
         if (node.expression) {
+            // named block, eg. def foo(&block)
             this.visit(node.expression);
+        } else {
+            // anonymous block, eg. def foo(&)
+            const lookup = this.find_local_or_throw("&", 0);
+
+            if (this.used) {
+                this.iseq.getlocal(lookup.index, lookup.depth);
+            }
         }
     }
 

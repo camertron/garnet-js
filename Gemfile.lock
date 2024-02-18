@@ -18,6 +18,7 @@ GEM
     rake (13.0.6)
 
 PLATFORMS
+  arm64-darwin-23
   x86_64-darwin-20
   x86_64-darwin-22
   x86_64-linux

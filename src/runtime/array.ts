@@ -53,6 +53,35 @@ export const init = () => {
         return self;
     });
 
+    klass.define_native_method("select", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        const elements = self.get_data<Array>().elements;
+
+        if (block) {
+            try {
+                const results: RValue[] = [];
+
+                for (const element of elements) {
+                    if (Object.send(block, "call", [element]).is_truthy()) {
+                        results.push(element);
+                    }
+                };
+
+                return Array.new(results);
+            } catch (e) {
+                if (e instanceof BreakError) {
+                    // select returns nil if a break occurs in the block
+                    return Qnil;
+                } else {
+                    // an error occurred
+                    throw e;
+                }
+            }
+        } else {
+            // @TODO: return an Enumerator
+            return Qnil;
+        }
+    });
+
     klass.define_native_method("reject", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
         const elements = self.get_data<Array>().elements;
 

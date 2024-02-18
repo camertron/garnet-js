@@ -417,10 +417,10 @@ __metadata:
 
 "@camertron/garnet-js@file:./::locator=%40camertron%2Fgarnet-js%40workspace%3A.":
   version: 0.1.0
-  resolution: "@camertron/garnet-js@file:./#./::hash=8ade4c&locator=%40camertron%2Fgarnet-js%40workspace%3A."
+  resolution: "@camertron/garnet-js@file:./#./::hash=76a869&locator=%40camertron%2Fgarnet-js%40workspace%3A."
   dependencies:
     "@bjorn3/browser_wasi_shim": "npm:^0.2.17"
-  checksum: 42eafed8a085e474992c7b5871d796585a0d70125d2d39aff26dac5cb0c63e2749c60fe2da2a82a81c260a702957baa085d24111d817e99c41637a70b210186e
+  checksum: c8652c817614d91fb90964a79c8e55b7d5c83e82667053fea89028060651c6790e736fb0d95666047aeded6d6fd8f91e0719cff402d358ee38e756ef242c35c3
   languageName: node
   linkType: hard
 

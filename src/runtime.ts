@@ -42,6 +42,19 @@ type ClassDefinitionCallback = (klass: Class) => void;
 export type NativeMethod = (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData) => RValue;
 export type Kwargs = Map<string, RValue>;
 
+export class KwargsHash {
+    private kwargs: Kwargs;
+
+    constructor(kwargs: Kwargs) {
+        this.kwargs = kwargs;
+    }
+
+    get(key: RValue) {
+        Runtime.assert_type(key, SymbolClass);
+        return this.kwargs.get(key.get_data<string>());
+    }
+}
+
 // used as the type for keys of the symbols weak map
 type SymbolType = {
     name: string
@@ -354,24 +367,22 @@ export abstract class Callable {
 export class InterpretedCallable extends Callable {
     public name: string;
     public iseq: InstructionSequence;
+    public nesting: RValue[];
     public owner?: RValue;
 
-    constructor(name: string, iseq: InstructionSequence, visibility: Visibility, owner?: RValue) {
+    constructor(name: string, iseq: InstructionSequence, visibility: Visibility, nesting: RValue[], owner?: RValue) {
         super();
 
         this.name = name;
         this.iseq = iseq;
         this.visibility = visibility;
+        this.nesting = nesting;
         this.owner = owner;
-
-        if (!owner) {
-            debugger;
-        }
     }
 
     call(context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData): RValue {
         call_data ||= MethodCallData.create(this.name, args.length);
-        return context.run_method_frame(call_data, context.frame!.nesting, this.iseq, receiver, args, kwargs, block, this.owner);
+        return context.run_method_frame(call_data, this.nesting, this.iseq, receiver, args, kwargs, block, this.owner);
     }
 }
 
@@ -476,7 +487,7 @@ export class Module {
     }
 
     define_method(name: string, body: InstructionSequence) {
-        this.methods[name] = new InterpretedCallable(name, body, this.default_visibility, this.rval);
+        this.methods[name] = new InterpretedCallable(name, body, this.default_visibility, ExecutionContext.current.frame!.nesting, this.rval);
     }
 
     define_native_method(name: string, body: NativeMethod, visibility?: Visibility) {
@@ -530,7 +541,10 @@ export class Module {
     // `Module.nesting.first.ancestors`, and `Object.ancestors` if `Module.nesting.first`
     // is nil or a module.
     find_constant(name: string): RValue | null {
-        let constant = this.find_constant_in_module_nesting(name);
+        let constant = this.find_constant_in_self(name);
+        if (constant) return constant;
+
+        constant = this.find_constant_in_module_nesting(name);
         if (constant) return constant;
 
         if (!this.nesting_parent || this.nesting_parent.klass === ModuleClass) {
@@ -546,35 +560,49 @@ export class Module {
         }
     }
 
-    private find_constant_in_module_nesting(name: string): RValue | null {
-        let current_mod: Module | undefined = this;
+    private find_constant_in_self(name: string): RValue | null {
+        let constant = this.constants[name];
+        if (constant) return constant;
 
-        while (current_mod) {
-            let constant = current_mod.constants[name];
+        this.maybe_autoload_constant(name, this);
+        constant = this.constants[name];
+        if (constant) return constant;
+
+        return null;
+    }
+
+    private find_constant_in_module_nesting(name: string): RValue | null {
+        const ec = ExecutionContext.current;
+        if (!ec || !ec.frame) return null;
+
+        for (const current_mod_rval of ec.frame.nesting) {
+            const current_mod = current_mod_rval.get_data<Module>();
+            let constant: RValue | null = current_mod.constants[name];
             if (constant) return constant;
 
-            if (current_mod.autoloads.has(name)) {
-                const file = current_mod.autoloads.get(name)!;
-                current_mod.autoloads.delete(name);
-                Runtime.require(file);
-                constant = current_mod.constants[name];
+            constant = this.maybe_autoload_constant(name, current_mod);
+            if (constant) return constant;
+        }
 
-                if (constant) {
-                    if (current_mod.has_deprecated_constant(name, constant)) {
-                        STDERR.get_data<IO>().puts(`warning: constant ${name} is deprecated`)
-                    }
+        return null;
+    }
 
-                    return constant;
-                } else {
-                    current_mod.autoloads.set(name, file);
+    private maybe_autoload_constant(name: string, mod: Module) : RValue | null {
+        if (mod.autoloads.has(name)) {
+            const file = mod.autoloads.get(name)!;
+            mod.autoloads.delete(name);
+            Runtime.require(file);
+            const constant = mod.constants[name];
+
+            if (constant) {
+                if (mod.has_deprecated_constant(name, constant)) {
+                    STDERR.get_data<IO>().puts(`warning: constant ${name} is deprecated`)
                 }
-            }
 
-            if (!current_mod.nesting_parent) {
-                break;
+                return constant;
+            } else {
+                mod.autoloads.set(name, file);
             }
-
-            current_mod = current_mod.nesting_parent.get_data<Module>();
         }
 
         return null;
@@ -592,7 +620,12 @@ export class Module {
 
             parent_mod = ancestor.get_data<Module>();
             constant = parent_mod.constants[name];
-            return constant ? false : true;
+            if (constant) return false;
+
+            constant = this.maybe_autoload_constant(name, parent_mod);
+            if (constant) return false;
+
+            return true;
         });
 
         if (parent_mod && (parent_mod as Module).has_deprecated_constant(name, constant!)) {
@@ -901,6 +934,10 @@ NilClass.get_data<Class>().tap( (klass: Class) => {
     klass.define_native_method("!", (_self: RValue): RValue => {
         return Qtrue;
     });
+
+    klass.define_native_method("===", (self: RValue, args: RValue[]): RValue => {
+        return self === args[0] ? Qtrue : Qfalse;
+    });
 });
 
 TrueClass.get_data<Class>().tap( (klass: Class) => {
@@ -926,6 +963,10 @@ TrueClass.get_data<Class>().tap( (klass: Class) => {
         }
 
         return self.iv_get("@__hash");
+    });
+
+    klass.define_native_method("===", (self: RValue, args: RValue[]): RValue => {
+        return self === args[0] ? Qtrue : Qfalse;
     });
 });
 
@@ -953,6 +994,10 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
 
         return self.iv_get("@__hash");
     });
+
+    klass.define_native_method("===", (self: RValue, args: RValue[]): RValue => {
+        return self === args[0] ? Qtrue : Qfalse;
+    });
 });
 
 (ClassClass.get_data<Class>()).tap( (klass: Class) => {
@@ -961,9 +1006,9 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
         return new RValue(self);
     });
 
-    klass.define_native_method("new", (self: RValue, args: RValue[]): RValue => {
+    klass.define_native_method("new", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
         const obj = Object.send(self, "allocate");
-        Object.send(obj, "initialize", args);
+        Object.send(obj, "initialize", args, kwargs, block);
         return obj;
     });
 
