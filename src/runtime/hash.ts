@@ -2,7 +2,7 @@ import { ArgumentError, KeyError } from "../errors";
 import { BreakError, ExecutionContext } from "../execution_context";
 import { RValue, Class, Qtrue, Qfalse, Qnil, HashClass, ProcClass, Runtime, Array as RubyArray, Kwargs, ArrayClass, KwargsHash } from "../runtime";
 import { Object } from "./object";
-import { InterpretedProc, Proc } from "./proc";
+import { Proc } from "./proc";
 import { String } from "../runtime/string";
 import { Integer } from "./integer";
 import { hash_combine } from "../util/hash_utils";
@@ -44,10 +44,6 @@ export class Hash {
     get(key: RValue): RValue {
         const hash_code = this.get_hash_code(key);
 
-        if (ExecutionContext.current?.globals["$cameron"] === Qtrue) {
-            console.log(`Getting key: ${Object.send(key, "inspect").get_data<string>()} with hash code: ${hash_code}`);
-        }
-
         if (this.keys.has(hash_code)) {
             return this.values.get(hash_code)!;
         } else {
@@ -63,9 +59,6 @@ export class Hash {
 
     set(key: RValue, value: RValue): RValue {
         const hash_code = this.get_hash_code(key);
-        if (ExecutionContext.current?.globals["$cameron"] === Qtrue) {
-            console.log(`Setting key: ${Object.send(key, "inspect").get_data<string>()}, value: ${Object.send(value, "inspect").get_data<string>()} with hash code: ${hash_code}`);
-        }
         this.keys.set(hash_code, key);
         this.values.set(hash_code, value);
         return value;
@@ -326,6 +319,10 @@ export const init = () => {
     });
 
     klass.alias_method("length", "size");
+
+    klass.define_native_method("empty?", (self: RValue, _args: RValue[]): RValue => {
+        return self.get_data<Hash>().keys.size === 0 ? Qtrue : Qfalse;
+    });
 
     klass.define_native_method("hash", (self: RValue, _args: RValue[]): RValue => {
         const data = self.get_data<Hash>();

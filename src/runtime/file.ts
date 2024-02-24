@@ -1,5 +1,5 @@
 import { ErrnoENOENT } from "../errors";
-import { Class, IOClass, Qnil, RValue, Runtime, StringClass, Qtrue, Qfalse } from "../runtime"
+import { Class, IOClass, RValue, Runtime, StringClass, Qtrue, Qfalse, Qnil } from "../runtime"
 import { vmfs } from "../vmfs";
 import { Dir } from "./dir";
 import { String } from "../runtime/string";
@@ -16,6 +16,12 @@ const path_from_realpath_args = (args: RValue[]): string => {
 
     return path;
 }
+
+export const FNM_SHORTNAME = 0;
+export const FNM_NOESCAPE = 1;
+export const FNM_PATHNAME = 2;
+export const FNM_DOTMATCH = 4;
+export const FNM_EXTGLOB = 16;
 
 export const init = () => {
     Runtime.define_class("File", IOClass, (klass: Class): void => {
@@ -177,6 +183,11 @@ export const init = () => {
             }
 
             return String.new(vmfs.join_paths(...parts));
+        });
+
+        klass.define_native_singleton_method("read", (_self: RValue, args: RValue[]): RValue => {
+            Runtime.assert_type(args[0], StringClass);
+            return String.new(vmfs.read(args[0].get_data<string>()).toString("utf-8"));
         });
     });
 };

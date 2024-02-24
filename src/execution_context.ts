@@ -4,7 +4,7 @@ import { BlockFrame, ClassFrame, Frame, MethodFrame, RescueFrame, TopFrame } fro
 import Instruction from "./instruction";
 import { CatchBreak, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
 import { Local } from "./local_table";
-import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, ArrayClass, ProcClass, Kwargs, Qtrue, Qfalse, Runtime } from "./runtime";
+import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, ArrayClass, ProcClass, Kwargs, Qtrue, Qfalse, Runtime, StringClass } from "./runtime";
 import { Binding } from "./runtime/binding";
 import { Hash } from "./runtime/hash";
 import { Object } from "./runtime/object";
@@ -44,6 +44,15 @@ export class BreakError extends ThrownError {
 }
 
 export class NextError extends ThrownError {
+}
+
+export class ThrowError extends ThrownError {
+    public tag: RValue;
+
+    constructor(tag: RValue, value: RValue) {
+        super(value);
+        this.tag = tag;
+    }
 }
 
 export enum CallingConvention {
@@ -119,6 +128,10 @@ export class ExecutionContext {
     }
 
     run_frame(frame: Frame, cb?: () => Label | null): RValue {
+        if (this.globals["$cameron"] === Qtrue) {
+            debugger;
+        }
+
         // First, set the current frame to the given value.
         let previous = this.frame;
         this.frame = frame;
@@ -281,13 +294,20 @@ export class ExecutionContext {
         }
     }
 
-    create_backtrace(): string[] {
-        let current: Frame | null = this.frame;
+    create_backtrace(start: number = 0, length: number = -1): string[] {
         const backtrace = [];
+        let current: Frame | null = this.frame;
+        let frame_idx = 0;
 
         while (current) {
-            backtrace.push(`${current.iseq.file}:${current.line + 1} in ${current.iseq.name}`);
+            if (frame_idx >= start) {
+                backtrace.push(`${current.iseq.file}:${current.line + 1} in ${current.iseq.name}`);
+            }
+
             current = current.parent;
+            frame_idx ++;
+
+            if (length != -1 && backtrace.length >= length) break;
         }
 
         return backtrace;
@@ -444,6 +464,9 @@ export class ExecutionContext {
     }
 
     local_set(index: number, depth: number, value: RValue) {
+        if (depth === 0 && this.frame!.iseq.local_table.locals[index]?.name === "&" && value.klass === StringClass && value.get_data<string>() === "defaults to passing") {
+            debugger;
+        }
         this.frame!.local_set(this, index, depth, value);
     }
 
@@ -451,9 +474,22 @@ export class ExecutionContext {
         return this.frame!.nesting![this.frame!.nesting.length - 1];
     }
 
+    // ugh whyyy is this necessary
+    private inc_local_index(local_index: number, iseq: InstructionSequence): number {
+        if (iseq.local_table.locals.length <= local_index + 1) {
+            return iseq.local_table.locals.length - 1;
+        }
+
+        if (iseq.local_table.locals[local_index + 1].name === "keyword_bits") {
+            return local_index + 2;
+        } else {
+            return local_index + 1;
+        }
+    }
+
     private setup_arguments(call_data: CallData, calling_convention: CallingConvention, iseq: InstructionSequence, args: RValue[], kwargs?: Kwargs, block?: RValue | null): Label | null {
         let locals = [...args];
-        let local_index = 0;
+        let local_index = this.inc_local_index(-1, iseq);
         let start_label: Label | null = null;
 
         if (call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
@@ -488,7 +524,7 @@ export class ExecutionContext {
             if (elements.length <= lead_num) {
                 for (let i = 0; i < lead_num; i ++) {
                     this.local_set(local_index, 0, elements.shift() || Qnil);
-                    local_index ++;
+                    local_index = this.inc_local_index(local_index, iseq);
                 }
 
                 elements.shift();
@@ -503,7 +539,7 @@ export class ExecutionContext {
             }
 
             this.local_set(local_index, 0, locals.shift() || Qnil);
-            local_index ++;
+            local_index = this.inc_local_index(local_index, iseq);
         }
 
         const post_num = iseq.argument_options.post_num || 0;
@@ -528,7 +564,7 @@ export class ExecutionContext {
                     this.local_set(local_index, 0, locals.shift()!);
                 }
 
-                local_index ++;
+                local_index = this.inc_local_index(local_index, iseq);
             }
 
             if (!start_label) {
@@ -548,14 +584,14 @@ export class ExecutionContext {
                 locals.length = 0;
             }
 
-            local_index ++;
+            local_index = this.inc_local_index(local_index, iseq);
         }
 
         // Next, set up any post arguments. These are positional arguments that
         // come after the splat argument.
         for (let i = 0; i < post_num; i ++) {
             this.local_set(local_index, 0, locals.shift()!);
-            local_index ++;
+            local_index = this.inc_local_index(local_index, iseq);
         }
 
         const keyword_option = iseq.argument_options.keyword;
@@ -606,7 +642,7 @@ export class ExecutionContext {
                 }
 
                 if (kwargs) kwargs.delete(name);
-                local_index ++;
+                local_index = this.inc_local_index(local_index, iseq);
             }
         }
 
@@ -620,13 +656,15 @@ export class ExecutionContext {
             }
 
             this.local_set(local_index, 0, Hash.from_hash(kwargs_hash));
-            local_index ++;
+            local_index = this.inc_local_index(local_index, iseq);
         }
 
         // Add any remaining (positional) locals, as they can be referenced using numbered parameter syntax, eg _n
-        while (locals.length > 0) {
-            this.local_set(local_index, 0, locals.shift()!);
-            local_index ++;
+        if (calling_convention === CallingConvention.BLOCK_PROC) {
+            while (locals.length > 0) {
+                this.local_set(local_index, 0, locals.shift()!);
+                local_index = this.inc_local_index(local_index, iseq);
+            }
         }
 
         if (iseq.argument_options.block_start != null) {

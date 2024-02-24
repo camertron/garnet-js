@@ -1,6 +1,7 @@
 import { ArgumentError } from "../errors";
 import { BreakError, ExecutionContext } from "../execution_context";
 import { Module, Qnil, RValue, Runtime, Array, Qfalse, Qtrue, Kwargs } from "../runtime"
+import { spaceship_compare } from "./comparable";
 import { Object } from "./object";
 import { Proc } from "./proc";
 
@@ -144,6 +145,38 @@ export const init = () => {
             }));
 
             return memo || Qnil;
+        });
+
+        // Uses a so-called "Schwartzian transform" that pre-computes the sort key for each item.
+        // https://en.wikipedia.org/wiki/Schwartzian_transform
+        mod.define_native_method("sort_by", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+            if (block) {
+                const proc = block.get_data<Proc>();
+                const tuples: RValue[][] = [];
+
+                try {
+                    Object.send(self, "each", [], undefined, Proc.from_native_fn(ExecutionContext.current, (_self: RValue, args: RValue[]): RValue => {
+                        const sort_key = proc.call(ExecutionContext.current, [args[0]]);
+                        tuples.push([sort_key, args[0] || Qnil]);
+                        return Qnil;
+                    }));
+                } catch (e) {
+                    if (e instanceof BreakError) {
+                        return e.value;
+                    }
+
+                    throw e;
+                }
+
+                tuples.sort((x_tuple: RValue[], y_tuple: RValue[]): number => {
+                    return spaceship_compare(x_tuple[0], y_tuple[0]);
+                });
+
+                return Array.new(tuples.map((tuple: RValue[]) => tuple[1]));
+            } else {
+                // @TODO: return an Enumerator
+                return Qnil;
+            }
         });
     });
 };

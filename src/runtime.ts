@@ -25,6 +25,8 @@ import { init as dirInit } from "./runtime/dir";
 import { init as comparableInit } from "./runtime/comparable";
 import { init as numericInit } from "./runtime/numeric";
 import { init as rb_config_init } from "./lib/rbconfig"
+import { init as stringio_init } from "./lib/stringio"
+import { init as socket_init } from "./lib/socket"
 import { init as enumerableInit } from "./runtime/enumerable";
 import { init as rangeInit } from "./runtime/range";
 import { init as bindingInit } from "./runtime/binding";
@@ -33,8 +35,10 @@ import { init as timeInit } from "./lib/time";
 import { init as threadInit } from './lib/thread';
 import { init as regexpInit} from "./runtime/regexp";
 import { init as encodingInit } from "./runtime/encoding";
+import { init as structInit } from "./runtime/struct";
 import { obj_id_hash } from "./util/object_id";
 import { String } from "./runtime/string";
+import * as tty from "node:tty";
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
@@ -351,6 +355,8 @@ export class Runtime {
 }
 
 Runtime.register_native_extension("rbconfig", rb_config_init);
+Runtime.register_native_extension("stringio", stringio_init);
+Runtime.register_native_extension("socket", socket_init);
 
 export enum Visibility {
     public,
@@ -575,7 +581,8 @@ export class Module {
         const ec = ExecutionContext.current;
         if (!ec || !ec.frame) return null;
 
-        for (const current_mod_rval of ec.frame.nesting) {
+        for (let i = ec.frame.nesting.length - 1; i >= 0; i --) {
+            const current_mod_rval = ec.frame.nesting[i];
             const current_mod = current_mod_rval.get_data<Module>();
             let constant: RValue | null = current_mod.constants[name];
             if (constant) return constant;
@@ -1001,11 +1008,28 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
 });
 
 (ClassClass.get_data<Class>()).tap( (klass: Class) => {
-    // Apparently `allocate' and `new' are... instance methods? Go figure.
+    // create a new instance of the Class class, i.e. create a new user-defined class
+    klass.define_native_singleton_method("new", (_self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        const superclass = args[0] || ObjectClass;
+        const new_class = new Class(null, superclass);
+        const new_class_rval = new RValue(ClassClass, new_class);
+        new_class.rval = new_class_rval;
+
+        if (block) {
+            block.get_data<Proc>().call(ExecutionContext.current, [new_class_rval]);
+        }
+
+        return new_class_rval;
+    });
+
+    // allocate a new instance of a class - this is an instance method on the class "Class" and allocates
+    // a new instance of a user-defined class
     klass.define_native_method("allocate", (self: RValue): RValue => {
         return new RValue(self);
     });
 
+    // create a new instance of a class - this is an instance method on the class "Class" and initializes
+    // a new instance of a user-defined class
     klass.define_native_method("new", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
         const obj = Object.send(self, "allocate");
         Object.send(obj, "initialize", args, kwargs, block);
@@ -1026,10 +1050,6 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
                 );
             }
         }
-    });
-
-    klass.define_native_method("name", (self: RValue): RValue => {
-        return self.get_data<Class>().name_rval;
     });
 
     klass.define_native_method("to_s", (self: RValue): RValue => {
@@ -1062,6 +1082,9 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
 
     klass.define_native_method("instance_exec", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData): RValue => {
         const proc = block!.get_data<Proc>();
+        if (proc.binding === undefined) {
+            debugger;
+        }
         const binding = proc.binding.with_self(self);
         let block_call_data: BlockCallData | undefined = undefined;
 
@@ -1115,6 +1138,7 @@ export class Float {
 export interface IO {
     puts(val: string): void;
     write(val: string): void;
+    is_tty(): boolean;
 }
 
 export type ConsoleFn = (...data: string[]) => void;
@@ -1137,6 +1161,10 @@ export class BrowserIO implements IO {
     write(val: string): void {
         this.console_fn(val);
     }
+
+    is_tty(): boolean {
+        return false;
+    }
 }
 
 export class NodeIO implements IO {
@@ -1158,6 +1186,10 @@ export class NodeIO implements IO {
     write(val: string): void {
         this.stream.write(val);
     }
+
+    is_tty(): boolean {
+        return this.stream.isTTY;
+    }
 }
 
 export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) => {
@@ -1177,7 +1209,7 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
         return Qnil;
     });
 
-    klass.define_native_method("print", (self: RValue, args: RValue[], _kwargs?: Kwargs, _block?: RValue, call_data?: MethodCallData): RValue => {
+    klass.define_native_method("write", (self: RValue, args: RValue[], _kwargs?: Kwargs, _block?: RValue, call_data?: MethodCallData): RValue => {
         const io = self.get_data<IO>();
 
         for (const arg of args) {
@@ -1186,22 +1218,29 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
                     io.write(Object.send(elem, "to_s").get_data<string>());
                 }
             } else {
-                io.write(Object.send(arg, "to_s").get_data<string>());
+                try {
+                    io.write(Object.send(arg, "to_s").get_data<string>());
+                } catch (e) {
+                    debugger;
+                }
             }
         }
 
         return Qnil;
     });
 
+    klass.alias_method("print", "write");
+
     klass.define_native_method("flush", (self: RValue): RValue => {
         // @TODO: what needs to be done here?
         return self;
     });
 
-    klass.define_native_method("tty?", (self: RValue): RValue => {
-        // @TODO: what needs to be done here?
-        return Qtrue;
+    klass.define_native_method("isatty", (self: RValue): RValue => {
+        return self.get_data<IO>().is_tty() ? Qtrue : Qfalse;
     });
+
+    klass.alias_method("tty?", "isatty");
 });
 
 export const STDOUT = ObjectClass.get_data<Class>().constants["STDOUT"] = isNode ? NodeIO.new(process.stdout) : BrowserIO.new(console.log);
@@ -1249,6 +1288,7 @@ export const init = async () => {
     await regexpInit();
     encodingInit();
     arrayInit();
+    structInit();
 
     ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"] = await (async () => {
         if (isNode) {

@@ -1,14 +1,51 @@
 import { ThreadError } from "../errors";
 import { BreakError, ExecutionContext } from "../execution_context";
 import { Class, Kwargs, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
+import { String } from "../runtime/string";
 import { Proc } from "../runtime/proc";
 import { Object } from "../runtime/object";
+import { Integer } from "../runtime/integer";
 
 let inited = false;
 
-export class Mutex {
+export class Thread {
+    private static thread_class_: RValue;
+    private static current_: RValue;
+
     static new(): RValue {
-        return new RValue(Object.find_constant("Thread")!.get_data<Class>().find_constant("Mutex")!, new Mutex());
+        return new RValue(this.thread_class, new Thread());
+    }
+
+    private static get thread_class(): RValue {
+        if (!this.thread_class_) {
+            this.thread_class_ = Object.find_constant("Thread")!;
+        }
+
+        return this.thread_class_;
+    }
+
+    static get current(): RValue {
+        if (!this.current_) {
+            this.current_ = Thread.new();
+        }
+
+        return this.current_;
+    }
+}
+
+export class Mutex {
+    private static mutex_class_: RValue;
+
+    static new(): RValue {
+        return new RValue(this.mutex_class, new Mutex());
+    }
+
+    private static get mutex_class(): RValue {
+        if (!this.mutex_class_) {
+            this.mutex_class_ = Object.find_constant("Thread")!.get_data<Class>().find_constant("Mutex")!;
+        }
+
+        return this.mutex_class_;
     }
 
     public locked: boolean;
@@ -38,11 +75,71 @@ export class Mutex {
     }
 }
 
+export class BacktraceLocation {
+    private static location_class_: RValue;
+
+    static new(path: string, lineno: number, label: string): RValue {
+        return new RValue(this.location_class, new BacktraceLocation(path, lineno, label));
+    }
+
+    private static get location_class(): RValue {
+        if (!this.location_class_) {
+            this.location_class_ = Object
+                .find_constant("Thread")!.get_data<Class>()
+                .find_constant("Backtrace")!.get_data<Class>()
+                .find_constant("Location")!;
+        }
+
+        return this.location_class_;
+    }
+
+    public path: string;
+    private path_rval_: RValue;
+    public lineno: number;
+    private lineno_rval_: RValue;
+    public label: string;
+    private label_rval_: RValue;
+
+    constructor(path: string, lineno: number, label: string) {
+        this.path = path;
+        this.lineno = lineno;
+        this.label = label;
+    }
+
+    get path_rval(): RValue {
+        if (!this.path_rval_) {
+            this.path_rval_ = String.new(this.path);
+        }
+
+        return this.path_rval_;
+    }
+
+    get lineno_rval(): RValue {
+        if (!this.lineno_rval_) {
+            this.lineno_rval_ = Integer.get(this.lineno);
+        }
+
+        return this.lineno_rval_;
+    }
+
+    get label_rval(): RValue {
+        if (!this.label_rval_) {
+            this.label_rval_ = String.new(this.label);
+        }
+
+        return this.label_rval_;
+    }
+}
+
 export const init = () => {
     if (inited) return;
 
     // Jesus I hope I don't have to implement this whole thing any time soon 😱
-    const ThreadClass = Runtime.define_class("Thread", ObjectClass);
+    const ThreadClass = Runtime.define_class("Thread", ObjectClass, (klass: Class) => {
+        klass.define_native_singleton_method("current", (_self: RValue): RValue => {
+            return Thread.current;
+        });
+    });
 
     const MutexClass = Runtime.define_class_under(ThreadClass, "Mutex", ObjectClass, (klass: Class) => {
         klass.define_native_singleton_method("new", (self: RValue): RValue => {
@@ -109,6 +206,22 @@ export const init = () => {
 
     // alias
     ObjectClass.get_data<Class>().constants["Mutex"] = MutexClass;
+
+    const BacktraceClass = Runtime.define_class_under(ThreadClass, "Backtrace", ObjectClass);
+
+    Runtime.define_class_under(BacktraceClass, "Location", ObjectClass, (klass: Class) => {
+        klass.define_native_method("path", (self: RValue): RValue => {
+            return self.get_data<BacktraceLocation>().path_rval;
+        });
+
+        klass.define_native_method("lineno", (self: RValue): RValue => {
+            return self.get_data<BacktraceLocation>().lineno_rval;
+        });
+
+        klass.define_native_method("label", (self: RValue): RValue => {
+            return self.get_data<BacktraceLocation>().label_rval;
+        });
+    });
 
     inited = true;
 };

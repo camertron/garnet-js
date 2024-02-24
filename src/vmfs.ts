@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as path from "path";
 import { isBrowser, isNode } from "./env";
 
 import { Trie } from "./util/trie";
@@ -25,11 +26,11 @@ abstract class FileSystem {
     abstract real_path(path: string): string;
 
     join_paths(...paths: string[]): string {
-        return join_paths(...paths);
+        return join_paths(this.separator, ...paths);
     }
 
     split_path(path: string): string[] {
-        return path.split(VirtualFileSystem.DELIMITER);
+        return path.split(VirtualFileSystem.SEPARATOR);
     }
 
     dirname(path: string): string {
@@ -42,50 +43,69 @@ abstract class FileSystem {
         return segments[segments.length - 1];
     }
 
+    abstract get separator(): string;
+
     // operations
-    abstract list(path: string): string[];
+    abstract each_child_path(base_path: string, cb: (child_path: string) => void): void;
     abstract open(path: string): IFileHandle;
     abstract read(path: string): Buffer;
     abstract write(path: string, bytes: Buffer): void;
 }
 
-const join_paths = (...paths: string[]): string => {
+const leading_separator_re_map: Map<string, RegExp> = new Map();
+const trailing_separator_re_map: Map<string, RegExp> = new Map();
+
+const get_leading_separator_re = (separator: string): RegExp => {
+    if (!leading_separator_re_map.has(separator)) {
+        leading_separator_re_map.set(separator, new RegExp(`^\.?${separator}+`));
+    }
+
+    return leading_separator_re_map.get(separator)!;
+}
+
+const get_trailing_separator_re = (separator: string): RegExp => {
+    if (!trailing_separator_re_map.has(separator)) {
+        trailing_separator_re_map.set(separator, new RegExp(`${separator}+$`));
+    }
+
+    return trailing_separator_re_map.get(separator)!;
+}
+
+const join_paths = (separator: string, ...paths: string[]): string => {
     if (paths.length == 0) {
         return "";
     } else if (paths.length == 1) {
         return paths[0];
     }
 
-    const first_seg = remove_trailing_delimiters(paths[0]);
-    const last_seg = remove_leading_delimiters(paths[paths.length - 1]);
+    const first_seg = remove_trailing_separators(paths[0], separator);
+    const last_seg = remove_leading_separators(paths[paths.length - 1], separator);
     const segments = [first_seg];
 
     for (let i = 1; i < paths.length - 1; i ++) {
-        segments.push(remove_delimiters(paths[i]));
+        segments.push(remove_separators(paths[i], separator));
     }
 
     segments.push(last_seg);
 
-    return segments.join("/");
+    return segments.join(separator);
 };
 
-const remove_delimiters = (str: string): string => {
-    return remove_trailing_delimiters(remove_leading_delimiters(str));
+const remove_separators = (str: string, separator: string): string => {
+    return remove_trailing_separators(remove_leading_separators(str, separator), separator);
 };
 
-const remove_trailing_delimiters = (str: string): string => {
-    return str.replace(VirtualFileSystem.TRAILING_DELIM_RE, "");
+const remove_trailing_separators = (str: string, separator: string): string => {
+    return str.replace(get_trailing_separator_re(separator), "");
 };
 
-const remove_leading_delimiters = (str: string): string => {
-    return str.replace(VirtualFileSystem.LEADING_DELIM_RE, "")
+const remove_leading_separators = (str: string, separator: string): string => {
+    return str.replace(get_leading_separator_re(separator), "");
 };
 
 class VirtualFileSystem extends FileSystem {
     static ROOT_PATH: string = "/";
-    static DELIMITER: string = "/";
-    static LEADING_DELIM_RE = new RegExp(`^\.?${this.DELIMITER}+`);
-    static TRAILING_DELIM_RE = new RegExp(`${this.DELIMITER}+$`);
+    static SEPARATOR: string = "/";
 
     private files: Trie<string, Buffer>;
 
@@ -93,6 +113,10 @@ class VirtualFileSystem extends FileSystem {
         super();
 
         this.files = new Trie();
+    }
+
+    get separator(): string {
+        return VirtualFileSystem.SEPARATOR;
     }
 
     // NOTE: this does not resolve symlinks because the virtual file system has no
@@ -141,7 +165,7 @@ class VirtualFileSystem extends FileSystem {
         return path.startsWith(".");
     }
 
-    list(path: string): string[] {
+    each_child_path(base_path: string, cb: (child_path: string) => void) {
         throw new Error("Method not implemented.");
     }
 
@@ -176,12 +200,16 @@ class VirtualFileSystem extends FileSystem {
 }
 
 class NodeFileSystem extends FileSystem {
+    get separator(): string {
+        return path.sep;
+    }
+
     root_path(): string {
         return VirtualFileSystem.ROOT_PATH;
     }
 
     is_relative(path: string): boolean {
-        return !path.startsWith(VirtualFileSystem.DELIMITER);
+        return !path.startsWith(VirtualFileSystem.SEPARATOR);
     }
 
     path_exists(path: string): boolean {
@@ -231,8 +259,10 @@ class NodeFileSystem extends FileSystem {
         }
     }
 
-    list(path: string): string[] {
-        throw new Error("Method not implemented.");
+    each_child_path(base_path: string, cb: (child_path: string) => void) {
+        for (const file of fs.readdirSync(base_path)) {
+            cb(file);
+        }
     }
 
     open(path: string): IFileHandle {

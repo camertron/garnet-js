@@ -47,8 +47,10 @@ for (let i = 0; i < argv.length; i ++) {
             dir = vmfs.join_paths(Dir.getwd(), dir);
         }
 
+        dir = path.resolve(dir);
         Dir.setwd(dir);
         ExecutionContext.current.push_onto_load_path(dir);
+        process.chdir(dir);
 
         i ++;
     } else if (argv[i] === "--") {

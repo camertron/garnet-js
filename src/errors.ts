@@ -1,29 +1,32 @@
-import { Array, ArrayClass, Class, Module, ObjectClass, Qnil, Qtrue, RValue, Runtime } from "./runtime";
+import { BacktraceLocation } from "./lib/thread";
+import { Array, ArrayClass, Class, Module, ObjectClass, Qnil, Qtrue, RValue, Runtime, StringClass } from "./runtime";
 import { Object } from "./runtime/object";
 import { String } from "./runtime/string";
 
 export const init = () => {
     const ExceptionClass = Runtime.define_class("Exception", ObjectClass, (klass: Class) => {
         klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
-            self.iv_set("@message", args[0] || Qnil);
+            self.data = new UserDefinedException(self.klass, args[0] || Qnil);
             return Qnil;
         });
 
         klass.define_native_method("message", (self: RValue): RValue => {
-            if (!self.iv_exists("@message")) {
-                self.iv_set("@message", String.new(self.get_data<Error>().message));
-            }
+            const message = self.get_data<IRubyError>().message;
 
-            return self.iv_get("@message");
+            if (message instanceof RValue) {
+                return message;
+            } else {
+                return String.new(message);
+            }
         });
 
         klass.define_native_method("full_message", (self: RValue): RValue => {
-            const backtrace = self.iv_get("@__ruby_backtrace").get_data<Array>().elements;
-            const message = self.iv_exists("@message") ? self.iv_get("@message").get_data<string>() : null;
-            const lines = [`${backtrace[0].get_data<string>()}: ${message} (${self.klass.get_data<Class>().name})`];
+            const error = self.get_data<IRubyError>();
+            const message = error.message instanceof RValue ? error.message.get_data<string>() : error.message;
+            const lines = [`${error.backtrace[0]}: ${message} (${self.klass.get_data<Class>().name})`];
 
-            for (let i = 1; i < backtrace.length; i ++) {
-                lines.push(`    ${backtrace[i].get_data<string>()}`);
+            for (let i = 1; i < error.backtrace.length; i ++) {
+                lines.push(`    ${error.backtrace[i]}`);
             }
 
             return String.new(lines.join("\n"));
@@ -31,12 +34,48 @@ export const init = () => {
 
         klass.define_native_method("set_backtrace", (self: RValue, args: RValue[]): RValue => {
             Runtime.assert_type(args[0], ArrayClass);
-            self.iv_set("@__ruby_backtrace", args[0]);
+            const backtrace = [];
+
+            for (const element of args[0].get_data<Array>().elements) {
+                Runtime.assert_type(element, StringClass);
+                backtrace.push(element.get_data<string>());
+            }
+
+            const error = self.get_data<IRubyError>();
+            error.backtrace = backtrace;
+            error.backtrace_rval = Array.new([...args[0].get_data<Array>().elements]);
+
             return Qnil;
         });
 
         klass.define_native_method("backtrace", (self: RValue): RValue => {
-            return self.iv_get("@__ruby_backtrace");
+            const error = self.get_data<IRubyError>();
+
+            if (!error.backtrace_rval) {
+                const backtrace = [];
+
+                for (const element of error.backtrace) {
+                    backtrace.push(String.new(element));
+                }
+
+                error.backtrace_rval = Array.new(backtrace);
+            }
+
+            return error.backtrace_rval;
+        });
+
+        klass.define_native_method("backtrace_locations", (self: RValue): RValue => {
+            const backtrace = self.get_data<IRubyError>().backtrace;
+            const locations = []
+
+            for (const element of backtrace) {
+                // @TODO: avoid splitting a string here, maybe we can store backtraces as tuples?
+                const [path, line_and_label] = element.split(":");
+                const [line, label] = line_and_label.split(" in ");
+                locations.push(BacktraceLocation.new(path, parseInt(line), label));
+            }
+
+            return Array.new(locations);
         });
     });
 
@@ -62,6 +101,7 @@ export const init = () => {
     const SystemCallErrorClass = Runtime.define_class("SystemCallError", StandardErrorClass);
     const ErrnoModule = Runtime.define_module("Errno");
     const ErrnoENOENTClass = Runtime.define_class_under(ErrnoModule, "ENOENT", SystemCallErrorClass);
+    const ErrnoEINVALClass = Runtime.define_class_under(ErrnoModule, "EINVAL", SystemCallErrorClass);
 
     const SystemExitClass = Runtime.define_class("SystemExit", ExceptionClass, (klass: Class) => {
         klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
@@ -87,6 +127,7 @@ export class NativeError extends Error {
 export abstract class RubyError extends Error {
     private rvalue: RValue;
     public backtrace: string[];
+    public backtrace_rval: RValue;
 
     to_rvalue(): RValue {
         this.rvalue ||= new RValue(this.ruby_class, this);
@@ -95,6 +136,24 @@ export abstract class RubyError extends Error {
 
     abstract get ruby_class(): RValue;
 }
+
+export class UserDefinedException {
+    private klass: RValue;
+    public message: RValue;
+    public backtrace: string[];
+    public backtrace_rval: RValue;
+
+    constructor(klass: RValue, message: RValue) {
+        this.klass = klass;
+        this.message = message;
+    }
+
+    get ruby_class(): RValue {
+        return this.klass;
+    }
+}
+
+type IRubyError = RubyError | UserDefinedException;
 
 export class StandardError extends RubyError {
     private static ruby_class: RValue | null;
@@ -288,6 +347,19 @@ export class ErrnoENOENT extends RubyError {
 
     get ruby_class() {
         return ErrnoENOENT.ruby_class ||= Object.find_constant("Errno")!.get_data<Module>().find_constant("ENOENT")!;
+    }
+}
+
+export class ErrnoEINVAL extends RubyError {
+    private static ruby_class: RValue | null;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "EINVAL";
+    }
+
+    get ruby_class() {
+        return ErrnoEINVAL.ruby_class ||= Object.find_constant("Errno")!.get_data<Module>().find_constant("EINVAL")!;
     }
 }
 

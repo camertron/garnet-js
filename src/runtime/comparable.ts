@@ -1,26 +1,23 @@
-import { ArgumentError, NoMethodError } from "../errors";
+import { ArgumentError } from "../errors";
 import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime"
 import { Object } from "./object";
 
-export const spaceship_compare = (x: RValue, y: RValue): number | null => {
-    try {
-        const result = Object.send(x, "<=>", [y])
-        if (result == Qnil) return null;
-        return result.get_data<number>();
-    } catch (e) {
-        if (e instanceof NoMethodError) {
-            const self_class_name = x.klass.get_data<Module>().name;
-            const other_class_name = y.klass.get_data<Module>().name;
-            throw new ArgumentError(`comparison of ${self_class_name} with ${other_class_name} failed`);
-        }
+export const spaceship_compare = (x: RValue, y: RValue): number => {
+    if (Object.respond_to(x, "<=>")) {
+        const spaceship_result = Object.send(x, "<=>", [y]);
 
-        throw e;
+        if (spaceship_result !== Qnil) {
+            return spaceship_result.get_data<number>();
+        }
     }
+
+    const self_class_name = x.klass.get_data<Module>().name;
+    const other_class_name = y.klass.get_data<Module>().name;
+    throw new ArgumentError(`comparison of ${self_class_name} with ${other_class_name} failed`);
 };
 
 const compare = (x: RValue, y: RValue, callback: (result: number) => boolean): RValue => {
-    const result = spaceship_compare(x, y)
-    if (result === null) return Qnil;
+    const result = spaceship_compare(x, y);
     return callback(result) ? Qtrue : Qfalse;
 };
 

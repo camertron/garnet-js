@@ -22,6 +22,7 @@ import {
     ClassVariableReadNode,
     ClassVariableWriteNode,
     ConstantPathNode,
+    ConstantPathWriteNode,
     ConstantReadNode,
     ConstantWriteNode,
     DefNode,
@@ -31,6 +32,8 @@ import {
     EnsureNode,
     FalseNode,
     FloatNode,
+    ForwardingArgumentsNode,
+    ForwardingParameterNode,
     ForwardingSuperNode,
     GlobalVariableOrWriteNode,
     GlobalVariableReadNode,
@@ -49,6 +52,7 @@ import {
     InterpolatedStringNode,
     InterpolatedSymbolNode,
     KeywordHashNode,
+    KeywordRestParameterNode,
     LambdaNode,
     LocalVariableAndWriteNode,
     LocalVariableOperatorWriteNode,
@@ -634,6 +638,7 @@ export class Compiler extends Visitor {
 
         if (node.keywordRest) {
             this.iseq.argument_options.keyword_rest_start = this.iseq.argument_size;
+            this.with_used(true, () => this.visit(node.keywordRest!));
         }
 
         if (node.block) {
@@ -641,6 +646,29 @@ export class Compiler extends Visitor {
             this.with_used(true, () => this.visit(node.block!));
             this.iseq.argument_size ++;
         }
+    }
+
+    override visitKeywordRestParameterNode(node: KeywordRestParameterNode): void {
+    }
+
+    override visitForwardingParameterNode(node: ForwardingParameterNode): void {
+    }
+
+    override visitForwardingArgumentsNode(node: ForwardingArgumentsNode): void {
+        let current_iseq: InstructionSequence | null = this.iseq;
+        let depth = 0;
+
+        while (current_iseq && !current_iseq.local_table.find("*")) {
+          current_iseq = current_iseq.parent_iseq;
+          depth ++;
+        }
+
+        let lookup = this.find_local_or_throw("*", depth);
+        this.iseq.getlocal(lookup.index, lookup.depth);
+        this.iseq.splatarray(false);
+
+        lookup = this.find_local_or_throw("&", depth);
+        this.iseq.getblockparamproxy(lookup.index, lookup.depth);
     }
 
     override visitRequiredKeywordParameterNode(node: RequiredKeywordParameterNode) {
@@ -889,10 +917,9 @@ export class Compiler extends Visitor {
     }
 
     override visitConstantReadNode(node: ConstantReadNode) {
-        this.iseq.putnil();
-        this.iseq.putobject({type: "TrueClass", value: true});
-
         if (this.used) {
+            this.iseq.putnil();
+            this.iseq.putobject({type: "TrueClass", value: true});
             this.iseq.getconstant(node.name)
         }
     }
@@ -1142,6 +1169,24 @@ export class Compiler extends Visitor {
         }
 
         this.iseq.getconstant((node.child as ConstantReadNode).name);
+    }
+
+    override visitConstantPathWriteNode(node: ConstantPathWriteNode) {
+        if (node.target.parent) {
+            this.with_used(true, () => this.visit(node.target.parent!));
+        } else {
+            this.iseq.putobject({type: "RValue", value: ObjectClass});
+        }
+
+        this.with_used(true, () => this.visit(node.value));
+
+        if (this.used) {
+            this.iseq.swap();
+            this.iseq.topn(1);
+        }
+
+        this.iseq.swap();
+        this.iseq.setconstant((node.target.child as ConstantReadNode).name);
     }
 
     override visitParenthesesNode(node: ParenthesesNode) {

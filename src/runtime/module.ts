@@ -1,8 +1,8 @@
-import { MethodCallData } from "../call_data";
+import { BlockCallData, CallData, MethodCallData } from "../call_data";
 import { Compiler } from "../compiler";
 import { ArgumentError, NameError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Array, Module, ModuleClass, RValue, Runtime, SymbolClass, Visibility, Qnil, StringClass, Class, Qtrue, Qfalse, NativeCallable, ClassClass, IntegerClass, Kwargs } from "../runtime";
+import { Array, Module, ModuleClass, RValue, Runtime, SymbolClass, Visibility, Qnil, StringClass, Class, Qtrue, Qfalse, NativeCallable, ClassClass, IntegerClass, Kwargs, TrueClass, FalseClass } from "../runtime";
 import { Kernel } from "./kernel";
 import { Object } from "./object";
 import { Proc } from "./proc";
@@ -15,6 +15,20 @@ export const init = () => {
 
     const mod = Object.find_constant("Module")!.get_data<Module>();
 
+    mod.define_native_singleton_method("new", (_self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        const mod = new Module(null);
+        const mod_rval = new RValue(ModuleClass, mod);
+        mod.rval = mod_rval;
+
+        if (block) {
+            const proc = block!.get_data<Proc>();
+            const binding = proc.binding.with_self(mod_rval);
+            proc.with_binding(binding).call(ExecutionContext.current, [mod_rval]);
+        }
+
+        return mod_rval;
+    });
+
     mod.define_native_method("inspect", (self: RValue): RValue => {
         const mod = self.get_data<Module>();
 
@@ -24,6 +38,8 @@ export const init = () => {
             return String.new(`#<Module:${Object.object_id_to_str(self.object_id)}>`);
         }
     });
+
+    mod.alias_method("to_s", "inspect");
 
     mod.define_native_method("ancestors", (self: RValue): RValue => {
         const result: RValue[] = [];
@@ -40,18 +56,30 @@ export const init = () => {
         for (const module of args) {
             Runtime.assert_type(module, ModuleClass);
             self.get_data<Module>().include(module);
+            Object.send(module, "included", [self]);
         }
 
         return self;
+    });
+
+    // stub that does nothing
+    mod.define_native_method("included", (): RValue => {
+        return Qnil;
     });
 
     mod.define_native_method("prepend", (self: RValue, args: RValue[]): RValue => {
         for (const module of args) {
             Runtime.assert_type(module, ModuleClass);
             self.get_data<Module>().prepend(module);
+            Object.send(module, "prepended", [self]);
         }
 
         return self;
+    });
+
+    // stub that does nothing
+    mod.define_native_method("prepended", (): RValue => {
+        return Qnil;
     });
 
     mod.define_native_method("public", (self: RValue, args: RValue[]): RValue => {
@@ -101,6 +129,33 @@ export const init = () => {
         return found ? Qtrue : Qfalse;
     });
 
+    mod.define_native_method("attr", (self: RValue, args: RValue[]): RValue => {
+        const result: RValue[] = [];
+
+        if (args.length === 1) {
+            // equivalent to attr_reader
+            result.push(Runtime.intern(define_attr_reader_on(self, coerce_to_string(args[0]))));
+        } else {
+            const second_arg = args[1];
+
+            if (second_arg.klass === TrueClass) {
+                // equivalent to attr_accessor, but deprecated
+                result.push(Runtime.intern(define_attr_writer_on(self, coerce_to_string(args[0]))));
+                result.push(Runtime.intern(define_attr_reader_on(self, coerce_to_string(args[0]))));
+            } else if (second_arg.klass === FalseClass) {
+                // equivalent to attr_reader, but deprecated
+                result.push(Runtime.intern(define_attr_reader_on(self, coerce_to_string(args[0]))));
+            } else {
+                // equivalent to attr_reader
+                each_string(args, (arg_s) => {
+                    result.push(Runtime.intern(define_attr_reader_on(self, arg_s)));
+                });
+            }
+        }
+
+        return Array.new(result);
+    });
+
     mod.define_native_method("attr_reader", (self: RValue, args: RValue[]): RValue => {
         const result: RValue[] = [];
 
@@ -143,11 +198,11 @@ export const init = () => {
         return Kernel.is_a(args[0], self) ? Qtrue : Qfalse;
     });
 
-    mod.define_native_method("class_eval", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+    mod.define_native_method("module_eval", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
         if (block) {
             const proc = block!.get_data<Proc>();
             const binding = proc.binding.with_self(self);
-            return proc.with_binding(binding).call(ExecutionContext.current, []);
+            return proc.with_binding(binding).call(ExecutionContext.current, [self]);
         } else {
             Runtime.assert_type(args[0], StringClass);
             const code = args[0].get_data<string>();
@@ -172,25 +227,42 @@ export const init = () => {
         }
     });
 
+    mod.alias_method("class_eval", "module_eval");
+
     mod.define_native_method("define_method", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
         Runtime.assert_type(args[0], SymbolClass);
         const method_name = args[0].get_data<string>();
 
-        if (!block) {
-            throw new ArgumentError("Module.define_method does not yet support being called without a block");
+        if (args.length === 2) {
+            block = args[1];
         }
 
-        self.get_data<Module>().define_native_method(method_name, (mtd_self: RValue, mtd_args: RValue[], mtd_kwargs?: Kwargs, mtd_block?: RValue, call_data?: MethodCallData): RValue => {
-            if (mtd_block) {
-                mtd_args = [...mtd_args, mtd_block];
-            }
+        if (!block) {
+            throw new ArgumentError("tried to create Proc object without a block");
+        }
 
-            if (call_data) {
-                call_data = MethodCallData.create("instance_exec", mtd_args.length, call_data.flag, call_data.kw_arg)
-                return Object.send(mtd_self, call_data, mtd_args, mtd_kwargs, block);
-            } else {
-                return Object.send(mtd_self, "instance_exec", args, kwargs, block);
-            }
+        if (block.klass === StringClass) {
+            debugger;
+        }
+
+        const proc = block.get_data<Proc>();
+
+        self.get_data<Module>().define_native_method(method_name, (mtd_self: RValue, mtd_args: RValue[], mtd_kwargs?: Kwargs, mtd_block?: RValue, call_data?: MethodCallData): RValue => {
+            // if (mtd_block) {
+            //     mtd_args = [...mtd_args, mtd_block];
+            //     mtd_block = undefined;
+            // }
+
+            // if (call_data) {
+            //     call_data = MethodCallData.create("instance_exec", mtd_args.length, call_data.flag, call_data.kw_arg)
+            //     return Object.send(mtd_self, call_data, mtd_args, mtd_kwargs, block);
+            // } else {
+            //     return Object.send(mtd_self, "instance_exec", args, kwargs, block);
+            // }
+
+            return proc
+                .with_binding(proc.binding.with_self(mtd_self))
+                .call(ExecutionContext.current, mtd_args, mtd_kwargs, call_data)
         });
 
         return args[0];
@@ -253,6 +325,28 @@ export const init = () => {
         return Array.new(ExecutionContext.current.frame?.nesting || []);
     });
 
+    mod.define_native_method("method_defined?", (self: RValue, args: RValue[]): RValue => {
+        const method_name = Runtime.coerce_to_string(args[0]).get_data<string>();
+        const inherit = (args[1] || Qfalse).is_truthy();
+        return Object.find_method_under(self, method_name, true, inherit) ? Qtrue : Qfalse;
+    });
+
+    mod.define_native_method("class_exec", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: CallData): RValue => {
+        const proc = block!.get_data<Proc>();
+        const binding = proc.binding.with_self(self);
+        let block_call_data: BlockCallData | undefined = undefined;
+
+        if (call_data) {
+            block_call_data = BlockCallData.create(call_data.argc, call_data.flag, call_data.kw_arg);
+        }
+
+        return proc.with_binding(binding).call(ExecutionContext.current, args, kwargs, block_call_data);
+    });
+
+    mod.define_native_method("name", (self: RValue): RValue => {
+        return self.get_data<Module>().name_rval;
+    });
+
     inited = true;
 };
 
@@ -277,11 +371,15 @@ const define_attr_writer_on = (mod: RValue, name: string): string => {
 
 const each_string = (args: RValue[], callback: (arg: string) => void) => {
     for (const arg of args) {
-        if (arg.klass != StringClass && arg.klass != SymbolClass) {
-            const arg_s = Object.send(arg, "inspect").get_data<string>();
-            throw new TypeError(`${arg_s} is not a symbol nor a string`);
-        }
-
-        callback(arg.get_data<string>());
+        callback(coerce_to_string(arg));
     }
+}
+
+const coerce_to_string = (obj: RValue): string => {
+    if (obj.klass != StringClass && obj.klass != SymbolClass) {
+        const arg_s = Object.send(obj, "inspect").get_data<string>();
+        throw new TypeError(`${arg_s} is not a symbol nor a string`);
+    }
+
+    return obj.get_data<string>();
 }

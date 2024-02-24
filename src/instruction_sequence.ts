@@ -58,6 +58,8 @@ import { String as RubyString } from "./runtime/string";
 import CheckKeyword from "./insns/checkkeyword";
 import SetClassVariable from "./insns/setclassvariable";
 import GetClassVariable from "./insns/getclassvariable";
+import SplatArray from "./insns/splatarray";
+import GetBlockParamProxy from "./insns/getblockparamproxy";
 
 class Node {
     public instruction: Instruction;
@@ -661,6 +663,14 @@ export class InstructionSequence {
 
     intern() {
         this.push(new Intern());
+    }
+
+    splatarray(flag: boolean) {
+        this.push(new SplatArray(flag));
+    }
+
+    getblockparamproxy(index: number, depth: number) {
+        this.push(new GetBlockParamProxy(index, depth));
     }
 
     private child_iseq(name: string, line: number, type: string): InstructionSequence {

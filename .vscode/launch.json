@@ -12,8 +12,9 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            // "command": "exe/ruby examples/nesting.rb"
-            "command": "exe/ruby -I ../../phlex-ruby/phlex/lib -r phlex examples/phlex/deferred_render.rb"
+            // "command": "exe/ruby examples/glob.rb"
+            "command": "exe/ruby -C ../../ioquatix/sus -I ../covered/lib bin/sus",
+            // "command": "exe/ruby -I ../../phlex-ruby/phlex/lib -r phlex examples/phlex/deferred_render.rb"
             // "command": "PATH=./bin:$PATH RUBY_EXE=exe/ruby exe/ruby -m @garnet-js/encoding-euc-jp/src/encoding-euc-jp -m @garnet-js/encoding-shift-jis/src/encoding-shift-jis -r encoding/euc_jp -r encoding/shift_jis -I /Users/camertron/workspace/ruby/mspec/lib -C ruby/spec /Users/camertron/workspace/ruby/mspec/bin/mspec-run -- core/string/concat_spec.rb core/string/empty_spec.rb"
             // "command": "PATH=./bin:$PATH RUBY_EXE=bin/ruby bin/ruby -I /Users/camertron/workspace/ruby/mspec/lib -C ruby/spec /Users/camertron/workspace/ruby/mspec/bin/mspec -- run -h"
             // "command": "npx tsx ${workspaceFolder}/tester2.ts"

@@ -141,6 +141,8 @@ export const init = () => {
         if (str) {
             Runtime.assert_type(str, StringClass);
             self.data = str.data;
+        } else {
+            self.data = "";
         }
 
         return Qnil;
@@ -449,7 +451,7 @@ export const init = () => {
 
     klass.alias_method("length", "size");
 
-    klass.define_native_method("[]", (self: RValue, args: RValue[]): RValue => {
+    const slice = (self: RValue, args: RValue[]): string | null => {
         const data = self.get_data<string>();
 
         if (args[0].klass == Object.find_constant("Range")!) {
@@ -471,19 +473,19 @@ export const init = () => {
             }
 
             if (start_pos > end_pos) {
-                return Qnil;
+                return null;
             }
 
             if (range.exclude_end) {
-                return RubyString.new(data.substring(start_pos, end_pos));
+                return data.substring(start_pos, end_pos);
             } else {
-                return RubyString.new(data.substring(start_pos, end_pos + 1));
+                return data.substring(start_pos, end_pos + 1);
             }
         } else if (args[0].klass === StringClass) {
             if (data.indexOf(args[0].get_data<string>()) > 0) {
-                return RubyString.new(args[0].get_data<string>());
+                return args[0].get_data<string>();
             } else {
-                return Qnil;
+                return null;
             }
         } else if (args[0].klass === RegexpClass) {
             throw new NotImplementedError("String#[](Regexp) is not yet implemented");
@@ -494,15 +496,33 @@ export const init = () => {
             if (args.length > 1) {
                 Runtime.assert_type(args[1], IntegerClass);
                 const len = args[1].get_data<number>();
-                return RubyString.new(data.substring(start, start + len));
+                return data.substring(start, start + len);
             } else {
                 if (start < data.length) {
-                    return RubyString.new(data.charAt(start));
+                    return data.charAt(start);
                 } else {
-                    return Qnil;
+                    return null;
                 }
             }
         }
+    };
+
+    klass.define_native_method("slice", (self: RValue, args: RValue[]): RValue => {
+        const substring = slice(self, args);
+
+        if (substring) {
+            self.data = substring
+            return self;
+        }
+
+        return Qnil;
+    });
+
+    klass.alias_method("[]", "slice");
+
+    klass.define_native_method("slice!", (self: RValue, args: RValue[]): RValue => {
+        const substring = slice(self, args);
+        return substring ? RubyString.new(substring) : Qnil;
     });
 
     klass.define_native_method("[]=", (self: RValue, args: RValue[]): RValue => {

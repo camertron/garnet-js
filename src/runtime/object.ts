@@ -1,7 +1,7 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
 import { FrozenError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Callable, Class, ClassClass, KernelModule, ModuleClass, ObjectClass, RValue, Runtime, StringClass, SymbolClass, Qtrue, Qfalse, ProcClass, Qnil, Module, Kwargs } from "../runtime";
+import { Callable, Class, ClassClass, KernelModule, ModuleClass, ObjectClass, RValue, Runtime, StringClass, SymbolClass, Qtrue, Qfalse, Module, Kwargs } from "../runtime";
 import { Symbol } from "./symbol";
 import { String } from "../runtime/string";
 
@@ -17,6 +17,10 @@ export class Object {
         } else {
             method_name = call_data_;
             call_data = undefined;
+        }
+
+        if (receiver.has_singleton_class()) {
+            method = Object.find_method_under(receiver.get_singleton_class(), method_name);
         }
 
         if (receiver.has_singleton_class() && receiver.get_singleton_class().get_data<Class>().methods[method_name]) {
@@ -66,7 +70,7 @@ export class Object {
         return this.find_method_under(obj.klass, method_name) ? true : false;
     }
 
-    static find_method_under(mod: RValue, method_name: string, include_self: boolean = true): Callable | null {
+    static find_method_under(mod: RValue, method_name: string, include_self: boolean = true, inherit: boolean = true): Callable | null {
         let found_method = null;
 
         Runtime.each_unique_ancestor(mod, include_self, (ancestor: RValue): boolean => {
@@ -90,6 +94,8 @@ export class Object {
                 return false;
             }
 
+            if (!inherit) return false;
+
             return true;
         });
 
@@ -110,6 +116,10 @@ export class Object {
 
     static find_constant(name: string): RValue | null {
         return ObjectClass.get_data<Class>().find_constant(name);
+    }
+
+    static new() {
+        return new RValue(ObjectClass);
     }
 }
 

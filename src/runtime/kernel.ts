@@ -1,12 +1,15 @@
 import { isNode } from "../env";
 import { ArgumentError, LocalJumpError, NameError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
-import { BreakError, ExecutionContext } from "../execution_context";
+import { BreakError, ExecutionContext, ThrowError } from "../execution_context";
 import { Array, Module, Qfalse, Qnil, Qtrue, RValue, StringClass, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, ArrayClass, HashClass, SymbolClass, FloatClass, Kwargs } from "../runtime";
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
 import { String } from "../runtime/string";
 import { Proc } from "./proc";
+import { obj_id_hash } from "../util/object_id";
+import { BacktraceLocation } from "../lib/thread";
+import { Range } from "./range";
 
 export class Kernel {
     public static exit_handlers: RValue[] = [];
@@ -293,8 +296,11 @@ export const init = async () => {
     });
 
     mod.define_native_method("singleton_class", (self: RValue): RValue => {
-        // @TODO: this needs to be smarter
-        return self.get_singleton_class();
+        if (self.klass === ClassClass || self.klass === ModuleClass) {
+            return self.get_data<Module>().get_singleton_class()
+        } else {
+            return self.get_singleton_class();
+        }
     });
 
     const CONSTANT_RE = /^[A-Z]\w*$/; // @TODO: is this right?
@@ -315,9 +321,15 @@ export const init = async () => {
         for (const module of args) {
             Runtime.assert_type(module, ModuleClass);
             self.get_data<Module>().extend(module);
+            Object.send(module, "extended", [self]);
         }
 
         return self;
+    });
+
+    // stub that does nothing
+    mod.define_native_method("extended", (): RValue => {
+        return Qnil;
     });
 
     mod.define_native_method("tap", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
@@ -338,10 +350,82 @@ export const init = async () => {
     });
 
     mod.define_native_method("block_given?", (_self: RValue): RValue => {
-        return ExecutionContext.current.frame_yield()?.block ? Qtrue : Qfalse;
+        const frame = ExecutionContext.current.frame_yield();
+
+        if (frame && frame.block && frame.block !== Qnil) {
+            return Qtrue;
+        }
+
+        return Qfalse;
     });
 
     mod.define_native_method("itself", (self: RValue): RValue => {
         return self;
+    });
+
+    mod.define_native_method("hash", (self: RValue): RValue => {
+        return Integer.get(obj_id_hash(self.object_id));
+    });
+
+    mod.define_native_method("caller_locations", (_self: RValue, args: RValue[]): RValue => {
+        let start = 0;
+        let length = -1;
+
+        if (args.length === 1) {
+            if (args[0].klass === Object.find_constant("Range")!) {
+                const range = args[0].get_data<Range>();
+                Runtime.assert_type(range.begin, IntegerClass);
+                Runtime.assert_type(range.end, IntegerClass);
+                start = range.begin.get_data<number>();
+                length = range.end.get_data<number>() - start;
+            }
+        } else if (args.length === 2) {
+            Runtime.assert_type(args[0], IntegerClass);
+            Runtime.assert_type(args[1], IntegerClass);
+            start = args[0].get_data<number>();
+            length = args[1].get_data<number>();
+        }
+
+        const backtrace = ExecutionContext.current.create_backtrace(start, length);
+        const locations = []
+
+        for (const element of backtrace) {
+            // @TODO: avoid splitting a string here, maybe we can store backtraces as tuples?
+            const [path, line_and_label] = element.split(":");
+            const [line, label] = element.split(" in ");
+            locations.push(BacktraceLocation.new(path, parseInt(line), label));
+        }
+
+        return Array.new(locations);
+    });
+
+    mod.define_native_method("catch", (_self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        const tag = args[0] || Object.new();
+
+        if (!block) {
+            throw new LocalJumpError("no block given");
+        }
+
+        const proc = block.get_data<Proc>();
+
+        try {
+            return proc.call(ExecutionContext.current, [tag]);
+        } catch (e) {
+            if (e instanceof ThrowError) {
+                if (e.tag.object_id === tag.object_id) {
+                    return e.value;
+                }
+            }
+
+            throw e;
+        }
+    });
+
+    mod.define_native_method("instance_variable_defined?", (self: RValue, args: RValue[]): RValue => {
+        if (args[0].klass !== StringClass && args[0].klass !== SymbolClass) {
+            throw new TypeError(`${Object.send(args[0], "inspect").get_data<string>()} is not a symbol nor a string`);
+        }
+
+        return self.iv_exists(args[0].get_data<string>()) ? Qtrue : Qfalse;
     });
 };

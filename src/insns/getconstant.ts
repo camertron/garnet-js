@@ -1,7 +1,7 @@
 import { NameError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Class, ClassClass, Module, ModuleClass, Qnil, Qtrue } from "../runtime";
+import { Class, ClassClass, Module, ModuleClass, Qnil } from "../runtime";
 
 export default class GetConstant extends Instruction {
     public name: string;

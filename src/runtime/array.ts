@@ -1,6 +1,6 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
 import { BreakError, ExecutionContext } from "../execution_context";
-import { Array, ArrayClass, Class, IntegerClass, Kwargs, Qfalse, Qnil, Qtrue, RValue, Runtime, StringClass } from "../runtime";
+import { Array as RubyArray, ArrayClass, Class, IntegerClass, Kwargs, Qfalse, Qnil, Qtrue, RValue, Runtime, StringClass } from "../runtime";
 import { hash_combine } from "../util/hash_utils";
 import { Integer } from "./integer";
 import { Object } from "./object";
@@ -19,8 +19,48 @@ export const init = () => {
 
     klass.include(Object.find_constant("Enumerable")!);
 
+    klass.define_native_method("initialize", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        let init_arr: RValue[];
+
+        if (args[0]) {
+            if (args[0].klass === ArrayClass) {
+                init_arr = [...args[0].get_data<RubyArray>().elements];
+            } else {
+                Runtime.assert_type(args[0], IntegerClass);
+                const size = args[0].get_data<number>();
+
+                // block supercedes default value
+                if (block) {
+                    const proc = block.get_data<Proc>();
+                    init_arr = [];
+
+                    try {
+                        for (let i = 0; i < size; i ++) {
+                            const val = proc.call(ExecutionContext.current, [Integer.get(i)]);
+                            init_arr.push(val);
+                        }
+                    } catch (e) {
+                        if (e instanceof BreakError) {
+                            return e.value;
+                        }
+
+                        throw e;
+                    }
+                } else {
+                    const default_value = args.length > 1 ? args[1] : Qnil;
+                    init_arr = Array(size).fill(default_value);
+                }
+            }
+        } else {
+            init_arr = [];
+        }
+
+        self.data = new RubyArray(init_arr);
+        return Qnil;
+    });
+
     klass.define_native_method("inspect", (self: RValue): RValue => {
-        const elements = self.get_data<Array>().elements;
+        const elements = self.get_data<RubyArray>().elements;
 
         const strings = elements.map( (element: RValue): string => {
             return Object.send(element, "inspect").get_data<string>();
@@ -32,7 +72,7 @@ export const init = () => {
     klass.define_native_method("each", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
         if (block) {
             try {
-                const elements = self.get_data<Array>().elements;
+                const elements = self.get_data<RubyArray>().elements;
 
                 for (const element of elements) {
                     Object.send(block, "call", [element]);
@@ -54,7 +94,7 @@ export const init = () => {
     });
 
     klass.define_native_method("select", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
-        const elements = self.get_data<Array>().elements;
+        const elements = self.get_data<RubyArray>().elements;
 
         if (block) {
             try {
@@ -66,7 +106,7 @@ export const init = () => {
                     }
                 };
 
-                return Array.new(results);
+                return RubyArray.new(results);
             } catch (e) {
                 if (e instanceof BreakError) {
                     // select returns nil if a break occurs in the block
@@ -83,7 +123,7 @@ export const init = () => {
     });
 
     klass.define_native_method("reject", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
-        const elements = self.get_data<Array>().elements;
+        const elements = self.get_data<RubyArray>().elements;
 
         if (block) {
             try {
@@ -95,7 +135,7 @@ export const init = () => {
                     }
                 };
 
-                return Array.new(results);
+                return RubyArray.new(results);
             } catch (e) {
                 if (e instanceof BreakError) {
                     // reject returns nil if a break occurs in the block
@@ -112,7 +152,7 @@ export const init = () => {
     });
 
     klass.define_native_method("index", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
-        const elements = self.get_data<Array>().elements;
+        const elements = self.get_data<RubyArray>().elements;
 
         if (block) {
             try {
@@ -146,7 +186,7 @@ export const init = () => {
     });
 
     klass.define_native_method("all?", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
-        const elements = self.get_data<Array>().elements;
+        const elements = self.get_data<RubyArray>().elements;
 
         if (args.length > 0) {
             for (const element of elements) {
@@ -171,8 +211,33 @@ export const init = () => {
         return Qtrue;
     });
 
+    klass.define_native_method("delete", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        const elements = self.get_data<RubyArray>().elements;
+        const obj = args[0];
+        let found_index: number | null = null;
+
+        for (let i = 0; i < elements.length; i ++) {
+            if (Object.send(obj, "==", [elements[i]]).is_truthy()) {
+                found_index = i;
+                break;
+            }
+        }
+
+        if (found_index) {
+            const found_element = elements[found_index];
+            delete elements[found_index];
+            return found_element;
+        }
+
+        if (block) {
+            return block.get_data<Proc>().call(ExecutionContext.current, [obj]);
+        }
+
+        return Qnil;
+    });
+
     klass.define_native_method("[]", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
-        const elements = self.get_data<Array>().elements;
+        const elements = self.get_data<RubyArray>().elements;
 
         if (args[0].klass == Object.find_constant("Range")!) {
             const range = args[0].get_data<Range>();
@@ -193,13 +258,13 @@ export const init = () => {
             }
 
             if (start_pos > end_pos) {
-                return Array.new([]);
+                return RubyArray.new([]);
             }
 
             if (range.exclude_end) {
-                return Array.new(elements.slice(start_pos, end_pos));
+                return RubyArray.new(elements.slice(start_pos, end_pos));
             } else {
-                return Array.new(elements.slice(start_pos, end_pos + 1));
+                return RubyArray.new(elements.slice(start_pos, end_pos + 1));
             }
         } else {
             const index = args[0].get_data<number>();
@@ -207,7 +272,7 @@ export const init = () => {
             if (args.length > 1) {
                 Runtime.assert_type(args[1], IntegerClass);
                 const length = args[1].get_data<number>();
-                return Array.new(elements.slice(index, index + length));
+                return RubyArray.new(elements.slice(index, index + length));
             } else {
                 return elements[index] || Qnil;
             }
@@ -216,7 +281,7 @@ export const init = () => {
 
     // @TODO: fill array with Qnils
     klass.define_native_method("[]=", (self: RValue, args: RValue[]): RValue => {
-        const elements = self.get_data<Array>().elements;
+        const elements = self.get_data<RubyArray>().elements;
         const index = args[0].get_data<number>();
         const new_value = args[1];
 
@@ -231,7 +296,7 @@ export const init = () => {
             if (element.klass === StringClass) {
                 result.push(element.get_data<string>());
             } else if (element.klass === ArrayClass) {
-                result.push(...stringify_and_flatten(element.get_data<Array>().elements));
+                result.push(...stringify_and_flatten(element.get_data<RubyArray>().elements));
             } else {
                 result.push(Object.send(element, "to_s").get_data<string>());
             }
@@ -244,12 +309,12 @@ export const init = () => {
         Runtime.assert_type(args[0], StringClass);
         const separator = args[0] || ExecutionContext.current.globals["$,"];
         const separator_str = separator.is_truthy() ? separator.get_data<string>() : "";
-        const result = stringify_and_flatten(self.get_data<Array>().elements).join(separator_str);
+        const result = stringify_and_flatten(self.get_data<RubyArray>().elements).join(separator_str);
         return String.new(result);
     });
 
     klass.define_native_method("include?", (self: RValue, args: RValue[]): RValue => {
-        for (const elem of self.get_data<Array>().elements) {
+        for (const elem of self.get_data<RubyArray>().elements) {
             if (Object.send(elem, "==", args).is_truthy()) {
                 return Qtrue;
             }
@@ -259,7 +324,7 @@ export const init = () => {
     });
 
     klass.define_native_method("pop", (self: RValue, args: RValue[]): RValue => {
-        return self.get_data<Array>().elements.pop() || Qnil;
+        return self.get_data<RubyArray>().elements.pop() || Qnil;
     });
 
     klass.define_native_method("shift", (self: RValue, args: RValue[]): RValue => {
@@ -270,23 +335,23 @@ export const init = () => {
             count = args[0].get_data<number>();
         }
 
-        const elements = self.get_data<Array>().elements;
+        const elements = self.get_data<RubyArray>().elements;
 
         // a count of 0 should return an empty array
         if (count === 1) {
             return elements.shift() || Qnil;
         } else {
-            return Array.new(elements.splice(0, count));
+            return RubyArray.new(elements.splice(0, count));
         }
     });
 
     klass.define_native_method("unshift", (self: RValue, args: RValue[], _kwargs?: Kwargs, _block?: RValue, call_data?: MethodCallData): RValue => {
-        const elements = self.get_data<Array>().elements;
+        const elements = self.get_data<RubyArray>().elements;
 
         if (call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
             for (const arg of args) {
                 if (arg.klass === ArrayClass) {
-                    elements.unshift(...arg.get_data<Array>().elements);
+                    elements.unshift(...arg.get_data<RubyArray>().elements);
                 } else {
                     elements.unshift(arg);
                 }
@@ -300,22 +365,22 @@ export const init = () => {
 
     klass.define_native_method("+", (self: RValue, args: RValue[]): RValue => {
         Runtime.assert_type(args[0], ArrayClass);
-        return Array.new(self.get_data<Array>().elements.concat(args[0].get_data<Array>().elements));
+        return RubyArray.new(self.get_data<RubyArray>().elements.concat(args[0].get_data<RubyArray>().elements));
     });
 
     klass.define_native_method("<<", (self: RValue, args: RValue[]): RValue => {
-        self.get_data<Array>().elements.push(args[0]);
+        self.get_data<RubyArray>().elements.push(args[0]);
         return self;
     });
 
     klass.define_native_method("push", (self: RValue, args: RValue[], _kwargs?: Kwargs, _block?: RValue, call_data?: MethodCallData): RValue => {
-        const elements = self.get_data<Array>().elements;
+        const elements = self.get_data<RubyArray>().elements;
 
         // this is wrong but I don't know how to fix it, since I need to know which args are splatted
         // but that info is not available right now. We'll need to capture more info in CallData.
         if (call_data && call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
             for (const arg of args) {
-                elements.push(...arg.get_data<Array>().elements);
+                elements.push(...arg.get_data<RubyArray>().elements);
             }
         } else {
             elements.push(...args);
@@ -325,13 +390,13 @@ export const init = () => {
     });
 
     klass.define_native_method("size", (self: RValue): RValue => {
-        return Integer.get(self.get_data<Array>().elements.length);
+        return Integer.get(self.get_data<RubyArray>().elements.length);
     });
 
     klass.alias_method("length", "size");
 
     klass.define_native_method("first", (self: RValue): RValue => {
-        const elements = self.get_data<Array>().elements;
+        const elements = self.get_data<RubyArray>().elements;
 
         if (elements.length > 0) {
             return elements[0];
@@ -341,7 +406,7 @@ export const init = () => {
     });
 
     klass.define_native_method("last", (self: RValue): RValue => {
-        const elements = self.get_data<Array>().elements;
+        const elements = self.get_data<RubyArray>().elements;
 
         if (elements.length > 0) {
             return elements[elements.length - 1];
@@ -351,22 +416,22 @@ export const init = () => {
     });
 
     klass.define_native_method("dup", (self: RValue): RValue => {
-        return Array.new([...self.get_data<Array>().elements]);
+        return RubyArray.new([...self.get_data<RubyArray>().elements]);
     });
 
     klass.define_native_method("concat", (self: RValue, args: RValue[]): RValue => {
         args.forEach((arg) => Runtime.assert_type(arg, ArrayClass));
-        const elements = self.get_data<Array>().elements;
-        args.forEach((arg) => elements.push(...arg.get_data<Array>().elements));
+        const elements = self.get_data<RubyArray>().elements;
+        args.forEach((arg) => elements.push(...arg.get_data<RubyArray>().elements));
         return self;
     });
 
     klass.define_native_method("empty?", (self: RValue): RValue => {
-        return self.get_data<Array>().elements.length === 0 ? Qtrue : Qfalse;
+        return self.get_data<RubyArray>().elements.length === 0 ? Qtrue : Qfalse;
     });
 
     klass.define_native_method("clear", (self: RValue): RValue => {
-        const elements = self.get_data<Array>().elements;
+        const elements = self.get_data<RubyArray>().elements;
         elements.splice(0, elements.length);
         return self;
     });
@@ -374,30 +439,30 @@ export const init = () => {
     klass.define_native_method("compact", (self: RValue): RValue => {
         const result: RValue[] = [];
 
-        for (const element of self.get_data<Array>().elements) {
+        for (const element of self.get_data<RubyArray>().elements) {
             if (element !== Qnil) {
                 result.push(element);
             }
         }
 
-        return Array.new(result);
+        return RubyArray.new(result);
     });
 
     klass.define_native_method("dup", (self: RValue): RValue => {
-        return Array.new([...self.get_data<Array>().elements]);
+        return RubyArray.new([...self.get_data<RubyArray>().elements]);
     });
 
     klass.define_native_method("replace", (self: RValue, args: RValue[]): RValue => {
         Runtime.assert_type(args[0], ArrayClass);
         const other = args[0];
-        self.get_data<Array>().elements = [...other.get_data<Array>().elements];
+        self.get_data<RubyArray>().elements = [...other.get_data<RubyArray>().elements];
         return self;
     });
 
     klass.alias_method("initialize_copy", "replace");
 
     klass.define_native_method("hash", (self: RValue): RValue => {
-        const elements = self.get_data<Array>().elements;
+        const elements = self.get_data<RubyArray>().elements;
         let hash = elements.length;
 
         for (const element of elements) {
@@ -411,7 +476,7 @@ export const init = () => {
 
     const add_tuple_to_hash = (tuple: RValue, idx: number, hash: Hash) => {
         if (tuple.klass === ArrayClass) {
-            const elements = tuple.get_data<Array>().elements;
+            const elements = tuple.get_data<RubyArray>().elements;
 
             if (elements.length === 2) {
                 hash.set(elements[0], elements[1]);
@@ -425,7 +490,7 @@ export const init = () => {
 
     klass.define_native_method("to_h", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
         const hash = new Hash();
-        const elements = self.get_data<Array>().elements;
+        const elements = self.get_data<RubyArray>().elements;
 
         if (block) {
             const proc = block.get_data<Proc>();
@@ -450,6 +515,15 @@ export const init = () => {
         }
 
         return Hash.from_hash(hash);
+    });
+
+    klass.define_native_method("reverse", (self: RValue): RValue => {
+        return RubyArray.new([...self.get_data<RubyArray>().elements].reverse());
+    });
+
+    klass.define_native_method("reverse!", (self: RValue): RValue => {
+        self.get_data<RubyArray>().elements.reverse();
+        return self;
     });
 
     inited = true;

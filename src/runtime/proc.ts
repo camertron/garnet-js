@@ -1,4 +1,4 @@
-import { BlockCallData } from "../call_data";
+import { BlockCallData, MethodCallData } from "../call_data";
 import { CallingConvention, ExecutionContext } from "../execution_context";
 import { BlockFrame } from "../frame";
 import { InstructionSequence } from "../instruction_sequence";
@@ -88,9 +88,9 @@ export const init = () => {
 
     const klass = Object.find_constant("Proc")!.get_data<Class>();
 
-    klass.define_native_method("call", (self: RValue, args: RValue[], kwargs?: Kwargs): RValue => {
+    klass.define_native_method("call", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData): RValue => {
         const ec = ExecutionContext.current
-        return self.get_data<Proc>().call(ec, args, kwargs, (ec.frame as BlockFrame).call_data);
+        return self.get_data<Proc>().call(ec, args, kwargs, call_data || (ec.frame as BlockFrame).call_data);
     });
 
     klass.define_native_method("arity", (self: RValue): RValue => {
