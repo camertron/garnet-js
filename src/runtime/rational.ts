@@ -1,5 +1,5 @@
 import { ArgumentError, ZeroDivisionError } from "../errors";
-import { Class, Object, Qnil, RValue, Runtime, StringClass } from "../garnet";
+import { Class, Object, RValue, Runtime } from "../garnet";
 import { FloatClass, IntegerClass, NumericClass } from "../runtime";
 import { String } from "../runtime/string";
 import { Integer } from "./integer";
@@ -204,7 +204,7 @@ export const init = () => {
 
             if (args.length === 1) {
                 switch (args[0].klass) {
-                    case StringClass:
+                    case String.klass:
                         rational = Rational.from_string(args[0].get_data<string>());
                         break;
 

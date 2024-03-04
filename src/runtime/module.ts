@@ -2,11 +2,12 @@ import { BlockCallData, CallData, MethodCallData } from "../call_data";
 import { Compiler } from "../compiler";
 import { ArgumentError, NameError } from "../errors";
 import { CallingConvention, ExecutionContext } from "../execution_context";
-import { Array, Module, ModuleClass, RValue, Runtime, SymbolClass, Visibility, Qnil, StringClass, Class, Qtrue, Qfalse, NativeCallable, ClassClass, IntegerClass, Kwargs, TrueClass, FalseClass } from "../runtime";
+import { Module, ModuleClass, RValue, Runtime, SymbolClass, Visibility, Qnil, Class, Qtrue, Qfalse, IntegerClass, Kwargs, TrueClass, FalseClass } from "../runtime";
 import { Kernel } from "./kernel";
 import { Object } from "./object";
 import { InterpretedProc, Proc } from "./proc";
 import { String } from "../runtime/string";
+import { RubyArray } from "../runtime/array";
 
 let inited = false;
 
@@ -49,7 +50,7 @@ export const init = () => {
             return true;
         });
 
-        return Array.new(result);
+        return RubyArray.new(result);
     });
 
     mod.define_native_method("include", (self: RValue, args: RValue[]): RValue => {
@@ -119,8 +120,8 @@ export const init = () => {
     });
 
     mod.define_native_method("const_defined?", (self: RValue, args: RValue[]): RValue => {
-        if (args[0].klass != StringClass && args[0].klass != SymbolClass) {
-            Runtime.assert_type(args[0], StringClass);
+        if (args[0].klass != String.klass && args[0].klass != SymbolClass) {
+            Runtime.assert_type(args[0], String.klass);
         }
 
         const c = args[0].get_data<string>();
@@ -153,7 +154,7 @@ export const init = () => {
             }
         }
 
-        return Array.new(result);
+        return RubyArray.new(result);
     });
 
     mod.define_native_method("attr_reader", (self: RValue, args: RValue[]): RValue => {
@@ -163,7 +164,7 @@ export const init = () => {
             result.push(Runtime.intern(define_attr_reader_on(self, arg_s)));
         });
 
-        return Array.new(result);
+        return RubyArray.new(result);
     });
 
     mod.define_native_method("attr_writer", (self: RValue, args: RValue[]): RValue => {
@@ -173,7 +174,7 @@ export const init = () => {
             result.push(Runtime.intern(define_attr_writer_on(self, arg_s)));
         });
 
-        return Array.new(result);
+        return RubyArray.new(result);
     });
 
     mod.define_native_method("attr_accessor", (self: RValue, args: RValue[]): RValue => {
@@ -184,7 +185,7 @@ export const init = () => {
             result.push(Runtime.intern(define_attr_reader_on(self, arg_s)));
         });
 
-        return Array.new(result);
+        return RubyArray.new(result);
     });
 
     mod.define_native_method("alias_method", (self: RValue, args: RValue[]): RValue => {
@@ -204,7 +205,7 @@ export const init = () => {
             const binding = proc.binding.with_self(self);
             return proc.with_binding(binding).call(ExecutionContext.current, [self]);
         } else {
-            Runtime.assert_type(args[0], StringClass);
+            Runtime.assert_type(args[0], String.klass);
             const code = args[0].get_data<string>();
             const ec = ExecutionContext.current;
             let path, line_offset;
@@ -310,7 +311,7 @@ export const init = () => {
         if (args.length === 1) {
             return args[0]
         } else {
-            return Array.new(args);
+            return RubyArray.new(args);
         }
     });
 
@@ -332,7 +333,7 @@ export const init = () => {
     });
 
     mod.define_native_method("nesting", (self: RValue): RValue => {
-        return Array.new(ExecutionContext.current.frame?.nesting || []);
+        return RubyArray.new(ExecutionContext.current.frame?.nesting || []);
     });
 
     mod.define_native_method("method_defined?", (self: RValue, args: RValue[]): RValue => {
@@ -386,7 +387,7 @@ const each_string = (args: RValue[], callback: (arg: string) => void) => {
 }
 
 const coerce_to_string = (obj: RValue): string => {
-    if (obj.klass != StringClass && obj.klass != SymbolClass) {
+    if (obj.klass != String.klass && obj.klass != SymbolClass) {
         const arg_s = Object.send(obj, "inspect").get_data<string>();
         throw new TypeError(`${arg_s} is not a symbol nor a string`);
     }

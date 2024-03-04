@@ -1,6 +1,6 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Array } from "../runtime";
+import { RubyArray } from "../runtime/array";
 
 export default class NewArray extends Instruction {
     public size: number;
@@ -13,7 +13,7 @@ export default class NewArray extends Instruction {
 
     call(context: ExecutionContext): ExecutionResult {
         const elements = context.popn(this.size);
-        context.push(Array.new(elements));
+        context.push(RubyArray.new(elements));
         return null;
     }
 

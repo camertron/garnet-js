@@ -1,8 +1,9 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Array, ArrayClass, Qnil, RValue } from "../runtime";
+import { Qnil, RValue } from "../runtime";
 import { Object } from "../runtime/object";
 import { TypeError } from "../errors";
+import { RubyArray } from "../runtime/array";
 
 export default class SplatArray extends Instruction {
     private flag: boolean;
@@ -16,23 +17,23 @@ export default class SplatArray extends Instruction {
         const value = context.pop()!;
         let arr: RValue;
 
-        if (value.klass === ArrayClass) {
-            arr = Array.new([...value?.get_data<Array>().elements]);
+        if (value.klass === RubyArray.klass) {
+            arr = RubyArray.new([...value?.get_data<RubyArray>().elements]);
         } else if (value === Qnil) {
-            arr = Array.new([]);
+            arr = RubyArray.new([]);
         } else {
             if (Object.respond_to(value, "to_a")) {
                 const result = Object.send(value, "to_a");
 
                 if (result === Qnil) {
-                    arr = Array.new([value]);
-                } else if (result.klass !== ArrayClass) {
+                    arr = RubyArray.new([value]);
+                } else if (result.klass !== RubyArray.klass) {
                     throw new TypeError("expected to_a to return an Array");
                 } else {
                     arr = result;
                 }
             } else {
-                arr = Array.new([value]);
+                arr = RubyArray.new([value]);
             }
         }
 

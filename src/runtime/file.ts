@@ -1,15 +1,15 @@
 import { ErrnoENOENT } from "../errors";
-import { Class, IOClass, RValue, Runtime, StringClass, Qtrue, Qfalse, Qnil } from "../runtime"
+import { Class, IOClass, RValue, Runtime, Qtrue, Qfalse } from "../runtime"
 import { vmfs } from "../vmfs";
 import { Dir } from "./dir";
 import { String } from "../runtime/string";
 
 const path_from_realpath_args = (args: RValue[]): string => {
-    Runtime.assert_type(args[0], StringClass);
+    Runtime.assert_type(args[0], String.klass);
     let path = args[0].get_data<string>();
 
     if (args.length > 1 && vmfs.is_relative(path)) {
-        Runtime.assert_type(args[1], StringClass);
+        Runtime.assert_type(args[1], String.klass);
         const dir = args[1].get_data<string>();
         path = vmfs.join_paths(dir, path);
     }
@@ -77,7 +77,7 @@ export const init = () => {
          * HOME must be set correctly). "~user" expands to the named user’s home directory.
          */
         klass.define_native_singleton_method("expand_path", (_self: RValue, args: RValue[]): RValue => {
-            Runtime.assert_type(args[0], StringClass);
+            Runtime.assert_type(args[0], String.klass);
             const path = args[0].get_data<string>();
 
             // already an absolute path, so return it
@@ -87,7 +87,7 @@ export const init = () => {
 
             let dir;
             if (args.length > 1) {
-                Runtime.assert_type(args[1], StringClass);
+                Runtime.assert_type(args[1], String.klass);
                 dir = args[1].get_data<string>();
             } else {
                 dir = Dir.getwd()
@@ -126,7 +126,7 @@ export const init = () => {
          * referenced by the link.
          */
         klass.define_native_singleton_method("file?", (_self: RValue, args: RValue[]): RValue => {
-            Runtime.assert_type(args[0], StringClass);
+            Runtime.assert_type(args[0], String.klass);
             const path = args[0].get_data<string>();
             return vmfs.is_file(path) ? Qtrue : Qfalse;
         });
@@ -135,7 +135,7 @@ export const init = () => {
          * a symbolic link to a directory; false otherwise
          */
         klass.define_native_singleton_method("directory?", (_self: RValue, args: RValue[]): RValue => {
-            Runtime.assert_type(args[0], StringClass);
+            Runtime.assert_type(args[0], String.klass);
             const path = args[0].get_data<string>();
             return vmfs.is_directory(path) ? Qtrue : Qfalse;
         });
@@ -149,14 +149,14 @@ export const init = () => {
          * not executable by the effective user/group.
          */
         klass.define_native_singleton_method("executable?", (_self: RValue, args: RValue[]): RValue => {
-            Runtime.assert_type(args[0], StringClass);
+            Runtime.assert_type(args[0], String.klass);
             const path = args[0].get_data<string>();
             return vmfs.is_executable(path) ? Qtrue : Qfalse;
         });
 
         klass.define_native_singleton_method("join", (_self: RValue, args: RValue[]): RValue => {
             const paths = args.map((arg) => {
-                Runtime.assert_type(arg, StringClass);
+                Runtime.assert_type(arg, String.klass);
                 return arg.get_data<string>();
             });
 
@@ -165,7 +165,7 @@ export const init = () => {
 
         /* Return true if the named file exists. */
         klass.define_native_singleton_method("exist?", (_self: RValue, args: RValue[]): RValue => {
-            Runtime.assert_type(args[0], StringClass);
+            Runtime.assert_type(args[0], String.klass);
             const path = args[0].get_data<string>();
             return vmfs.path_exists(path) ? Qtrue : Qfalse;
         });
@@ -175,7 +175,7 @@ export const init = () => {
          * File::ALT_SEPARATOR as the separator when File::ALT_SEPARATOR is not nil.
          */
         klass.define_native_singleton_method("dirname", (_self: RValue, args: RValue[]): RValue => {
-            Runtime.assert_type(args[0], StringClass);
+            Runtime.assert_type(args[0], String.klass);
             const parts = vmfs.split_path(args[0].get_data<string>());
 
             while (parts.length > 0 && parts[parts.length - 1].length === 0) {
@@ -186,7 +186,7 @@ export const init = () => {
         });
 
         klass.define_native_singleton_method("read", (_self: RValue, args: RValue[]): RValue => {
-            Runtime.assert_type(args[0], StringClass);
+            Runtime.assert_type(args[0], String.klass);
             return String.new(vmfs.read(args[0].get_data<string>()).toString("utf-8"));
         });
     });

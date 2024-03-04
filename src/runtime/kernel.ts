@@ -1,7 +1,7 @@
 import { is_node } from "../env";
 import { ArgumentError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
 import { BreakError, ExecutionContext, ThrowError } from "../execution_context";
-import { Array, Module, Qfalse, Qnil, Qtrue, RValue, StringClass, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, ArrayClass, HashClass, SymbolClass, FloatClass, Kwargs, Visibility } from "../runtime";
+import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, HashClass, SymbolClass, FloatClass, Kwargs, Visibility } from "../runtime";
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
@@ -11,7 +11,7 @@ import { obj_id_hash } from "../util/object_id";
 import { BacktraceLocation } from "../lib/thread";
 import { Range } from "./range";
 import { MethodCallData } from "../call_data";
-import { Rational } from "./rational";
+import { RubyArray } from "../runtime/array";
 
 export class Kernel {
     public static exit_handlers: RValue[] = [];
@@ -54,19 +54,19 @@ export const init = async () => {
 
     mod.define_native_method("require", (_self: RValue, args: RValue[]): RValue => {
         const path = args[0];
-        Runtime.assert_type(path, StringClass);
+        Runtime.assert_type(path, String.klass);
         return Runtime.require(path.get_data<string>()) ? Qtrue : Qfalse;
     });
 
     mod.define_native_method("require_relative", (_self: RValue, args: RValue[]): RValue => {
         const path = args[0];
-        Runtime.assert_type(path, StringClass);
+        Runtime.assert_type(path, String.klass);
         return Runtime.require_relative(path.get_data<string>(), ExecutionContext.current.frame!.iseq.file) ? Qtrue : Qfalse;
     });
 
     mod.define_native_method("load", (_self: RValue, args: RValue[]): RValue => {
         const path = args[0];
-        Runtime.assert_type(path, StringClass);
+        Runtime.assert_type(path, String.klass);
         return Runtime.load(path.get_data<string>()) ? Qtrue : Qfalse;
     });
 
@@ -113,7 +113,7 @@ export const init = async () => {
                 instance = Object.send(args[0], "new", [args[1] || Qnil]);
                 break;
 
-            case StringClass:
+            case String.klass:
                 instance = Object.send(Object.find_constant("RuntimeError")!, "new", [args[0]]);
                 break;
 
@@ -164,7 +164,7 @@ export const init = async () => {
             case FloatClass:
                 return Integer.get(Math.floor(args[0].get_data<number>()));
 
-            case StringClass:
+            case String.klass:
                 const str = args[0].get_data<string>();
 
                 if (str.match(/^\d+$/)) {
@@ -179,14 +179,14 @@ export const init = async () => {
     });
 
     mod.define_native_method("Array", (self: RValue, args: RValue[]): RValue => {
-        if (args[0].klass == ArrayClass) {
+        if (args[0].klass == RubyArray.klass) {
             return args[0];
         } else if (Object.send(args[0], "respond_to?", [Runtime.intern("to_ary")]).is_truthy()) {
             return Object.send(args[0], "to_ary");
         } else if (Object.send(args[0], "respond_to?", [Runtime.intern("to_a")]).is_truthy()) {
             return Object.send(args[0], "to_a");
         } else {
-            return Array.new([args[0]]);
+            return RubyArray.new([args[0]]);
         }
     });
 
@@ -215,7 +215,7 @@ export const init = async () => {
     mod.define_native_method("instance_variable_set", (self: RValue, args: RValue[]): RValue => {
         const first_arg = args[0] || Qnil;
 
-        if (first_arg.klass === StringClass || first_arg.klass === SymbolClass) {
+        if (first_arg.klass === String.klass || first_arg.klass === SymbolClass) {
             const ivar_name = first_arg.get_data<string>();
             self.iv_set(ivar_name, args[1]);
             return args[1];
@@ -227,7 +227,7 @@ export const init = async () => {
     mod.define_native_method("instance_variable_get", (self: RValue, args: RValue[]): RValue => {
         const first_arg = args[0] || Qnil;
 
-        if (first_arg.klass === StringClass || first_arg.klass === SymbolClass) {
+        if (first_arg.klass === String.klass || first_arg.klass === SymbolClass) {
             const ivar_name = first_arg.get_data<string>();
             return self.iv_get(ivar_name);
         } else {
@@ -264,11 +264,11 @@ export const init = async () => {
 
         const first_arg = args[0] || Qnil;
 
-        if (first_arg.klass === StringClass) {
+        if (first_arg.klass === String.klass) {
             if (args[1]) {
-                if (args[1].klass === ArrayClass) {
-                    const elems = args[1].get_data<Array>().elements;
-                    elems.forEach((elem) => Runtime.assert_type(elem, StringClass));
+                if (args[1].klass === RubyArray.klass) {
+                    const elems = args[1].get_data<RubyArray>().elements;
+                    elems.forEach((elem) => Runtime.assert_type(elem, String.klass));
                     const elem_strings = elems.map((elem) => elem.get_data<string>());
                     // kexec(first_arg.get_data<string>(), elem_strings);
                     return Qnil;
@@ -281,9 +281,9 @@ export const init = async () => {
             }
         } else if (first_arg.klass === HashClass) {
             throw new NotImplementedError("passing a hash as the first argument to Kernel#exec is not yet supported");
-        } else if (first_arg.klass === ArrayClass) {
-            const elems = args[0].get_data<Array>().elements;
-            elems.forEach((elem) => Runtime.assert_type(elem, StringClass));
+        } else if (first_arg.klass === RubyArray.klass) {
+            const elems = args[0].get_data<RubyArray>().elements;
+            elems.forEach((elem) => Runtime.assert_type(elem, String.klass));
             const elem_strings = elems.map((elem) => elem.get_data<string>());
             // kexec(elem_strings.join(" "));
             return Qnil;
@@ -401,7 +401,7 @@ export const init = async () => {
             locations.push(BacktraceLocation.new(path, parseInt(line), label));
         }
 
-        return Array.new(locations);
+        return RubyArray.new(locations);
     });
 
     mod.define_native_method("throw", (_self: RValue, args: RValue[]): RValue => {
@@ -431,7 +431,7 @@ export const init = async () => {
     });
 
     mod.define_native_method("instance_variable_defined?", (self: RValue, args: RValue[]): RValue => {
-        if (args[0].klass !== StringClass && args[0].klass !== SymbolClass) {
+        if (args[0].klass !== String.klass && args[0].klass !== SymbolClass) {
             throw new TypeError(`${Object.send(args[0], "inspect").get_data<string>()} is not a symbol nor a string`);
         }
 

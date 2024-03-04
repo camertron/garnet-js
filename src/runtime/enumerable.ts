@@ -1,10 +1,10 @@
-import { ArgumentError } from "../errors";
 import { BreakError, ExecutionContext } from "../execution_context";
-import { Module, Qnil, RValue, Runtime, Array, Qfalse, Qtrue, Kwargs } from "../runtime"
+import { Module, Qnil, RValue, Runtime, Qfalse, Qtrue, Kwargs } from "../runtime"
 import { spaceship_compare } from "./comparable";
 import { Integer } from "./integer";
 import { Object } from "./object";
 import { Proc } from "./proc";
+import { RubyArray } from "../runtime/array";
 
 export const init = () => {
     Runtime.define_module("Enumerable", (mod: Module) => {
@@ -18,7 +18,7 @@ export const init = () => {
                     return Qnil;
                 }));
 
-                return Array.new(results);
+                return RubyArray.new(results);
             } else {
                 // @TODO: return an Enumerator
                 return Qnil;
@@ -100,7 +100,7 @@ export const init = () => {
                     return Qnil;
                 }));
 
-                return Array.new([Array.new(truthy_array), Array.new(falsey_array)]);
+                return RubyArray.new([RubyArray.new(truthy_array), RubyArray.new(falsey_array)]);
             } else {
                 // @TODO: return an Enumerator
                 return Qnil;
@@ -173,7 +173,7 @@ export const init = () => {
                     return spaceship_compare(x_tuple[0], y_tuple[0]);
                 });
 
-                return Array.new(tuples.map((tuple: RValue[]) => tuple[1]));
+                return RubyArray.new(tuples.map((tuple: RValue[]) => tuple[1]));
             } else {
                 // @TODO: return an Enumerator
                 return Qnil;

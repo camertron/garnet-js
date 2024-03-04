@@ -1,6 +1,6 @@
 import { ArgumentError, NotImplementedError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Class, IntegerClass, Kwargs, Qnil, RValue, Runtime, StringClass } from "../runtime"
+import { Class, IntegerClass, Kwargs, Qnil, RValue, Runtime } from "../runtime"
 import { Hash } from "./hash";
 import { Integer } from "./integer";
 import { Proc } from "./proc";
@@ -69,7 +69,7 @@ export const init = () => {
 
             const sig_no = args[0] || Qnil;
 
-            if (sig_no.klass === StringClass) {
+            if (sig_no.klass === String.klass) {
                 let sig_str = sig_no.get_data<string>().toUpperCase();
                 if (sig_str.startsWith("SIG")) sig_str = sig_str.slice(3);
 

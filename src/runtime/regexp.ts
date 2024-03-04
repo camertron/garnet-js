@@ -1,10 +1,11 @@
 import { IndexError, RuntimeError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Array, Class, IntegerClass, ObjectClass, Qnil, RValue, RegexpClass, Runtime } from "../runtime";
+import { Class, IntegerClass, ObjectClass, Qnil, RValue, RegexpClass, Runtime } from "../runtime";
 import { String as RubyString } from "../runtime/string";
 import * as WASM from "../wasm";
 import { Integer } from "./integer";
 import { Object } from "./object";
+import { RubyArray } from "../runtime/array";
 
 let onigmo: Onigmo;
 let inited = false;
@@ -115,7 +116,7 @@ export const init = async () => {
                 captures.push(RubyString.new(match_data.str.slice(begin, end)));
             }
 
-            return Array.new(captures);
+            return RubyArray.new(captures);
         });
 
         klass.define_native_method("begin", (self: RValue, args: RValue[]): RValue => {

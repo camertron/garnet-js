@@ -1,7 +1,8 @@
 import { BacktraceLocation } from "./lib/thread";
-import { Array, ArrayClass, Class, Module, ObjectClass, Qnil, Qtrue, RValue, Runtime, StringClass } from "./runtime";
+import { Class, Module, ObjectClass, Qnil, Qtrue, RValue, Runtime } from "./runtime";
 import { Object } from "./runtime/object";
 import { String } from "./runtime/string";
+import { RubyArray } from "./runtime/array";
 
 export const init = () => {
     const ExceptionClass = Runtime.define_class("Exception", ObjectClass, (klass: Class) => {
@@ -33,17 +34,17 @@ export const init = () => {
         });
 
         klass.define_native_method("set_backtrace", (self: RValue, args: RValue[]): RValue => {
-            Runtime.assert_type(args[0], ArrayClass);
+            Runtime.assert_type(args[0], RubyArray.klass);
             const backtrace = [];
 
-            for (const element of args[0].get_data<Array>().elements) {
-                Runtime.assert_type(element, StringClass);
+            for (const element of args[0].get_data<RubyArray>().elements) {
+                Runtime.assert_type(element, String.klass);
                 backtrace.push(element.get_data<string>());
             }
 
             const error = self.get_data<IRubyError>();
             error.backtrace = backtrace;
-            error.backtrace_rval = Array.new([...args[0].get_data<Array>().elements]);
+            error.backtrace_rval = RubyArray.new([...args[0].get_data<RubyArray>().elements]);
 
             return Qnil;
         });
@@ -58,7 +59,7 @@ export const init = () => {
                     backtrace.push(String.new(element));
                 }
 
-                error.backtrace_rval = Array.new(backtrace);
+                error.backtrace_rval = RubyArray.new(backtrace);
             }
 
             return error.backtrace_rval;
@@ -75,7 +76,7 @@ export const init = () => {
                 locations.push(BacktraceLocation.new(path, parseInt(line), label));
             }
 
-            return Array.new(locations);
+            return RubyArray.new(locations);
         });
     });
 

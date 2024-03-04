@@ -1,7 +1,8 @@
 import {beforeAll, describe, expect, test} from '@jest/globals';
 import * as Garnet from "../garnet";
-import { Array as RubyArray, ArrayClass, SymbolClass, TrueClass, StringClass } from '../runtime';
+import { SymbolClass, TrueClass } from '../runtime';
 import { LoadError } from '../errors';
+import { RubyArray } from "../runtime/array";
 
 beforeAll(() => {
     return Garnet.init();
@@ -67,7 +68,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await Garnet.evaluate(code);
-        expect(result.klass).toBe(ArrayClass);
+        expect(result.klass).toBe(RubyArray.klass);
         const results = result.get_data<RubyArray>().elements.map((val) => val.get_data<boolean>());
         expect(results).toEqual([false, true]);
     });
@@ -261,7 +262,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await Garnet.evaluate(code);
-        expect(result.klass).toBe(StringClass);
+        expect(result.klass).toBe(Garnet.String.klass);
         expect(result.get_data<string>()).toEqual("cannot load such file -- foo");
     });
 });

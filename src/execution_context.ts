@@ -4,11 +4,12 @@ import { BlockFrame, ClassFrame, Frame, MethodFrame, RescueFrame, TopFrame } fro
 import Instruction from "./instruction";
 import { CatchBreak, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
 import { Local } from "./local_table";
-import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, ArrayClass, ProcClass, Kwargs, Qtrue, Qfalse, Runtime, StringClass, HashClass } from "./runtime";
+import { ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, ProcClass, Kwargs, Qtrue, Qfalse, Runtime, HashClass } from "./runtime";
 import { Binding } from "./runtime/binding";
 import { Hash } from "./runtime/hash";
 import { Object } from "./runtime/object";
 import { String } from "./runtime/string";
+import { RubyArray } from "./runtime/array";
 
 export type ExecutionResult = JumpResult | LeaveResult | null;
 
@@ -543,7 +544,7 @@ export class ExecutionContext {
         // Apparently blocks and procs destructure one level of their args automatically.
         // Eg. {}.map { |a, b| ... } automatically destructures [a, b] while {}.map { |a| ... } does not,
         // and instead passes a two-element array to the block.
-        if (calling_convention === CallingConvention.BLOCK_PROC && locals[0]?.klass === ArrayClass) {
+        if (calling_convention === CallingConvention.BLOCK_PROC && locals[0]?.klass === RubyArray.klass) {
             const elements = locals[0].get_data<RubyArray>().elements;
 
             if (elements.length <= lead_num) {

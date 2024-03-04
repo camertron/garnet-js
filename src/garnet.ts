@@ -1,7 +1,7 @@
-import { Class, ObjectClass, RValue, Runtime, init as initRuntime } from "./runtime";
+import { RValue, init as initRuntime } from "./runtime";
 import { ExecutionContext } from "./execution_context";
 import { vmfs } from "./vmfs";
-import { Compiler, ParseLocal, ParseOptions } from "./compiler";
+import { Compiler, ParseLocal } from "./compiler";
 import { CompilerOptions } from "./compiler_options";
 import { RubyError, SystemExit } from "./errors";
 import { Kernel } from "./runtime/kernel";
@@ -96,8 +96,6 @@ export {
     ModuleClass,
     ObjectClass,
     BasicObjectClass,
-    Array,
-    StringClass,
     RegexpClass,
     NilClass,
     Qnil,
@@ -114,6 +112,7 @@ export {
 
 export type { IO } from "./runtime";
 export { String } from "./runtime/string";
+export { RubyArray } from "./runtime/array";
 
 export { Object } from "./runtime/object";
 export { RubyError } from "./errors";

@@ -1,8 +1,8 @@
-import { MethodCallData } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Array, ArrayClass, Qnil, Qtrue, RValue, Runtime } from "../runtime";
+import { Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { Object } from "../runtime/object"
+import { RubyArray } from "../runtime/array";
 
 export enum ExpandArrayFlag {
     SPLAT_FLAG = 0x01,
@@ -24,19 +24,19 @@ export default class ExpandArray extends Instruction {
         let object = context.pop()!;
 
         object = (() => {
-            if (object.klass == ArrayClass) {
+            if (object.klass == RubyArray.klass) {
                 // dup
-                return new RValue(ArrayClass, new Array([...object.get_data<Array>().elements]));
+                return new RValue(RubyArray.klass, new Array([...object.get_data<RubyArray>().elements]));
             } else if (Object.send(object, "respond_to?", [Runtime.intern("to_ary"), Qtrue]).is_truthy()) {
                 return Object.send(object, "to_ary");
             } else {
-                return Array.new([object]);
+                return RubyArray.new([object]);
             }
         })();
 
         const splat_flag = (this.flags & ExpandArrayFlag.SPLAT_FLAG) > 0;
         const postarg_flag = (this.flags & ExpandArrayFlag.POSTARG_FLAG) > 0;
-        const obj_data = object.get_data<Array>().elements;
+        const obj_data = object.get_data<RubyArray>().elements;
 
         if (this.size == 0 && !splat_flag) {
             // no space left on stack

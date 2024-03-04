@@ -1,5 +1,5 @@
 import { is_node } from "../env";
-import { Class, ObjectClass, Qnil, RValue, Runtime, StringClass } from "../runtime"
+import { Class, ObjectClass, Qnil, RValue, Runtime } from "../runtime"
 import { Hash } from "./hash";
 import { String } from "../runtime/string";
 
@@ -12,7 +12,7 @@ export const init = () => {
     const env = new RValue(ObjectClass);
 
     env.get_singleton_class().get_data<Class>().define_native_method("[]", (_self: RValue, args: RValue[]): RValue => {
-        Runtime.assert_type(args[0], StringClass);
+        Runtime.assert_type(args[0], String.klass);
 
         const result = env_hash.get(args[0]);
 
@@ -30,8 +30,8 @@ export const init = () => {
     });
 
     env.get_singleton_class().get_data<Class>().define_native_method("[]=", (_self: RValue, args: RValue[]): RValue => {
-        Runtime.assert_type(args[0], StringClass);
-        Runtime.assert_type(args[1], StringClass);
+        Runtime.assert_type(args[0], String.klass);
+        Runtime.assert_type(args[1], String.klass);
         env_hash.set(args[0], args[1]);
         return args[1];
     });

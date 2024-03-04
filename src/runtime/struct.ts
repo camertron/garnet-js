@@ -1,7 +1,8 @@
 import { ArgumentError, TypeError } from "../errors";
-import { Class, ClassClass, ObjectClass, Qnil, RValue, Runtime, StringClass } from "../garnet";
+import { Class, ClassClass, ObjectClass, Qnil, RValue, Runtime } from "../garnet";
 import { SymbolClass } from "../runtime";
 import { Object } from "../runtime/object";
+import { String } from "../runtime/string";
 
 let inited = false;
 
@@ -19,7 +20,7 @@ export const init = () => {
 
             // If the first argument is a string, it is used as the struct's class name and
             // added as a constant on Struct::, eg: Struct.new("Foo")  # => Struct::Foo
-            if (args[0].klass === StringClass) {
+            if (args[0].klass === String.klass) {
                 const class_name = args[0].get_data<string>();
                 new_class = new Class(class_name, struct_class.rval);
                 struct_class.constants[class_name] = new_class.rval;

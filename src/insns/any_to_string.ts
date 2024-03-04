@@ -1,6 +1,6 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Class, StringClass } from "../runtime";
+import { Class } from "../runtime";
 import { Object } from "../runtime/object";
 import { String } from "../runtime/string";
 
@@ -9,7 +9,7 @@ export default class AnyToString extends Instruction {
         const value = context.pop()!;
         const original = context.pop()!;
 
-        if (value.klass == StringClass) {
+        if (value.klass == String.klass) {
             context.push(value);
         } else {
             const class_name = original.klass.get_data<Class>().name;

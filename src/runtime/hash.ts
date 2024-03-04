@@ -1,12 +1,13 @@
 import { ArgumentError, KeyError } from "../errors";
 import { BreakError, ExecutionContext } from "../execution_context";
-import { RValue, Class, Qtrue, Qfalse, Qnil, HashClass, ProcClass, Runtime, Array as RubyArray, Kwargs, ArrayClass, KwargsHash } from "../runtime";
+import { RValue, Class, Qtrue, Qfalse, Qnil, HashClass, ProcClass, Runtime, Kwargs, KwargsHash } from "../runtime";
 import { Object } from "./object";
 import { Proc } from "./proc";
 import { String } from "../runtime/string";
 import { Integer } from "./integer";
 import { hash_combine } from "../util/hash_utils";
 import { CallData } from "../call_data";
+import { RubyArray } from "../runtime/array";
 
 export class Hash {
     static new(default_value?: RValue, default_proc?: RValue): RValue {
@@ -344,13 +345,13 @@ export const init = () => {
             args[0].get_data<Hash>().each((k: RValue, v: RValue): void => {
                 hash.set(k, v);
             });
-        } else if (args.length === 1 && args[0].klass === ArrayClass) {
+        } else if (args.length === 1 && args[0].klass === RubyArray.klass) {
             const elements = args[0].get_data<RubyArray>().elements;
 
             for (let i = 0; i < elements.length; i ++) {
                 const arg = elements[i];
 
-                if (arg.klass === ArrayClass) {
+                if (arg.klass === RubyArray.klass) {
                     const tuple_elements = arg.get_data<RubyArray>().elements;
 
                     if (tuple_elements.length === 1 || tuple_elements.length === 2) {

@@ -1,4 +1,4 @@
-import { Array } from "../runtime";
+import { RubyArray } from "../runtime/array";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction, { ValueType } from "../instruction";
 import { RValue } from "../runtime";
@@ -15,7 +15,7 @@ export default class DupArray extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        context.push(Array.new([...this.values]));
+        context.push(RubyArray.new([...this.values]));
         return null;
     }
 

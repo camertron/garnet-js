@@ -1,4 +1,4 @@
-import { Class, NilClass, Object, Qnil, Runtime, StringClass } from "../garnet";
+import { Class, NilClass, Object, Runtime } from "../garnet";
 import { ObjectClass, RValue } from "../runtime";
 import { Integer } from "../runtime/integer";
 import { String } from "../runtime/string"
@@ -25,7 +25,7 @@ export const init = () => {
                 case NilClass:
                     // writing nil should append an empty string, i.e. do nothing
                     return Integer.get(0);
-                case StringClass:
+                case String.klass:
                     val = args[0].get_data<string>();
                     self.data = self.get_data<string>() + val;
                     return Integer.get(String.get_encoding(args[0]).bytesize(val));

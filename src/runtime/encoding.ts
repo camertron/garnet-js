@@ -1,4 +1,4 @@
-import { Class, ObjectClass, Qfalse, Qtrue, RValue, Runtime, StringClass } from "../runtime";
+import { Class, ObjectClass, Qfalse, Qtrue, RValue, Runtime } from "../runtime";
 import { isLittlEndian } from "../util/endianness";
 import { CR_7BIT, CR_UNKNOWN, CR_VALID, String as RubyString } from "../runtime/string";
 import { EncodingCompatibilityError } from "../errors";
@@ -43,7 +43,7 @@ export abstract class Encoding {
     static extract(obj: RValue): RValue | undefined {
         if (obj.klass === this.encoding_class_rval) {
             return obj;
-        } else if (obj.klass === StringClass) {
+        } else if (obj.klass === RubyString.klass) {
             return RubyString.get_encoding_rval(obj);
         }
     }
@@ -52,7 +52,7 @@ export abstract class Encoding {
     static coerce(obj: RValue): RValue | undefined {
         if (obj.klass === this.encoding_class_rval) {
             return obj;
-        } else if (obj.klass === StringClass) {
+        } else if (obj.klass === RubyString.klass) {
             return this.get(obj.get_data<string>());
         } else {
             return undefined;
@@ -86,17 +86,17 @@ export abstract class Encoding {
         if (enc1 == null || enc2 == null) return null;
         if (enc1 == enc2) return enc1;
 
-        if (obj2.klass === StringClass && (obj2.get_data<string>().length == 0)) return enc1;
-        if (obj1.klass === StringClass && (obj1.get_data<string>().length == 0)) {
-            return enc1.get_data<Encoding>().ascii_compatible && obj2.klass === StringClass && (RubyString.ascii_only(obj2)) ? enc1 : enc2;
+        if (obj2.klass === RubyString.klass && (obj2.get_data<string>().length == 0)) return enc1;
+        if (obj1.klass === RubyString.klass && (obj1.get_data<string>().length == 0)) {
+            return enc1.get_data<Encoding>().ascii_compatible && obj2.klass === RubyString.klass && (RubyString.ascii_only(obj2)) ? enc1 : enc2;
         }
 
         if (!enc1.get_data<Encoding>().ascii_compatible || !enc2.get_data<Encoding>().ascii_compatible) return null;
 
-        if (obj2.klass !== StringClass && enc2 === Encoding.us_ascii) return enc1;
-        if (obj1.klass !== StringClass && enc1 === Encoding.us_ascii) return enc2;
+        if (obj2.klass !== RubyString.klass && enc2 === Encoding.us_ascii) return enc1;
+        if (obj1.klass !== RubyString.klass && enc1 === Encoding.us_ascii) return enc2;
 
-        if (obj1.klass !== StringClass) {
+        if (obj1.klass !== RubyString.klass) {
             const obj_tmp = obj1; // swap1 obj1 & obj2
             obj1 = obj2;
             obj2 = obj_tmp;
@@ -106,10 +106,10 @@ export abstract class Encoding {
             enc2 = enc_tmp;
         }
 
-        if (obj1.klass === StringClass) {
+        if (obj1.klass === RubyString.klass) {
             const cr1 = RubyString.scan_for_code_range(obj1);
 
-            if (obj2.klass === StringClass) {
+            if (obj2.klass === RubyString.klass) {
                 const cr2 = RubyString.scan_for_code_range(obj2);
                 return this.are_compatible_(enc1, cr1, enc2, cr2);
             }

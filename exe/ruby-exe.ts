@@ -1,6 +1,6 @@
 import { argv } from "process";
 import * as Garnet from "../src/garnet";
-import { ExecutionContext, Runtime, vmfs, Array, String } from "../src/garnet";
+import { ExecutionContext, Runtime, vmfs, RubyArray, String } from "../src/garnet";
 import path from "path";
 import { fileURLToPath } from 'url';
 import fs from "fs";
@@ -60,7 +60,7 @@ for (let i = 0; i < argv.length; i ++) {
     }
 }
 
-Garnet.ObjectClass.get_data<Garnet.Class>().constants["ARGV"] = Array.new(
+Garnet.ObjectClass.get_data<Garnet.Class>().constants["ARGV"] = RubyArray.new(
     script_argv.map((arg) => {
         return String.new(arg);
     })

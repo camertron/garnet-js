@@ -1,6 +1,6 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
-import { Array, Qfalse } from "../runtime";
 import Instruction from "../instruction";
+import { RubyArray } from "../runtime/array";
 
 export default class CheckKeyword extends Instruction {
     public keyword_bits_index: number;
@@ -15,7 +15,7 @@ export default class CheckKeyword extends Instruction {
 
     call(context: ExecutionContext): ExecutionResult {
         const keyword_bits = context.local_get(this.keyword_bits_index, 0);
-        context.push(keyword_bits.get_data<Array>().elements[this.keyword_index]);
+        context.push(keyword_bits.get_data<RubyArray>().elements[this.keyword_index]);
         return null;
     }
 

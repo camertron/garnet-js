@@ -2,10 +2,11 @@ import { MethodCallData, CallDataFlag } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { ArrayClass, Kwargs, RValue, Array } from "../runtime";
+import { Kwargs, RValue } from "../runtime";
 import { Hash } from "../runtime/hash";
 import { Object } from "../runtime/object"
 import { Proc } from "../runtime/proc";
+import { RubyArray } from "../runtime/array";
 
 export default class Send extends Instruction {
     public call_data: MethodCallData;
@@ -53,8 +54,8 @@ export default class Send extends Instruction {
         if (this.call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
             // @TODO, ok but which arguments are splatted and which aren't?
             args = args.flatMap((arg) => {
-                if (arg.klass === ArrayClass) {
-                    return arg.get_data<Array>().elements;
+                if (arg.klass === RubyArray.klass) {
+                    return arg.get_data<RubyArray>().elements;
                 } else {
                     return arg;
                 }

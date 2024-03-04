@@ -1,7 +1,7 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
 import { FrozenError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Callable, Class, KernelModule, ObjectClass, RValue, Runtime, StringClass, SymbolClass, Qtrue, Qfalse, Module, Kwargs } from "../runtime";
+import { Callable, Class, KernelModule, ObjectClass, RValue, Runtime, SymbolClass, Qtrue, Qfalse, Module, Kwargs } from "../runtime";
 import { Symbol } from "./symbol";
 import { String } from "../runtime/string";
 
@@ -179,14 +179,14 @@ export const init = () => {
         // NOTE: send should actually be defined by the Kernel module
         klass.define_native_singleton_method("send", (self: RValue, args: RValue[]): RValue => {
             const method_name = args[0];
-            Runtime.assert_type(method_name, StringClass);
+            Runtime.assert_type(method_name, String.klass);
             return Object.send(self.klass.get_data<Class>().get_singleton_class(), method_name.get_data<string>(), args);
         });
 
         klass.define_native_method("send", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData) => {
             const method_name = args[0];
 
-            if (method_name.klass === StringClass || method_name.klass === SymbolClass) {
+            if (method_name.klass === String.klass || method_name.klass === SymbolClass) {
                 if (call_data) {
                     const new_call_data = MethodCallData.create(method_name.get_data<string>(), call_data.argc - 1, call_data.flag, call_data.kw_arg);
                     return Object.send(self, new_call_data, args.slice(1), kwargs, block);

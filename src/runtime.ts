@@ -39,6 +39,7 @@ import { init as struct_init } from "./runtime/struct";
 import { init as rational_init } from "./runtime/rational";
 import { obj_id_hash } from "./util/object_id";
 import { String } from "./runtime/string";
+import { RubyArray } from "./runtime/array";
 import * as tty from "node:tty";
 
 type ModuleDefinitionCallback = (module: Module) => void;
@@ -241,7 +242,7 @@ export class Runtime {
 
     static coerce_to_string(obj: RValue): RValue {
         switch (obj.klass) {
-            case StringClass:
+            case String.klass:
             case SymbolClass:
                 return obj;
             default:
@@ -249,7 +250,7 @@ export class Runtime {
                     const str = Object.send(obj, "to_str");
 
                     // make sure classes that inherit from String also work here
-                    if (Kernel.is_a(str, StringClass)) {
+                    if (Kernel.is_a(str, String.klass)) {
                         return str;
                     } else {
                         const obj_class_name = obj.klass.get_data<Class>().name;
@@ -266,7 +267,7 @@ export class Runtime {
     static require(path: string): boolean {
         // console.log(`Require ${path}`);
         const ec = ExecutionContext.current;
-        const loaded_features = ec.globals['$"'].get_data<Array>().elements;
+        const loaded_features = ec.globals['$"'].get_data<RubyArray>().elements;
         const full_path = this.find_on_load_path(path) || path;
 
         // required files are only evaluated once
@@ -326,7 +327,7 @@ export class Runtime {
 
     private static find_on_load_path(path: string, assume_extension: boolean = true): string | null {
         const ec = ExecutionContext.current;
-        const load_paths = ec.globals["$:"].get_data<Array>().elements;
+        const load_paths = ec.globals["$:"].get_data<RubyArray>().elements;
 
         for(let load_path of load_paths) {
             let full_path = vmfs.join_paths(load_path.get_data<string>(), path);
@@ -848,8 +849,8 @@ class_class.superclass = ModuleClass;
 
 export const BasicObjectClass = object_class.constants["BasicObject"] = new RValue(ClassClass, basic_object_class);
 export const ObjectClass      = object_class.constants["Object"]      = new RValue(ClassClass, object_class);
-export const StringClass      = object_class.constants["String"]      = new RValue(ClassClass, new Class("String", ObjectClass));
-export const ArrayClass       = object_class.constants["Array"]       = new RValue(ClassClass, new Class("Array", ObjectClass));
+// export const StringClass      = object_class.constants["String"]      = new RValue(ClassClass, new Class("String", ObjectClass));
+// export const ArrayClass       = object_class.constants["Array"]       = new RValue(ClassClass, new Class("Array", ObjectClass));
 export const HashClass        = object_class.constants["Hash"]        = new RValue(ClassClass, new Class("Hash", ObjectClass));
 export const NumericClass     = object_class.constants["Numeric"]     = new RValue(ClassClass, new Class("Numeric", ObjectClass));
 export const IntegerClass     = object_class.constants["Integer"]     = new RValue(ClassClass, new Class("Integer", NumericClass));
@@ -868,8 +869,8 @@ basic_object_class.rval = BasicObjectClass;
 object_class.rval = ObjectClass;
 module_class.rval = ModuleClass;
 class_class.rval = ClassClass;
-StringClass.get_data<Class>().rval = StringClass;
-ArrayClass.get_data<Class>().rval = ArrayClass;
+// StringClass.get_data<Class>().rval = StringClass;
+// ArrayClass.get_data<Class>().rval = ArrayClass;
 HashClass.get_data<Class>().rval = HashClass;
 NumericClass.get_data<Class>().rval = NumericClass;
 IntegerClass.get_data<Class>().rval = IntegerClass;
@@ -1210,8 +1211,8 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
         const io = self.get_data<IO>();
 
         for (const arg of args) {
-            if (arg.klass === ArrayClass && call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
-                for (const elem of arg.get_data<Array>().elements) {
+            if (arg.klass === RubyArray.klass && call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
+                for (const elem of arg.get_data<RubyArray>().elements) {
                     io.puts(Object.send(elem, "to_s").get_data<string>());
                 }
             } else {
@@ -1226,8 +1227,8 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
         const io = self.get_data<IO>();
 
         for (const arg of args) {
-            if (arg.klass === ArrayClass && call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
-                for (const elem of arg.get_data<Array>().elements) {
+            if (arg.klass === RubyArray.klass && call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
+                for (const elem of arg.get_data<RubyArray>().elements) {
                     io.write(Object.send(elem, "to_s").get_data<string>());
                 }
             } else {
@@ -1254,22 +1255,6 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
 
 export const STDOUT = ObjectClass.get_data<Class>().constants["STDOUT"] = is_node ? NodeIO.new(process.stdout) : BrowserIO.new(console.log);
 export const STDERR = ObjectClass.get_data<Class>().constants["STDERR"] = is_node ? NodeIO.new(process.stderr) : BrowserIO.new(console.error);
-
-export class Array {
-    static new(arr?: RValue[]): RValue {
-        return new RValue(ArrayClass, new Array(arr || []));
-    }
-
-    public elements: RValue[];
-
-    constructor(elements: RValue[]) {
-        this.elements = elements;
-    }
-
-    add(element: RValue) {
-        this.elements.push(element);
-    }
-}
 
 export const init = async () => {
     module_init();

@@ -1,9 +1,10 @@
 import { BreakError } from "../execution_context";
 import { ExecutionContext, Qtrue } from "../garnet";
-import { Array, Class, Kwargs, NumericClass, ObjectClass, Qnil, Runtime, RValue, } from "../runtime";
+import { Class, Kwargs, NumericClass, ObjectClass, Qnil, Runtime, RValue, } from "../runtime";
 import { String } from "../runtime/string";
 import { parse_glob } from "./parse-glob";
 import { Proc } from "./proc";
+import { RubyArray } from "../runtime/array";
 
 export class Dir {
     private static wd: string;
@@ -74,7 +75,7 @@ export const init = () => {
                     matching_paths.push(String.new(path));
                 });
 
-                return Array.new(matching_paths);
+                return RubyArray.new(matching_paths);
             }
         });
 
