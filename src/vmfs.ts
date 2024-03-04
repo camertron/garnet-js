@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { isBrowser, isNode } from "./env";
+import { is_browser, is_node } from "./env";
 
 import { Trie } from "./util/trie";
 import { Dir } from "./runtime/dir";
@@ -279,9 +279,9 @@ class NodeFileSystem extends FileSystem {
 }
 
 export const vmfs: FileSystem = ( () => {
-    if (isBrowser) {
+    if (is_browser) {
         return new VirtualFileSystem();
-    } else if (isNode) {
+    } else if (is_node) {
         return new NodeFileSystem();
     } else {
         throw new Error("Running in an unsupported environment!");

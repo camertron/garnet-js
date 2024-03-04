@@ -1,4 +1,4 @@
-import { isNode } from "./env";
+import { is_node } from "./env";
 import { make_wasi } from "./wasi";
 
 const module_paths: string[] = [];
@@ -24,7 +24,7 @@ export class ModuleNotFound extends Error {
 };
 
 const load_module_source = async (locator: string): Promise<Buffer> => {
-    if (isNode) {
+    if (is_node) {
         const fs = await import("fs");
         const path = await import("path");
         let file: string | undefined;

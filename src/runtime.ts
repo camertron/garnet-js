@@ -2,40 +2,40 @@ import { InstructionSequence } from "./instruction_sequence";
 import { Compiler } from "./compiler";
 import { LoadError, TypeError, NoMethodError, NotImplementedError, NameError } from "./errors";
 import { CallingConvention, ExecutionContext } from "./execution_context";
-import { init as arrayInit } from "./runtime/array";
-import { Integer, init as integerInit } from "./runtime/integer";
+import { init as array_init } from "./runtime/array";
+import { Integer, init as integer_init } from "./runtime/integer";
 import { Object } from "./runtime/object";
-import { init as symbolInit } from "./runtime/symbol";
-import { init as stringInit } from "./runtime/string";
+import { init as symbol_init } from "./runtime/symbol";
+import { init as string_init } from "./runtime/string";
 import { Dir } from "./runtime/dir";
 import { vmfs } from "./vmfs";
-import { Proc, init as procInit } from "./runtime/proc";
-import { init as hashInit } from "./runtime/hash";
-import { isNode } from "./env";
+import { Proc, init as proc_init } from "./runtime/proc";
+import { init as hash_init } from "./runtime/hash";
+import { is_node } from "./env";
 import { BlockCallData, CallData, CallDataFlag, MethodCallData } from "./call_data";
-import { init as floatInit } from "./runtime/float";
-import { init as moduleInit } from "./runtime/module";
+import { init as float_init } from "./runtime/float";
+import { init as module_init } from "./runtime/module";
 import { Kernel, init as kernel_init } from "./runtime/kernel";
 import { init as object_init } from "./runtime/object";
 import { init as error_init } from "./errors";
-import { init as processInit } from "./runtime/process";
-import { init as envInit } from "./runtime/env";
-import { init as fileInit } from "./runtime/file";
-import { init as dirInit } from "./runtime/dir";
-import { init as comparableInit } from "./runtime/comparable";
-import { init as numericInit } from "./runtime/numeric";
+import { init as process_init } from "./runtime/process";
+import { init as env_init } from "./runtime/env";
+import { init as file_init } from "./runtime/file";
+import { init as dir_init } from "./runtime/dir";
+import { init as comparable_init } from "./runtime/comparable";
+import { init as numeric_init } from "./runtime/numeric";
 import { init as rb_config_init } from "./lib/rbconfig"
 import { init as stringio_init } from "./lib/stringio"
 import { init as socket_init } from "./lib/socket"
-import { init as enumerableInit } from "./runtime/enumerable";
-import { init as rangeInit } from "./runtime/range";
-import { init as bindingInit } from "./runtime/binding";
-import { init as signalInit } from "./runtime/signal";
-import { init as timeInit } from "./lib/time";
-import { init as threadInit } from './lib/thread';
-import { init as regexpInit} from "./runtime/regexp";
-import { init as encodingInit } from "./runtime/encoding";
-import { init as structInit } from "./runtime/struct";
+import { init as enumerable_init } from "./runtime/enumerable";
+import { init as range_init } from "./runtime/range";
+import { init as binding_init } from "./runtime/binding";
+import { init as signal_init } from "./runtime/signal";
+import { init as time_init } from "./lib/time";
+import { init as thread_init } from './lib/thread';
+import { init as regexp_init} from "./runtime/regexp";
+import { init as encoding_init } from "./runtime/encoding";
+import { init as struct_init } from "./runtime/struct";
 import { init as rational_init } from "./runtime/rational";
 import { obj_id_hash } from "./util/object_id";
 import { String } from "./runtime/string";
@@ -1252,8 +1252,8 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
     klass.alias_method("tty?", "isatty");
 });
 
-export const STDOUT = ObjectClass.get_data<Class>().constants["STDOUT"] = isNode ? NodeIO.new(process.stdout) : BrowserIO.new(console.log);
-export const STDERR = ObjectClass.get_data<Class>().constants["STDERR"] = isNode ? NodeIO.new(process.stderr) : BrowserIO.new(console.error);
+export const STDOUT = ObjectClass.get_data<Class>().constants["STDOUT"] = is_node ? NodeIO.new(process.stdout) : BrowserIO.new(console.log);
+export const STDERR = ObjectClass.get_data<Class>().constants["STDERR"] = is_node ? NodeIO.new(process.stderr) : BrowserIO.new(console.error);
 
 export class Array {
     static new(arr?: RValue[]): RValue {
@@ -1272,36 +1272,36 @@ export class Array {
 }
 
 export const init = async () => {
-    moduleInit();
-    stringInit();
+    module_init();
+    string_init();
     rational_init();
-    integerInit();
-    floatInit();
-    symbolInit();
-    enumerableInit();
-    hashInit();
-    procInit();
+    integer_init();
+    float_init();
+    symbol_init();
+    enumerable_init();
+    hash_init();
+    proc_init();
     error_init();
-    processInit();
-    envInit();
-    fileInit();
-    dirInit();
-    comparableInit();
-    numericInit();
+    process_init();
+    env_init();
+    file_init();
+    dir_init();
+    comparable_init();
+    numeric_init();
     await kernel_init();
     object_init();
-    rangeInit();
-    bindingInit();
-    signalInit();
-    timeInit();
-    threadInit();
-    await regexpInit();
-    encodingInit();
-    arrayInit();
-    structInit();
+    range_init();
+    binding_init();
+    signal_init();
+    time_init();
+    thread_init();
+    await regexp_init();
+    encoding_init();
+    array_init();
+    struct_init();
 
     ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"] = await (async () => {
-        if (isNode) {
+        if (is_node) {
             let arch: string = process.arch;
             if (arch === "x64") arch = "x86_64";
 
@@ -1347,7 +1347,7 @@ export const init = async () => {
     );
 }
 
-if (isNode) {
+if (is_node) {
     Dir.setwd(process.env.PWD!);
 } else {
     Dir.setwd(vmfs.root_path());

@@ -7,14 +7,14 @@ import { RubyError, SystemExit } from "./errors";
 import { Kernel } from "./runtime/kernel";
 import { Object } from "./runtime/object";
 import { Proc } from "./runtime/proc";
-import { isNode } from "./env";
+import { is_node } from "./env";
 import * as WASM from "./wasm";
 import { parsePrism } from "@ruby/prism/src/parsePrism";
 import { Regexp } from "./runtime/regexp";
 
 export async function init() {
     if (!ExecutionContext.current) {
-        if (isNode) {
+        if (is_node) {
             const path = await import("path");
             const url = await import("url");
 
@@ -73,7 +73,7 @@ export async function evaluate(code: string, path?: string, line: number = 1, co
                 if (e.get_data<RubyError>() instanceof SystemExit) {
                     await deinit();
 
-                    if (isNode) {
+                    if (is_node) {
                         process.exit(e.get_data<SystemExit>().status);
                     }
                 }
@@ -119,6 +119,6 @@ export { Object } from "./runtime/object";
 export { RubyError } from "./errors";
 
 export { Encoding, UnicodeEncoding, register_encoding } from "./runtime/encoding"
-export { isNode } from "./env"
+export { is_node } from "./env"
 
 export { ExecutionContext, vmfs, Regexp, WASM };

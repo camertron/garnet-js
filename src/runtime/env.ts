@@ -1,5 +1,5 @@
-import { isNode } from "../env";
-import { Class, NativeCallable, ObjectClass, Qnil, RValue, Runtime, StringClass } from "../runtime"
+import { is_node } from "../env";
+import { Class, ObjectClass, Qnil, RValue, Runtime, StringClass } from "../runtime"
 import { Hash } from "./hash";
 import { String } from "../runtime/string";
 
@@ -16,7 +16,7 @@ export const init = () => {
 
         const result = env_hash.get(args[0]);
 
-        if (isNode && result === Qnil) {
+        if (is_node && result === Qnil) {
             const result_from_env = process.env[args[0].get_data<string>()];
 
             if (result_from_env) {

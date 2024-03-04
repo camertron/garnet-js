@@ -1,4 +1,4 @@
-import { isNode } from "../env";
+import { is_node } from "../env";
 import { ArgumentError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
 import { BreakError, ExecutionContext, ThrowError } from "../execution_context";
 import { Array, Module, Qfalse, Qnil, Qtrue, RValue, StringClass, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, ArrayClass, HashClass, SymbolClass, FloatClass, Kwargs, Visibility } from "../runtime";
@@ -37,7 +37,7 @@ export const init = async () => {
     let child_process: unknown;
     // let kexec: (executable: string, args?: string[]) => never;
 
-    if (isNode) {
+    if (is_node) {
         // child_process = await import("child_process");
 
         // @ts-ignore
@@ -144,7 +144,7 @@ export const init = async () => {
     });
 
     mod.define_native_method("`", (self: RValue, args: RValue[]): RValue => {
-        if (!isNode) {
+        if (!is_node) {
             throw new RuntimeError("backticks are only supported in nodejs");
         }
 
@@ -258,7 +258,7 @@ export const init = async () => {
     });
 
     mod.define_native_method("exec", (self: RValue, args: RValue[]): RValue => {
-        if (!isNode) {
+        if (!is_node) {
             throw new RuntimeError("Kernel#exec is only supported in nodejs");
         }
 

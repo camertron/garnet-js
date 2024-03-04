@@ -1,4 +1,4 @@
-import { isNode } from "../env";
+import { is_node } from "../env";
 import { Module, Runtime } from "../runtime"
 import { Hash } from "../runtime/hash";
 import { vmfs } from "../vmfs";
@@ -6,7 +6,7 @@ import { String } from "../runtime/string";
 
 let url: typeof import("node:url");
 
-if (isNode) {
+if (is_node) {
     url = await import("node:url");
 }
 
@@ -21,7 +21,7 @@ export const init = () => {
     config.set(String.new("EXEEXT"), String.new("")); // change this for windows?
     config.set(String.new("RUBY_INSTALL_NAME"), String.new("ruby"));
 
-    if (isNode) {
+    if (is_node) {
         config.set(String.new("bindir"), String.new(vmfs.real_path(vmfs.join_paths(url.fileURLToPath(import.meta.url), "..", "..", "..", "exe"))));
     }
 

@@ -1,4 +1,4 @@
-import { isNode } from "../env";
+import { is_node } from "../env";
 import { ErrnoEINVAL } from "../errors";
 import { Float, IntegerClass, Module, RValue, Runtime } from "../runtime"
 import { Integer } from "./integer";
@@ -15,7 +15,7 @@ export const init = () => {
         mod.constants["CLOCK_MONOTONIC"] = Integer.get(6);
 
         mod.define_native_singleton_method("pid", (_self: RValue, _args: RValue[]): RValue => {
-            if (isNode) {
+            if (is_node) {
                 return Integer.new(process.pid);
             } else {
                 // Just return something other than 0 or 1 for now. Can we run multiple processes
