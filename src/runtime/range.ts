@@ -1,14 +1,25 @@
 import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
+import { String } from "../runtime/string";
 import { spaceship_compare } from "./comparable";
 import { Object } from "../runtime/object";
 
 export class Range {
+    private static klass_: RValue;
+
+    private static get klass(): RValue {
+        if (!this.klass_) {
+            this.klass_ = Object.find_constant("Range")!;
+        }
+
+        return this.klass_;
+    }
+
     public begin: RValue;
     public end: RValue;
     public exclude_end: boolean;
 
     static new(begin: RValue, end: RValue, exclude_end: boolean): RValue {
-        return new RValue(Object.find_constant("Range")!, new Range(begin, end, exclude_end));
+        return new RValue(Range.klass, new Range(begin, end, exclude_end));
     }
 
     constructor(begin: RValue, end: RValue, exclude_end: boolean) {
@@ -24,6 +35,11 @@ export const init = () => {
     if (inited) return;
 
     Runtime.define_class("Range", ObjectClass, (klass: Class) => {
+        klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
+            self.data = new Range(args[0], args[1], (args[3] || Qfalse).is_truthy());
+            return Qnil;
+        });
+
         klass.define_native_method("begin", (self: RValue): RValue => {
             return self.get_data<Range>().begin;
         });
@@ -51,6 +67,15 @@ export const init = () => {
 
             return Qnil;
         });
+
+        klass.define_native_method("inspect", (self: RValue): RValue => {
+            const range = self.get_data<Range>();
+            const begin_str = Object.send(range.begin, "inspect").get_data<string>();
+            const end_str = Object.send(range.end, "inspect").get_data<string>();
+            const dots = range.exclude_end ? "..." : "..";
+
+            return String.new(`${begin_str}${dots}${end_str}`);
+        })
     });
 
     inited = true;

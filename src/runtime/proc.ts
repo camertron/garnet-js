@@ -71,7 +71,7 @@ export class InterpretedProc extends Proc {
     }
 
     with_binding(new_binding: Binding): InterpretedProc {
-        return new InterpretedProc(this.iseq, new_binding);
+        return new InterpretedProc(this.iseq, new_binding, this.calling_convention);
     }
 
     // @TODO: flesh this out. For now, just returns the number of required positional args;

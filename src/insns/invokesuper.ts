@@ -22,10 +22,10 @@ export default class InvokeSuper extends Instruction {
     call(context: ExecutionContext): ExecutionResult {
         const self = context.pop()!;
         const method_frame = context.frame as MethodFrame;
-        const owner = (context.frame as MethodFrame).owner!;
+        const owner = (context.frame as MethodFrame).owner;
 
         if (owner) {
-            const method = Object.find_method_under(owner, method_frame.call_data.mid, false);
+            const method = Object.find_super_method_under(self, owner, method_frame.call_data.mid);
             let block = undefined;
 
             if (this.block_iseq) {

@@ -207,7 +207,15 @@ export const init = () => {
     // alias
     ObjectClass.get_data<Class>().constants["Mutex"] = MutexClass;
 
-    const BacktraceClass = Runtime.define_class_under(ThreadClass, "Backtrace", ObjectClass);
+    const BacktraceClass = Runtime.define_class_under(ThreadClass, "Backtrace", ObjectClass, (klass: Class) => {
+        // klass.define_native_method("to_s", (self: RValue): RValue => {
+        //     return Qnil;
+        // });
+
+        // klass.define_native_method("inspect", (self: RValue): RValue => {
+        //     return Qnil;
+        // });
+    });
 
     Runtime.define_class_under(BacktraceClass, "Location", ObjectClass, (klass: Class) => {
         klass.define_native_method("path", (self: RValue): RValue => {
@@ -220,6 +228,11 @@ export const init = () => {
 
         klass.define_native_method("label", (self: RValue): RValue => {
             return self.get_data<BacktraceLocation>().label_rval;
+        });
+
+        klass.define_native_method("inspect", (self: RValue): RValue => {
+            const loc = self.get_data<BacktraceLocation>();
+            return String.new(`${loc.path}:${loc.lineno} in ${loc.label}`);
         });
     });
 

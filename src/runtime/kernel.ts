@@ -1,7 +1,7 @@
 import { isNode } from "../env";
-import { ArgumentError, LocalJumpError, NameError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
+import { ArgumentError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
 import { BreakError, ExecutionContext, ThrowError } from "../execution_context";
-import { Array, Module, Qfalse, Qnil, Qtrue, RValue, StringClass, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, ArrayClass, HashClass, SymbolClass, FloatClass, Kwargs } from "../runtime";
+import { Array, Module, Qfalse, Qnil, Qtrue, RValue, StringClass, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, ArrayClass, HashClass, SymbolClass, FloatClass, Kwargs, Visibility } from "../runtime";
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
@@ -10,6 +10,8 @@ import { Proc } from "./proc";
 import { obj_id_hash } from "../util/object_id";
 import { BacktraceLocation } from "../lib/thread";
 import { Range } from "./range";
+import { MethodCallData } from "../call_data";
+import { Rational } from "./rational";
 
 export class Kernel {
     public static exit_handlers: RValue[] = [];
@@ -188,6 +190,10 @@ export const init = async () => {
         }
     });
 
+    mod.define_native_method("Rational", (self: RValue, args: RValue[]): RValue => {
+        return Object.send(Object.find_constant("Rational")!, "new", args);
+    });
+
     mod.define_native_method("instance_variable_get", (self: RValue, args: RValue[]): RValue => {
         return self.iv_get(Object.send(args[0], "to_s").get_data<string>());
     });
@@ -279,7 +285,6 @@ export const init = async () => {
             const elems = args[0].get_data<Array>().elements;
             elems.forEach((elem) => Runtime.assert_type(elem, StringClass));
             const elem_strings = elems.map((elem) => elem.get_data<string>());
-            console.log(elem_strings);
             // kexec(elem_strings.join(" "));
             return Qnil;
         } else {
@@ -392,11 +397,15 @@ export const init = async () => {
         for (const element of backtrace) {
             // @TODO: avoid splitting a string here, maybe we can store backtraces as tuples?
             const [path, line_and_label] = element.split(":");
-            const [line, label] = element.split(" in ");
+            const [line, label] = line_and_label.split(" in ");
             locations.push(BacktraceLocation.new(path, parseInt(line), label));
         }
 
         return Array.new(locations);
+    });
+
+    mod.define_native_method("throw", (_self: RValue, args: RValue[]): RValue => {
+        throw new ThrowError(args[0], args[1] || Qnil);
     });
 
     mod.define_native_method("catch", (_self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
@@ -427,5 +436,36 @@ export const init = async () => {
         }
 
         return self.iv_exists(args[0].get_data<string>()) ? Qtrue : Qfalse;
+    });
+
+    mod.define_native_method("public_send", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData): RValue => {
+        const method_name = Runtime.coerce_to_string(args[0]).get_data<string>();
+        const method = Object.find_method_under(self, method_name);
+
+        if (!method) {
+            throw new NoMethodError(`undefined \`${method_name}' called for ${Object.send(self, "inspect").get_data<string>()}`);
+        }
+
+        if (method.visibility !== Visibility.public) {
+            const visibility_str = method.visibility === Visibility.private ? "private" : "protected";
+            throw new NoMethodError(`${visibility_str} \`${method_name}' called for ${Object.send(self, "inspect").get_data<string>()}`);
+        }
+
+        return method.call(ExecutionContext.current, self, args.slice(1), kwargs, block, call_data);
+    });
+
+    const msleep = (n: number) => {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, n);
+    }
+
+    mod.define_native_method("sleep", (_self: RValue, args: RValue[]): RValue => {
+        if (args[0].klass !== IntegerClass && args[0].klass !== FloatClass) {
+            throw new ArgumentError(`can't convert ${args[0].klass.get_data<Class>().name} into time interval`);
+        }
+
+        const interval_secs = args[0].get_data<number>();
+        msleep(interval_secs * 1000);
+
+        return args[0];
     });
 };

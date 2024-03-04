@@ -16,8 +16,8 @@ import { BlockCallData, CallData, CallDataFlag, MethodCallData } from "./call_da
 import { init as floatInit } from "./runtime/float";
 import { init as moduleInit } from "./runtime/module";
 import { Kernel, init as kernel_init } from "./runtime/kernel";
-import { init as objectInit } from "./runtime/object";
-import { init as errorInit } from "./errors";
+import { init as object_init } from "./runtime/object";
+import { init as error_init } from "./errors";
 import { init as processInit } from "./runtime/process";
 import { init as envInit } from "./runtime/env";
 import { init as fileInit } from "./runtime/file";
@@ -36,6 +36,7 @@ import { init as threadInit } from './lib/thread';
 import { init as regexpInit} from "./runtime/regexp";
 import { init as encodingInit } from "./runtime/encoding";
 import { init as structInit } from "./runtime/struct";
+import { init as rational_init } from "./runtime/rational";
 import { obj_id_hash } from "./util/object_id";
 import { String } from "./runtime/string";
 import * as tty from "node:tty";
@@ -169,29 +170,25 @@ export class Runtime {
     }
 
     static each_unique_ancestor(mod: RValue, include_self: boolean = true, cb: (ancestor: RValue) => boolean) {
-        this.each_ancestor(mod, new Set(), include_self, cb);
+        this.each_unique_ancestor_helper(mod, new Set(), include_self, cb);
     }
 
     // Return false from cb() to exit early. Returning false from cb() will cause
     // each_ancestor to return false as well; otherwise it will return true.
     // Pass false for include_self to skip checking mod and prepended modules, i.e. if you're trying to
     // find a method somewhere above mod on the ancestry chain
-    private static each_ancestor(mod: RValue, seen: Set<RValue>, include_self: boolean, cb: (ancestor: RValue) => boolean): boolean {
+    private static each_unique_ancestor_helper(mod: RValue, seen: Set<RValue>, include_self: boolean, cb: (ancestor: RValue) => boolean): boolean {
         if (seen.has(mod)) return true;
 
         seen.add(mod);
 
-        const module = mod.get_data<Module>();
-
         if (include_self) {
-            for (let prepended_module of module.prepends) {
-                if (!cb(prepended_module)) {
+            for (const prepend of mod.get_data<Module>().prepends) {
+                if (!cb(prepend)) {
                     return false;
                 }
-            }
 
-            if (mod.has_singleton_class()) {
-                if (!this.each_ancestor(mod.get_singleton_class(), seen, true, cb)) {
+                if (!this.each_unique_ancestor_helper(prepend, seen, true, cb)) {
                     return false;
                 }
             }
@@ -199,21 +196,27 @@ export class Runtime {
             if (!cb(mod)) {
                 return false;
             }
-        }
 
-        for (let included_module of module.includes) {
-            if (!cb(included_module)) {
-                return false;
-            }
-        }
-
-        if (module instanceof Class) {
-            if (module.superclass) {
-                if (!cb(module.superclass)) {
+            for (const include of mod.get_data<Module>().includes) {
+                if (!cb(include)) {
                     return false;
                 }
 
-                if (!this.each_ancestor(module.superclass, seen, true, cb)) {
+                if (!this.each_unique_ancestor_helper(include, seen, true, cb)) {
+                    return false;
+                }
+            }
+        }
+
+        if (mod.klass === ClassClass) {
+            const superclass = mod.get_data<Class>().superclass;
+
+            if (superclass) {
+                if (!cb(superclass)) {
+                    return false;
+                }
+
+                if (!this.each_unique_ancestor_helper(superclass, seen, true, cb)) {
                     return false;
                 }
             }
@@ -509,7 +512,7 @@ export class Module {
     }
 
     alias_method(new_name: string, existing_name: string) {
-        const method = Object.find_method_under(this.rval, existing_name, true);
+        const method = Object.find_instance_method_under(this.rval, existing_name, true);
 
         if (method) {
             this.methods[new_name] = method;
@@ -753,9 +756,13 @@ export class RValue {
     }
 
     get_singleton_class(): RValue {
+        if (this.data instanceof Module) {
+            return this.get_data<Module>().get_singleton_class();
+        }
+
         if (!this.singleton_class) {
-            const name = `#<${this.klass.get_data<Class>().name}:${Object.object_id_to_str(this.object_id)}>`
-            const klass = new Class(`#<Class:${name}>`, this.klass, true);
+            let name = `#<Class:${this.klass.get_data<Class>().name}:${Object.object_id_to_str(this.object_id)}>`
+            const klass = new Class(name, this.klass, true);
             this.singleton_class = new RValue(ClassClass, klass);
             klass.rval = this.singleton_class;
         }
@@ -764,7 +771,15 @@ export class RValue {
     }
 
     has_singleton_class(): boolean {
-        return this.singleton_class !== undefined;
+        if (this.singleton_class) {
+            return true
+        }
+
+        if (this.data instanceof Module) {
+            return true
+        }
+
+        return false;
     }
 
     get_context<T extends {[key: string | number]: any}>(): T {
@@ -1022,6 +1037,10 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
         return new_class_rval;
     });
 
+    klass.define_native_method("superclass", (self: RValue): RValue => {
+        return self.get_data<Class>().superclass || Qnil;
+    });
+
     // allocate a new instance of a class - this is an instance method on the class "Class" and allocates
     // a new instance of a user-defined class
     klass.define_native_method("allocate", (self: RValue): RValue => {
@@ -1038,17 +1057,14 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
 
     klass.define_native_method("inspect", (self: RValue): RValue => {
         const klass = self.get_data<Class>();
-        if (klass.is_singleton_class) {
-            return String.new(`#<${klass.name}>`);
+
+        if (klass.name) {
+            return String.new(klass.name);
         } else {
-            if (klass.name) {
-                return String.new(klass.name);
-            } else {
-                // once we figure out how to call super(), replace this hackery
-                return ObjectClass.get_data<Class>().methods["inspect"].call(
-                    ExecutionContext.current, self, []
-                );
-            }
+            // once we figure out how to call super(), replace this hackery
+            return ObjectClass.get_data<Class>().methods["inspect"].call(
+                ExecutionContext.current, self, []
+            );
         }
     });
 
@@ -1082,9 +1098,6 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
 
     klass.define_native_method("instance_exec", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData): RValue => {
         const proc = block!.get_data<Proc>();
-        if (proc.binding === undefined) {
-            debugger;
-        }
         const binding = proc.binding.with_self(self);
         let block_call_data: BlockCallData | undefined = undefined;
 
@@ -1218,11 +1231,7 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
                     io.write(Object.send(elem, "to_s").get_data<string>());
                 }
             } else {
-                try {
-                    io.write(Object.send(arg, "to_s").get_data<string>());
-                } catch (e) {
-                    debugger;
-                }
+                io.write(Object.send(arg, "to_s").get_data<string>());
             }
         }
 
@@ -1265,13 +1274,14 @@ export class Array {
 export const init = async () => {
     moduleInit();
     stringInit();
+    rational_init();
     integerInit();
     floatInit();
     symbolInit();
     enumerableInit();
     hashInit();
     procInit();
-    errorInit();
+    error_init();
     processInit();
     envInit();
     fileInit();
@@ -1279,7 +1289,7 @@ export const init = async () => {
     comparableInit();
     numericInit();
     await kernel_init();
-    objectInit();
+    object_init();
     rangeInit();
     bindingInit();
     signalInit();

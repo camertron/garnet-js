@@ -221,6 +221,8 @@ export abstract class Encoding {
 
     abstract codepoint_valid(codepoint: number): boolean;
     abstract codepoint_to_utf16(codepoint: number): string;
+    abstract bytesize(str: string): number;
+
     abstract conversion_targets: string[];
 
     public min_length: number;
@@ -249,6 +251,10 @@ export class USASCIIEncoding extends Encoding {
     codepoint_to_utf16(codepoint: number): string {
         return String.fromCodePoint(codepoint);
     }
+
+    bytesize(str: string): number {
+        return str.length;
+    }
 }
 
 export class BinaryEncoding extends Encoding {
@@ -265,6 +271,10 @@ export class BinaryEncoding extends Encoding {
 
     codepoint_to_utf16(codepoint: number): string {
         return String.fromCodePoint(codepoint);
+    }
+
+    bytesize(str: string): number {
+        return str.length;
     }
 }
 
@@ -286,6 +296,38 @@ export class UTF8Encoding extends UnicodeEncoding {
     constructor() {
         super(1, 4);
     }
+
+    codepoint_valid(codepoint: number): boolean {
+        return (
+            // standard unicode range
+            (codepoint >= 0 && codepoint < 0x110000) &&
+
+            // invalid in UTF-8 specifically (not sure why?)
+            (codepoint < 55296 || codepoint > 57343)
+        );
+    }
+
+    bytesize(str: string): number {
+        let size = 0;
+
+        for (let i = 0; i < str.length; i ++) {
+            const cp = str.codePointAt(i)!;
+
+            if (cp < 0x80) {
+                size ++;
+            } else if (cp < 0x800) {
+                size += 2;
+            } else if (cp < 0x10000) {
+                size += 3;
+            } else if (cp < 0x110000) {
+                size += 4;
+            } else {
+                throw new RangeError(`invalid codepoint 0xd800 in UTF-8`)
+            }
+        }
+
+        return size;
+    }
 }
 
 export class UTF16LEEncoding extends UnicodeEncoding {
@@ -293,6 +335,10 @@ export class UTF16LEEncoding extends UnicodeEncoding {
 
     constructor() {
         super(2, 2);
+    }
+
+    bytesize(str: string): number {
+        return str.length * 2;
     }
 }
 
@@ -302,6 +348,10 @@ export class UTF16BEEncoding extends UnicodeEncoding {
     constructor() {
         super(2, 2);
     }
+
+    bytesize(str: string): number {
+        return str.length * 2;
+    }
 }
 
 export class UTF32Encoding extends UnicodeEncoding {
@@ -309,6 +359,10 @@ export class UTF32Encoding extends UnicodeEncoding {
 
     constructor() {
         super(4, 4);
+    }
+
+    bytesize(str: string): number {
+        return str.length * 4;
     }
 }
 

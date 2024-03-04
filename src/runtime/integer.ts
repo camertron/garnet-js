@@ -1,9 +1,10 @@
-import { RangeError } from "../errors";
+import { ArgumentError, RangeError } from "../errors";
 import { Class, Float, FloatClass, IntegerClass, NumericClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { obj_id_hash } from "../util/object_id";
 import { Encoding } from "./encoding";
 import { String } from "../runtime/string";
 import { Object } from "../runtime/object";
+import { Rational } from "./rational";
 
 export class Integer {
     static INT2FIX0: RValue;
@@ -11,6 +12,10 @@ export class Integer {
     static INT2FIXN1: RValue;
 
     static new(value: number): RValue {
+        if (isNaN(value)) {
+            throw new ArgumentError("value is NaN");
+        }
+
         return new RValue(IntegerClass, value);
     }
 
@@ -33,6 +38,7 @@ export const init = () => {
     if (inited) return
 
     const klass = Object.find_constant("Integer")!.get_data<Class>();
+    const RationalClass = Object.find_constant("Rational")!;
 
     Integer.INT2FIX0 = Integer.new(0);
     Integer.INT2FIX1 = Integer.new(1);
@@ -56,12 +62,21 @@ export const init = () => {
         const multiplier = args[0];
         Runtime.assert_type(multiplier, NumericClass);
 
-        const result = self.get_data<number>() * multiplier.get_data<number>();
+        const self_num = self.get_data<number>();
 
-        if (multiplier.klass === FloatClass) {
-            return Float.new(result);
-        } else {
-            return Integer.get(Math.floor(result));
+        switch (multiplier.klass) {
+            case FloatClass:
+                return Float.new(self_num * multiplier.get_data<number>());
+            case RationalClass:
+                const rational = multiplier.get_data<Rational>();
+                return Rational.new(
+                    rational.s * self_num * rational.n,
+                    rational.d,
+                )
+            case IntegerClass:
+                return Integer.get(Math.floor(self_num * multiplier.get_data<number>()));
+            default:
+                throw new ArgumentError("Unreachable");
         }
     });
 
@@ -82,12 +97,21 @@ export const init = () => {
         const term = args[0];
         Runtime.assert_type(term, NumericClass);
 
-        const result = self.get_data<number>() + term.get_data<number>();
+        const self_num = self.get_data<number>();
 
-        if (term.klass === FloatClass) {
-            return Float.new(result);
-        } else {
-            return Integer.get(Math.floor(result));
+        switch (term.klass) {
+            case FloatClass:
+                return Float.new(self.get_data<number>() + term.get_data<number>());
+            case RationalClass:
+                const rational = term.get_data<Rational>();
+                return Rational.new(
+                    (self_num * rational.d) + rational.n,
+                    rational.d
+                );
+            case IntegerClass:
+                return Integer.get(Math.floor(self.get_data<number>() + term.get_data<number>()));
+            default:
+                throw new ArgumentError("Unreachable");
         }
     });
 
@@ -95,12 +119,21 @@ export const init = () => {
         const term = args[0];
         Runtime.assert_type(term, NumericClass);
 
-        const result = self.get_data<number>() - term.get_data<number>();
+        const self_num = self.get_data<number>();
 
-        if (term.klass === FloatClass) {
-            return Float.new(result);
-        } else {
-            return Integer.get(Math.floor(result));
+        switch (term.klass) {
+            case FloatClass:
+                return Float.new(self.get_data<number>() - term.get_data<number>());
+            case RationalClass:
+                const rational = term.get_data<Rational>();
+                return Rational.new(
+                    (self_num * rational.d) - rational.n,
+                    rational.d
+                );
+            case IntegerClass:
+                return Integer.get(Math.floor(self.get_data<number>() - term.get_data<number>()));
+            default:
+                throw new ArgumentError("Unreachable");
         }
     });
 
@@ -183,6 +216,10 @@ export const init = () => {
         } else {
             throw new RangeError(`${data} out of char range`);
         }
+    });
+
+    klass.define_native_method("abs", (self: RValue): RValue => {
+        return Integer.get(Math.abs(self.get_data<number>()));
     });
 
     inited = true;

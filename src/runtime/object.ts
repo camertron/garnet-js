@@ -1,13 +1,12 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
 import { FrozenError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Callable, Class, ClassClass, KernelModule, ModuleClass, ObjectClass, RValue, Runtime, StringClass, SymbolClass, Qtrue, Qfalse, Module, Kwargs } from "../runtime";
+import { Callable, Class, KernelModule, ObjectClass, RValue, Runtime, StringClass, SymbolClass, Qtrue, Qfalse, Module, Kwargs } from "../runtime";
 import { Symbol } from "./symbol";
 import { String } from "../runtime/string";
 
 export class Object {
     static send(receiver: RValue, call_data_: MethodCallData | string, args: RValue[] = [], kwargs?: Kwargs, block?: RValue): RValue {
-        let method = null;
         let method_name: string;
         let call_data: MethodCallData | undefined;
 
@@ -19,17 +18,7 @@ export class Object {
             call_data = undefined;
         }
 
-        if (receiver.has_singleton_class()) {
-            method = Object.find_method_under(receiver.get_singleton_class(), method_name);
-        }
-
-        if (receiver.has_singleton_class() && receiver.get_singleton_class().get_data<Class>().methods[method_name]) {
-            method = receiver.get_singleton_class().get_data<Class>().methods[method_name];
-        } else if (receiver.klass == ClassClass || receiver.klass == ModuleClass) {
-            method = Object.find_method_under(receiver.get_data<Class>().get_singleton_class(), method_name);
-        } else {
-            method = Object.find_method_under(receiver.klass, method_name);
-        }
+        const method = Object.find_method_under(receiver, method_name);
 
         if (block?.klass === SymbolClass) {
             block = Symbol.to_proc(block);
@@ -62,15 +51,41 @@ export class Object {
     }
 
     static respond_to(obj: RValue, method_name: string): boolean {
-        if (obj.has_singleton_class()) {
-            const found = this.find_method_under(obj.get_singleton_class(), method_name);
-            if (found) return true;
-        }
-
-        return this.find_method_under(obj.klass, method_name) ? true : false;
+        return this.find_method_under(obj, method_name) ? true : false;
     }
 
-    static find_method_under(mod: RValue, method_name: string, include_self: boolean = true, inherit: boolean = true): Callable | null {
+    // While find_method_under below can be passed any object, this method expects you to pass it a
+    // Module (or a Class, since classes inherit from Module).
+    static find_instance_method_under(mod: RValue, method_name: string, include_self: boolean = true, inherit: boolean = true): Callable | null {
+        return this.find_method_under_helper(mod, method_name, include_self, inherit);
+    }
+
+    static find_method_under(obj: RValue, method_name: string, include_self: boolean = true, inherit: boolean = true): Callable | null {
+        /* We check to see if the receiver has a singleton class in order to skip creating an
+         * unnecessary one. Modules and classes always have a singleton class, but instances don't
+         * unless one has been explicitly defined, i.e. to house some instance-specific behavior.
+         * In the case of an instance, it is always safe to look for the desired method under
+         * the class (if no singleton class exists) because singleton classes on instances inherit
+         * from the instance's class:
+         *
+         * class Foo
+         * end
+         *
+         * f = Foo.new
+         * f.singleton_class.superclass  # => Foo
+         *
+         * Method resolution will search Foo immediately after Foo's singleton class. If the
+         * singleton class has no behavior of its own, there is no need to create it or search
+         * it for the desired method.
+         */
+        if (obj.has_singleton_class()) {
+            return this.find_method_under_helper(obj.get_singleton_class(), method_name, include_self, inherit);
+        } else {
+            return this.find_method_under_helper(obj.klass, method_name, include_self, inherit);
+        }
+    }
+
+    private static find_method_under_helper(mod: RValue, method_name: string, include_self: boolean = true, inherit: boolean = true): Callable | null {
         let found_method = null;
 
         Runtime.each_unique_ancestor(mod, include_self, (ancestor: RValue): boolean => {
@@ -102,6 +117,40 @@ export class Object {
         return found_method;
     }
 
+    static find_super_method_under(self: RValue, method_owner: RValue, method_name: string): Callable | null {
+        let found_method_owner = false;
+        let found_method: Callable | null = null;
+
+        /* Iterate through all the ancestors of self until we reach the current method's owner.
+         * Once the owner has been found in the inheritance hierarchy, we traverse from that point
+         * up the hierarchy looking for the method in subsequent ancestors. It's not enough to
+         * examine only the ancestors of self, because self cannot tell us what level of the
+         * hierarchy we are already at; it is also not enough to look only at the ancestors of
+         * the owner, since the owner may have a different set of ancestors than self. Instead, we
+         * have to search self's ancestry until we find owner, then start looking for the appropriate
+         * method from there.
+         */
+        Runtime.each_unique_ancestor(self.klass, true, (ancestor: RValue): boolean => {
+            if (ancestor === method_owner) {
+                found_method_owner = true;
+                return true;
+            }
+
+            if (found_method_owner) {
+                const method = ancestor.get_data<Module>().methods[method_name];
+
+                if (method) {
+                    found_method = method;
+                    return false;
+                }
+            }
+
+            return true;
+        });
+
+        return found_method;
+    }
+
     static object_id_to_str(object_id: number): string {
         const id_str = object_id.toString(16).padStart(16, "0");
         return `0x${id_str}`;
@@ -109,7 +158,7 @@ export class Object {
 
     static check_frozen(obj: RValue) {
         if (obj.is_frozen()) {
-            const inspect_str = Object.send(obj, "inspect");
+            const inspect_str = Object.send(obj, "inspect").get_data<string>();
             throw new FrozenError(`can't modify frozen ${obj.klass.get_data<Class>().name}: ${inspect_str}`);
         }
     }

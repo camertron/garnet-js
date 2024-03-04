@@ -2,6 +2,7 @@ import { ArgumentError } from "../errors";
 import { BreakError, ExecutionContext } from "../execution_context";
 import { Module, Qnil, RValue, Runtime, Array, Qfalse, Qtrue, Kwargs } from "../runtime"
 import { spaceship_compare } from "./comparable";
+import { Integer } from "./integer";
 import { Object } from "./object";
 import { Proc } from "./proc";
 
@@ -173,6 +174,32 @@ export const init = () => {
                 });
 
                 return Array.new(tuples.map((tuple: RValue[]) => tuple[1]));
+            } else {
+                // @TODO: return an Enumerator
+                return Qnil;
+            }
+        });
+
+        mod.define_native_method("each_with_index", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+            if (block) {
+                const proc = block.get_data<Proc>();
+                let index = 0;
+
+                try {
+                    Object.send(self, "each", [], undefined, Proc.from_native_fn(ExecutionContext.current, (_self: RValue, args: RValue[]): RValue => {
+                        proc.call(ExecutionContext.current, [...args, Integer.get(index)]);
+                        index ++;
+                        return Qnil;
+                    }));
+                } catch (e) {
+                    if (e instanceof BreakError) {
+                        return e.value;
+                    }
+
+                    throw e;
+                }
+
+                return self;
             } else {
                 // @TODO: return an Enumerator
                 return Qnil;

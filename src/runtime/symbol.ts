@@ -1,10 +1,11 @@
 import { ExecutionContext } from "../execution_context";
-import { Class, Qfalse, Qtrue, RValue, Runtime, SymbolClass } from "../runtime";
+import { Class, Qfalse, Qnil, Qtrue, RValue, RegexpClass, Runtime, SymbolClass } from "../runtime";
 import { hash_string } from "../util/string_utils";
 import { Integer } from "./integer";
 import { Object } from "./object";
 import { Proc } from "./proc";
 import { String } from "../runtime/string";
+import { Regexp } from "./regexp";
 
 export class Symbol {
     private static to_proc_table: Map<string, RValue> = new Map();
@@ -61,6 +62,22 @@ export const init = () => {
 
     klass.define_native_method("to_proc", (self: RValue): RValue => {
         return Symbol.to_proc(self);
+    });
+
+    klass.define_native_method("=~", (self: RValue, args: RValue[]): RValue => {
+        if (args[0].klass === RegexpClass) {
+            const regexp = args[0].get_data<Regexp>();
+            const result = regexp.search(self.get_data<string>());
+
+            if (result) {
+                Regexp.set_svars(result);
+                return Integer.get(result.begin(0));
+            } else {
+                return Qnil;
+            }
+        } else {
+            return Object.send(args[0], "=~", [self]);
+        }
     });
 
     inited = true;

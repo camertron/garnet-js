@@ -31,6 +31,7 @@ export async function init() {
         Compiler.parse = (source) => {
             const scope: ParseLocal[] = [];
 
+            // @TODO: this will need to be part of IRB or something
             ExecutionContext.current.top_locals.forEach((local) => {
                 scope.push({name: local.name});
             });

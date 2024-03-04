@@ -14,11 +14,14 @@ export default class DefineSMethod extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
+        const mod = context.pop()!;
+
         context.define_method(
-            context.frame!.self.get_data<Module>().get_singleton_class(),
+            mod.get_singleton_class(),
             this.name,
             this.iseq
         );
+
         return null;
     }
 

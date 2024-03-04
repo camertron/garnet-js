@@ -1,11 +1,11 @@
 import { BlockCallData, CallData, MethodCallData } from "../call_data";
 import { Compiler } from "../compiler";
 import { ArgumentError, NameError } from "../errors";
-import { ExecutionContext } from "../execution_context";
+import { CallingConvention, ExecutionContext } from "../execution_context";
 import { Array, Module, ModuleClass, RValue, Runtime, SymbolClass, Visibility, Qnil, StringClass, Class, Qtrue, Qfalse, NativeCallable, ClassClass, IntegerClass, Kwargs, TrueClass, FalseClass } from "../runtime";
 import { Kernel } from "./kernel";
 import { Object } from "./object";
-import { Proc } from "./proc";
+import { InterpretedProc, Proc } from "./proc";
 import { String } from "../runtime/string";
 
 let inited = false;
@@ -241,28 +241,38 @@ export const init = () => {
             throw new ArgumentError("tried to create Proc object without a block");
         }
 
-        if (block.klass === StringClass) {
-            debugger;
-        }
-
-        const proc = block.get_data<Proc>();
+        /* Making an assumption here that define_method is always called with an InterpretedProc,
+         * which is probably a pretty safe guess. Native code has no need to define methods this way.
+         */
+        const proc = block.get_data<InterpretedProc>();
+        proc.calling_convention = CallingConvention.METHOD_LAMBDA;
 
         self.get_data<Module>().define_native_method(method_name, (mtd_self: RValue, mtd_args: RValue[], mtd_kwargs?: Kwargs, mtd_block?: RValue, call_data?: MethodCallData): RValue => {
-            // if (mtd_block) {
-            //     mtd_args = [...mtd_args, mtd_block];
-            //     mtd_block = undefined;
-            // }
+            const ec = ExecutionContext.current;
+            const my_proc = proc;
 
-            // if (call_data) {
-            //     call_data = MethodCallData.create("instance_exec", mtd_args.length, call_data.flag, call_data.kw_arg)
-            //     return Object.send(mtd_self, call_data, mtd_args, mtd_kwargs, block);
-            // } else {
-            //     return Object.send(mtd_self, "instance_exec", args, kwargs, block);
-            // }
+            /* define_method is deceptively tricky to implement because it has to evaluate a block as
+             * if it were a method. This is mostly because of the way `return` behaves. Normally, returning
+             * from within a block returns from the enclosing method. However, it would be pretty surprising
+             * if `return` behaved that way for methods defined via define_method - there's no telling what
+             * parent method frame might be calling our defined method. Returning from it would be madness.
+             *
+             * To prevent chaos, we push a method frame whenever the defined method is called. Doing so not
+             * only fixes the `return` issue, it also makes the defined method appear in stack traces.
+             *
+             * There's a gotcha tho. Methods aren't closures, so any locals define_method closes over won't
+             * be available inside the new method frame... unless we perform some trickery. Fortunately,
+             * we have access to the block's binding, which contains a snapshot of the stack as it was when
+             * the block was created. Invoking the block directly will temporarily replace the existing stack
+             * with the snapshotted one, restoring it once the block is finished executing. To replicate this
+             * behavior for define_method, we do the same stack swapping dance before running the method frame.
+             */
+            // return ec.with_stack(proc.binding.stack, () => {
+            //     return ec.run_method_frame(call_data!, ec.frame!.nesting, proc.iseq, mtd_self, mtd_args, mtd_kwargs, mtd_block);
+            // });
 
-            return proc
-                .with_binding(proc.binding.with_self(mtd_self))
-                .call(ExecutionContext.current, mtd_args, mtd_kwargs, call_data)
+            const binding = proc.binding.with_self(mtd_self);
+            return proc.with_binding(binding).call(ExecutionContext.current, mtd_args, mtd_kwargs);
         });
 
         return args[0];

@@ -2,7 +2,7 @@ import { MethodCallData, CallDataFlag } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { Kwargs, Qtrue, RValue } from "../runtime";
+import { ArrayClass, Kwargs, RValue, Array } from "../runtime";
 import { Hash } from "../runtime/hash";
 import { Object } from "../runtime/object"
 import { Proc } from "../runtime/proc";
@@ -48,7 +48,19 @@ export default class Send extends Instruction {
             }
         }
 
-        const args = context.popn(this.call_data.argc);
+        let args = context.popn(this.call_data.argc);
+
+        if (this.call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
+            // @TODO, ok but which arguments are splatted and which aren't?
+            args = args.flatMap((arg) => {
+                if (arg.klass === ArrayClass) {
+                    return arg.get_data<Array>().elements;
+                } else {
+                    return arg;
+                }
+            })
+        }
+
         const receiver = context.pop()!;
         const result = Object.send(receiver, this.call_data, args, kwargs, block);
         context.push(result);

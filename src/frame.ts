@@ -1,5 +1,5 @@
 import { BlockCallData, MethodCallData } from "./call_data";
-import { ExecutionContext } from "./execution_context";
+import { CallingConvention, ExecutionContext } from "./execution_context";
 import { InstructionSequence } from "./instruction_sequence";
 import { RValue, ObjectClass, Main, Module, Kwargs } from "./runtime";
 import { Binding } from "./runtime/binding";
@@ -57,13 +57,15 @@ export class TopFrame extends Frame {
 
 export class BlockFrame extends Frame {
     public call_data: BlockCallData;
+    public calling_convention: CallingConvention;
     private binding: Binding;
     private original_stack: RValue[];
 
-    constructor(call_data: BlockCallData, iseq: InstructionSequence, binding: Binding, original_stack: RValue[]) {
+    constructor(call_data: BlockCallData, calling_convention: CallingConvention, iseq: InstructionSequence, binding: Binding, original_stack: RValue[]) {
         super(iseq, binding.parent_frame, binding.stack_index, binding.self, binding.nesting);
 
         this.call_data = call_data;
+        this.calling_convention = calling_convention;
         this.binding = binding;
         this.original_stack = original_stack;
     }

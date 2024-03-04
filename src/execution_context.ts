@@ -4,7 +4,7 @@ import { BlockFrame, ClassFrame, Frame, MethodFrame, RescueFrame, TopFrame } fro
 import Instruction from "./instruction";
 import { CatchBreak, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
 import { Local } from "./local_table";
-import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, ArrayClass, ProcClass, Kwargs, Qtrue, Qfalse, Runtime, StringClass } from "./runtime";
+import { Array as RubyArray, ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, ArrayClass, ProcClass, Kwargs, Qtrue, Qfalse, Runtime, StringClass, HashClass } from "./runtime";
 import { Binding } from "./runtime/binding";
 import { Hash } from "./runtime/hash";
 import { Object } from "./runtime/object";
@@ -128,10 +128,6 @@ export class ExecutionContext {
     }
 
     run_frame(frame: Frame, cb?: () => Label | null): RValue {
-        if (this.globals["$cameron"] === Qtrue) {
-            debugger;
-        }
-
         // First, set the current frame to the given value.
         let previous = this.frame;
         this.frame = frame;
@@ -181,9 +177,14 @@ export class ExecutionContext {
                         }
                     } catch (error) {
                         if (error instanceof ReturnError) {
+                            // if this is a lambda, return from the block instead of the enclosing method
+                            if (this.frame instanceof BlockFrame && this.frame.calling_convention === CallingConvention.METHOD_LAMBDA) {
+                                throw error;
+                            }
+
                             let method_frame: Frame = this.frame;
 
-                            while (method_frame.iseq.type != "method") {
+                            while (!(method_frame instanceof MethodFrame)) {
                                 if (!method_frame.parent) break;
                                 method_frame = method_frame.parent;
                             }
@@ -192,7 +193,13 @@ export class ExecutionContext {
                                 throw new LocalJumpError("unexpected return");
                             }
 
-                            this.stack.splice(method_frame.stack_index);
+                            // Don't mess with the block's stack, which is the stack snapshot held
+                            // in the block's binding. Truncating it here means the block will not
+                            // have access to locals it may have closed over.
+                            if (!(this.frame instanceof BlockFrame)) {
+                                this.stack.splice(method_frame.stack_index);
+                            }
+
                             this.frame = previous || method_frame.parent; // implicit Leave
 
                             throw error;
@@ -368,11 +375,12 @@ export class ExecutionContext {
     run_top_frame(iseq: InstructionSequence, stack_index?: number): RValue {
         const new_top_frame = new TopFrame(iseq, stack_index);
         const result = this.run_frame(new_top_frame, () => {
-            for (const local of new_top_frame.iseq.local_table.locals) {
-                if (!this.top_locals.has(local.name)) {
-                    this.top_locals.set(local.name, local);
-                }
-            }
+            // @TODO: only set items on this.top_locals if they have been defined
+            // for (const local of new_top_frame.iseq.local_table.locals) {
+            //     if (!this.top_locals.has(local.name)) {
+            //         this.top_locals.set(local.name, local);
+            //     }
+            // }
 
             return null;
         });
@@ -384,14 +392,22 @@ export class ExecutionContext {
     run_block_frame(call_data: BlockCallData, calling_convention: CallingConvention, iseq: InstructionSequence, binding: Binding, args: RValue[], kwargs?: Kwargs): RValue {
         const original_stack = this.stack;
 
-        return this.with_stack(binding.stack, () => {
-            return this.run_frame(new BlockFrame(call_data, iseq, binding, original_stack), () => {
-                return this.setup_arguments(call_data, calling_convention, iseq, args, kwargs, undefined);
+        try {
+            return this.with_stack(binding.stack, () => {
+                return this.run_frame(new BlockFrame(call_data, calling_convention,iseq, binding, original_stack), () => {
+                    return this.setup_arguments(call_data, calling_convention, iseq, args, kwargs, undefined);
+                });
             });
-        });
+        } catch (e) {
+            if (e instanceof ReturnError && calling_convention === CallingConvention.METHOD_LAMBDA) {
+                return e.value;
+            }
+
+            throw e;
+        }
     }
 
-    private with_stack(stack: RValue[], cb: () => RValue): RValue {
+    with_stack(stack: RValue[], cb: () => RValue): RValue {
         const old_stack = this.stack;
         this.stack = stack;
 
@@ -464,9 +480,6 @@ export class ExecutionContext {
     }
 
     local_set(index: number, depth: number, value: RValue) {
-        if (depth === 0 && this.frame!.iseq.local_table.locals[index]?.name === "&" && value.klass === StringClass && value.get_data<string>() === "defaults to passing") {
-            debugger;
-        }
         this.frame!.local_set(this, index, depth, value);
     }
 
@@ -474,7 +487,8 @@ export class ExecutionContext {
         return this.frame!.nesting![this.frame!.nesting.length - 1];
     }
 
-    // ugh whyyy is this necessary
+    // Ugh whyyy is this necessary? Can't we just use the indices in the local table?
+    // Probably. I'd say a refactor is in order.
     private inc_local_index(local_index: number, iseq: InstructionSequence): number {
         if (iseq.local_table.locals.length <= local_index + 1) {
             return iseq.local_table.locals.length - 1;
@@ -492,15 +506,26 @@ export class ExecutionContext {
         let local_index = this.inc_local_index(-1, iseq);
         let start_label: Label | null = null;
 
-        if (call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
-            locals = locals.flatMap((elem) => {
-                // @TODO: we should probably check for respond_to?(:to_ary) here
-                if (elem.klass === ArrayClass) {
-                    return elem.get_data<RubyArray>().elements;
-                } else {
-                    return elem;
-                }
-            })
+        // if (call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
+        //     locals = locals.flatMap((elem) => {
+        //         // @TODO: we should probably check for respond_to?(:to_ary) here
+        //         if (elem.klass === ArrayClass) {
+        //             return elem.get_data<RubyArray>().elements;
+        //         } else {
+        //             return elem;
+        //         }
+        //     })
+        // }
+
+        if (iseq.argument_options.keyword_rest_start != null && iseq.argument_options.keyword_rest_start > -1 && !call_data.has_flag(CallDataFlag.KWARG) && !call_data.has_flag(CallDataFlag.KW_SPLAT)) {
+            if (locals.length > 0 && locals[locals.length - 1].klass === HashClass) {
+                const kwargs_hash = locals.pop()!;
+                kwargs ||= new Map();
+
+                kwargs_hash.get_data<Hash>().each((k, v) => {
+                    kwargs!.set(k.get_data<string>(), v);
+                });
+            }
         }
 
         if (!block && call_data && call_data.has_flag(CallDataFlag.ARGS_BLOCKARG)) {
@@ -655,8 +680,13 @@ export class ExecutionContext {
                 }
             }
 
-            this.local_set(local_index, 0, Hash.from_hash(kwargs_hash));
-            local_index = this.inc_local_index(local_index, iseq);
+            if (iseq.argument_options.keyword_rest_start === -1) {
+                const lookup = iseq.local_table.find_or_throw("*");
+                this.local_get(lookup.index, lookup.depth).get_data<RubyArray>().add(Hash.from_hash(kwargs_hash));
+            } else {
+                this.local_set(local_index, 0, Hash.from_hash(kwargs_hash));
+                local_index = this.inc_local_index(local_index, iseq);
+            }
         }
 
         // Add any remaining (positional) locals, as they can be referenced using numbered parameter syntax, eg _n

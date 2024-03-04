@@ -391,8 +391,7 @@ export class Compiler extends Visitor {
 
     override visitIntegerNode(node: IntegerNode) {
         if (this.used) {
-            const intVal = this.text_for_loc(node.location);
-            this.iseq.putobject({ type: "Integer", value: parseInt(intVal) });
+            this.iseq.putobject({ type: "Integer", value: node.value });
         }
     }
 
@@ -407,9 +406,9 @@ export class Compiler extends Visitor {
         if (!this.used) return
 
         if (node.isFrozen()) {
-            this.iseq.putobject({type: "String", value: node.unescaped})
+            this.iseq.putobject({type: "String", value: node.unescaped});
         } else {
-            this.iseq.putstring(node.unescaped)
+            this.iseq.putstring(node.unescaped);
         }
     }
 
@@ -575,11 +574,6 @@ export class Compiler extends Visitor {
 
         this.with_child_iseq(method_iseq, () => {
             node.locals.forEach((local) => {
-                if (local == "...") {
-                    this.iseq.local_table.plain("*")
-                    this.iseq.local_table.block("&")
-                }
-
                 this.iseq.local_table.plain(local)
             });
 
@@ -608,7 +602,7 @@ export class Compiler extends Visitor {
         }
     }
 
-    // (required, optional = nil, *rest, post, keywords:, **keywordRest)
+    // (required, optional = nil, *rest, post, keywords:, **keywordRest, &block)
     override visitParametersNode(node: ParametersNode) {
         this.with_used(true, () => this.visitAll(node.requireds));
         this.iseq.argument_options.lead_num = node.requireds.length;
@@ -652,13 +646,26 @@ export class Compiler extends Visitor {
     }
 
     override visitForwardingParameterNode(node: ForwardingParameterNode): void {
+        this.iseq.local_table.plain("*")
+        this.iseq.local_table.block("&")
+        this.iseq.local_table.plain("...")
+
+        // forwarding all parameters implies forwarding kwargs and a block
+        this.iseq.argument_options.rest_start = this.iseq.argument_size;
+
+        // -1 indicates kwrest is passed as the last argument in the positional args array
+        this.iseq.argument_options.keyword_rest_start = -1;
+        this.iseq.argument_size ++;
+
+        this.iseq.argument_options.block_start = this.iseq.argument_size;
+        this.iseq.argument_size ++;
     }
 
     override visitForwardingArgumentsNode(node: ForwardingArgumentsNode): void {
         let current_iseq: InstructionSequence | null = this.iseq;
         let depth = 0;
 
-        while (current_iseq && !current_iseq.local_table.find("*")) {
+        while (current_iseq && !current_iseq.local_table.find("...")) {
           current_iseq = current_iseq.parent_iseq;
           depth ++;
         }

@@ -297,7 +297,7 @@ export const init = () => {
         } else if (args.length > 1) {
             return args[1];
         } else {
-            throw new KeyError(`key not found: ${Object.send(key, "inspect")}`);
+            throw new KeyError(`key not found: ${Object.send(key, "inspect").get_data<string>()}`);
         }
     });
 

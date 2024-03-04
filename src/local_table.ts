@@ -1,3 +1,5 @@
+import { RValue } from "./garnet";
+
 export abstract class Local {
     public name: string;
 

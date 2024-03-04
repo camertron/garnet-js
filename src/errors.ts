@@ -88,6 +88,7 @@ export const init = () => {
     const RangeErrorClass = Runtime.define_class("RangeError", StandardErrorClass);
     const EncodingErrorClass = Runtime.define_class("EncodingError", StandardErrorClass);
     const ThreadErrorClass = Runtime.define_class("ThreadErrorError", StandardErrorClass);
+    const ZeroDivisionError = Runtime.define_class("ZeroDivisionError", StandardErrorClass);
     const KeyErrorClass = Runtime.define_class("KeyError", IndexErrorClass);
     const FrozenErrorClass = Runtime.define_class("FrozenError", RuntimeErrorClass);
     const NoMethodErrorClass = Runtime.define_class("NoMethodError", NameErrorClass);
@@ -416,5 +417,18 @@ export class ThreadError extends RubyError {
 
     get ruby_class(): RValue {
         return ThreadError.ruby_class ||= Object.find_constant("ThreadError")!;
+    }
+}
+
+export class ZeroDivisionError extends RubyError {
+    private static ruby_class: RValue | null;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "ZeroDivisionError";
+    }
+
+    get ruby_class(): RValue {
+        return ZeroDivisionError.ruby_class ||= Object.find_constant("ZeroDivisionError")!;
     }
 }

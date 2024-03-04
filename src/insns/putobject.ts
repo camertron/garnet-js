@@ -7,6 +7,9 @@ export default class PutObject extends Instruction {
     constructor(object: ValueType) {
         super();
         this.object = object;
+        if (object.type === "Integer" && isNaN(this.object.value)) {
+            debugger;
+        }
     }
 
     call(context: ExecutionContext): ExecutionResult {
