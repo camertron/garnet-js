@@ -1,9 +1,10 @@
 import { ArgumentError, NameError, ZeroDivisionError } from "../errors";
-import { Class, Object, RValue, Runtime } from "../garnet";
+import { Class, RValue, Runtime } from "../runtime";
 import { String } from "../runtime/string";
 import { Float } from "./float";
 import { Integer } from "./integer";
 import { Numeric } from "./numeric";
+import { Object } from "./object";
 
 let inited = false;
 

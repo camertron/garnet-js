@@ -1,6 +1,6 @@
 import { ArgumentError, KeyError, NameError } from "../errors";
 import { BreakError, ExecutionContext } from "../execution_context";
-import { RValue, Class, Qtrue, Qfalse, Qnil, ProcClass, Runtime, Kwargs, KwargsHash, ObjectClass } from "../runtime";
+import { RValue, Class, Qtrue, Qfalse, Qnil, Runtime, Kwargs, KwargsHash, ObjectClass } from "../runtime";
 import { Object } from "./object";
 import { Proc } from "./proc";
 import { String } from "../runtime/string";
@@ -148,7 +148,7 @@ export const init = () => {
         });
 
         klass.define_native_method("default_proc=", (self: RValue, args: RValue[]): RValue => {
-            if (args[0].klass !== ProcClass) {
+            if (args[0].klass !== Proc.klass) {
                 throw new TypeError(`wrong default_proc type ${args[0].klass.get_data<Class>().name} (expected Proc)`)
             }
 

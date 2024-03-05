@@ -1,13 +1,28 @@
-import { Class, NilClass, Object, Runtime } from "../garnet";
-import { ObjectClass, RValue } from "../runtime";
+import { Class, NilClass, ObjectClass, RValue, Runtime } from "../runtime";
 import { Integer } from "../runtime/integer";
 import { String } from "../runtime/string"
+import { Object } from "../runtime/object"
+import { NameError } from "../errors";
 
 let inited = false;
 
 export class StringIO {
     static new() {
-        return new RValue(Object.find_constant("StringIO")!, "");
+        return new RValue(this.klass, "");
+    }
+
+    private static klass_: RValue;
+
+    static get klass(): RValue {
+        const klass = Object.find_constant("StringIO");
+
+        if (klass) {
+            this.klass_ = klass;
+        } else {
+            throw new NameError(`missing constant StringIO`);
+        }
+
+        return this.klass_;
     }
 }
 

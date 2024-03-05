@@ -1,7 +1,7 @@
 import { is_node } from "../env";
 import { ArgumentError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
 import { BreakError, ExecutionContext, ThrowError } from "../execution_context";
-import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, SymbolClass, Kwargs, Visibility } from "../runtime";
+import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, Kwargs, Visibility } from "../runtime";
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
@@ -12,6 +12,7 @@ import { BacktraceLocation } from "../lib/thread";
 import { Range } from "./range";
 import { MethodCallData } from "../call_data";
 import { RubyArray } from "../runtime/array";
+import { Symbol } from "../runtime/symbol";
 import { Hash } from "./hash";
 import { Float } from "./float";
 
@@ -217,7 +218,7 @@ export const init = async () => {
     mod.define_native_method("instance_variable_set", (self: RValue, args: RValue[]): RValue => {
         const first_arg = args[0] || Qnil;
 
-        if (first_arg.klass === String.klass || first_arg.klass === SymbolClass) {
+        if (first_arg.klass === String.klass || first_arg.klass === Symbol.klass) {
             const ivar_name = first_arg.get_data<string>();
             self.iv_set(ivar_name, args[1]);
             return args[1];
@@ -229,7 +230,7 @@ export const init = async () => {
     mod.define_native_method("instance_variable_get", (self: RValue, args: RValue[]): RValue => {
         const first_arg = args[0] || Qnil;
 
-        if (first_arg.klass === String.klass || first_arg.klass === SymbolClass) {
+        if (first_arg.klass === String.klass || first_arg.klass === Symbol.klass) {
             const ivar_name = first_arg.get_data<string>();
             return self.iv_get(ivar_name);
         } else {
@@ -433,7 +434,7 @@ export const init = async () => {
     });
 
     mod.define_native_method("instance_variable_defined?", (self: RValue, args: RValue[]): RValue => {
-        if (args[0].klass !== String.klass && args[0].klass !== SymbolClass) {
+        if (args[0].klass !== String.klass && args[0].klass !== Symbol.klass) {
             throw new TypeError(`${Object.send(args[0], "inspect").get_data<string>()} is not a symbol nor a string`);
         }
 

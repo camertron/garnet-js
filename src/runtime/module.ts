@@ -2,12 +2,13 @@ import { BlockCallData, CallData, MethodCallData } from "../call_data";
 import { Compiler } from "../compiler";
 import { ArgumentError, NameError } from "../errors";
 import { CallingConvention, ExecutionContext } from "../execution_context";
-import { Module, ModuleClass, RValue, Runtime, SymbolClass, Visibility, Qnil, Class, Qtrue, Qfalse, Kwargs, TrueClass, FalseClass } from "../runtime";
+import { Module, ModuleClass, RValue, Runtime, Visibility, Qnil, Class, Qtrue, Qfalse, Kwargs, TrueClass, FalseClass } from "../runtime";
 import { Kernel } from "./kernel";
 import { Object } from "./object";
 import { InterpretedProc, Proc } from "./proc";
 import { String } from "../runtime/string";
 import { RubyArray } from "../runtime/array";
+import { Symbol } from "../runtime/symbol";
 import { Integer } from "./integer";
 
 let inited = false;
@@ -88,7 +89,7 @@ export const init = () => {
         if (args.length === 0) {
             self.get_data<Module>().default_visibility = Visibility.public;
         } else {
-            Runtime.assert_type(args[0], SymbolClass);
+            Runtime.assert_type(args[0], Symbol.klass);
             const mtd_name = args[0].get_data<string>();
             self.get_data<Module>().methods[mtd_name].visibility = Visibility.public;
         }
@@ -100,7 +101,7 @@ export const init = () => {
         if (args.length === 0) {
             self.get_data<Module>().default_visibility = Visibility.private;
         } else {
-            Runtime.assert_type(args[0], SymbolClass);
+            Runtime.assert_type(args[0], Symbol.klass);
             const mtd_name = args[0].get_data<string>();
             self.get_data<Module>().methods[mtd_name].visibility = Visibility.private;
         }
@@ -112,7 +113,7 @@ export const init = () => {
         if (args.length === 0) {
             self.get_data<Module>().default_visibility = Visibility.protected;
         } else {
-            Runtime.assert_type(args[0], SymbolClass);
+            Runtime.assert_type(args[0], Symbol.klass);
             const mtd_name = args[0].get_data<string>();
             self.get_data<Module>().methods[mtd_name].visibility = Visibility.private;
         }
@@ -121,7 +122,7 @@ export const init = () => {
     });
 
     mod.define_native_method("const_defined?", (self: RValue, args: RValue[]): RValue => {
-        if (args[0].klass != String.klass && args[0].klass != SymbolClass) {
+        if (args[0].klass != String.klass && args[0].klass != Symbol.klass) {
             Runtime.assert_type(args[0], String.klass);
         }
 
@@ -232,7 +233,7 @@ export const init = () => {
     mod.alias_method("class_eval", "module_eval");
 
     mod.define_native_method("define_method", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
-        Runtime.assert_type(args[0], SymbolClass);
+        Runtime.assert_type(args[0], Symbol.klass);
         const method_name = args[0].get_data<string>();
 
         if (args.length === 2) {
@@ -388,7 +389,7 @@ const each_string = (args: RValue[], callback: (arg: string) => void) => {
 }
 
 const coerce_to_string = (obj: RValue): string => {
-    if (obj.klass != String.klass && obj.klass != SymbolClass) {
+    if (obj.klass != String.klass && obj.klass != Symbol.klass) {
         const arg_s = Object.send(obj, "inspect").get_data<string>();
         throw new TypeError(`${arg_s} is not a symbol nor a string`);
     }

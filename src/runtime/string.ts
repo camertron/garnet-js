@@ -1,5 +1,5 @@
 import { ArgumentError, EncodingConverterNotFoundError, IndexError, NameError, NotImplementedError, RangeError } from "../errors";
-import { Class, Qnil, RValue, Runtime, Qtrue, Qfalse, RegexpClass, ObjectClass } from "../runtime";
+import { Class, Qnil, RValue, Runtime, Qtrue, Qfalse, ObjectClass } from "../runtime";
 import { hash_string } from "../util/string_utils";
 import { Integer } from "./integer";
 import { MatchData, Regexp } from "./regexp";
@@ -268,7 +268,7 @@ export const init = () => {
         klass.define_native_method("match?", (self: RValue, args: RValue[]): RValue => {
             let pattern: Regexp;
 
-            if (args[0].klass === RegexpClass) {
+            if (args[0].klass === Regexp.klass) {
                 pattern = args[0].get_data<Regexp>();
             } else {
                 const re_str = Runtime.coerce_to_string(args[0]).get_data<string>();
@@ -503,7 +503,7 @@ export const init = () => {
                 } else {
                     return null;
                 }
-            } else if (args[0].klass === RegexpClass) {
+            } else if (args[0].klass === Regexp.klass) {
                 throw new NotImplementedError("String#[](Regexp) is not yet implemented");
             } else {
                 Runtime.assert_type(args[0], Integer.klass);
@@ -581,7 +581,7 @@ export const init = () => {
                 } else {
                     throw new IndexError("string not matched");
                 }
-            } else if (args[0].klass === RegexpClass) {
+            } else if (args[0].klass === Regexp.klass) {
                 throw new NotImplementedError("String#[]=(Regexp) is not yet implemented");
             } else {
                 Runtime.assert_type(args[0], Integer.klass);
@@ -639,7 +639,7 @@ export const init = () => {
         klass.define_native_method("start_with?", (self: RValue, args: RValue[]): RValue => {
             const data = self.get_data<string>();
 
-            if (args[0]?.klass === RegexpClass) {
+            if (args[0]?.klass === Regexp.klass) {
                 const match = args[0].get_data<Regexp>().search(data);
                 return match && match.begin(0) === 0 ? Qtrue : Qfalse;
             } else {
@@ -659,7 +659,7 @@ export const init = () => {
         });
 
         klass.define_native_method("=~", (self: RValue, args: RValue[]): RValue => {
-            if (args[0].klass === RegexpClass) {
+            if (args[0].klass === Regexp.klass) {
                 const regexp = args[0].get_data<Regexp>();
                 const result = regexp.search(self.get_data<string>());
 

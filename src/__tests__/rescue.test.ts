@@ -1,8 +1,9 @@
 import {beforeAll, describe, expect, test} from '@jest/globals';
 import * as Garnet from "../garnet";
-import { SymbolClass, TrueClass } from '../runtime';
+import { TrueClass } from '../runtime';
 import { LoadError } from '../errors';
 import { RubyArray } from "../runtime/array";
+import { Symbol } from "../runtime/symbol";
 
 beforeAll(() => {
     return Garnet.init();
@@ -47,7 +48,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await Garnet.evaluate(code);
-        expect(result.klass).toBe(SymbolClass);
+        expect(result.klass).toBe(Symbol.klass);
         expect(result.get_data<string>()).toEqual("handled");
     });
 
@@ -86,7 +87,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await Garnet.evaluate(code);
-        expect(result.klass).toBe(SymbolClass);
+        expect(result.klass).toBe(Symbol.klass);
         expect(result.get_data<string>()).toEqual("handled");
     });
 
@@ -103,7 +104,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await Garnet.evaluate(code);
-        expect(result.klass).toBe(SymbolClass);
+        expect(result.klass).toBe(Symbol.klass);
         expect(result.get_data<string>()).toEqual("handled");
     });
 
@@ -117,7 +118,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await Garnet.evaluate(code);
-        expect(result.klass).toBe(SymbolClass);
+        expect(result.klass).toBe(Symbol.klass);
         expect(result.get_data<string>()).toEqual("no_error");
     });
 
@@ -132,7 +133,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await Garnet.evaluate(code);
-        expect(result.klass).toBe(SymbolClass);
+        expect(result.klass).toBe(Symbol.klass);
         expect(result.get_data<string>()).toEqual("handled");
     });
 
@@ -148,7 +149,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await Garnet.evaluate(code);
-        expect(result.klass).toBe(SymbolClass);
+        expect(result.klass).toBe(Symbol.klass);
         expect(result.get_data<string>()).toEqual("no_error");
     });
 
@@ -165,7 +166,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await Garnet.evaluate(code);
-        expect(result.klass).toBe(SymbolClass);
+        expect(result.klass).toBe(Symbol.klass);
         expect(result.get_data<string>()).toEqual("handled");
     });
 

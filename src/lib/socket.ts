@@ -1,5 +1,4 @@
-import { IOClass, Runtime } from "../garnet";
-import { ObjectClass } from "../runtime";
+import { IOClass, Runtime } from "../runtime";
 
 let inited = false;
 

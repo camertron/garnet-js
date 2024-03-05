@@ -1,8 +1,8 @@
 import { ArgumentError, TypeError } from "../errors";
-import { Class, ClassClass, ObjectClass, Qnil, RValue, Runtime } from "../garnet";
-import { SymbolClass } from "../runtime";
+import { Class, ClassClass, ObjectClass, Qnil, RValue, Runtime } from "../runtime";
 import { Object } from "../runtime/object";
 import { String } from "../runtime/string";
+import { Symbol } from "../runtime/symbol";
 
 let inited = false;
 
@@ -59,7 +59,7 @@ export const init = () => {
             });
 
             for (let i = 0; i < args.length; i ++) {
-                if (args[i].klass !== SymbolClass) {
+                if (args[i].klass !== Symbol.klass) {
                     throw new TypeError(`${Object.send(args[i], "inspect").get_data<string>()} is not a symbol`);
                 }
 

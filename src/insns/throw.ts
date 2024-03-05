@@ -1,7 +1,7 @@
 import { NotImplementedError } from "../errors";
 import { BreakError, ExecutionContext, ExecutionResult, NextError, ReturnError } from "../execution_context";
+import { NilClass } from "../runtime";
 import Instruction from "../instruction";
-import { NilClass, Runtime } from "../runtime";
 import { Object } from "../runtime/object";
 
 export enum ThrowType {

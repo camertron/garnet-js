@@ -1,10 +1,11 @@
 import { MethodCallData } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Qfalse, Qtrue, SymbolClass } from "../runtime";
+import { Qfalse, Qtrue } from "../runtime";
 import { Integer } from "../runtime/integer";
 import { Object } from "../runtime/object"
 import { String } from "../runtime/string"
+import { Symbol } from "../runtime/symbol"
 
 export default class OptEq extends Instruction {
     public call_data: MethodCallData;
@@ -25,7 +26,7 @@ export default class OptEq extends Instruction {
 
         if ((receiver_class == Integer.klass && arg0_class == Integer.klass) ||
             (receiver_class == String.klass && arg0_class == String.klass) ||
-            (receiver_class == SymbolClass && arg0_class == SymbolClass)) {
+            (receiver_class == Symbol.klass && arg0_class == Symbol.klass)) {
             if (receiver.get_data<number | string>() == args[0].get_data<number | string>()) {
                 context.push(Qtrue);
             } else {

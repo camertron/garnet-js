@@ -4,12 +4,13 @@ import { BlockFrame, ClassFrame, Frame, MethodFrame, RescueFrame, TopFrame } fro
 import Instruction from "./instruction";
 import { CatchBreak, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
 import { Local } from "./local_table";
-import { ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, ProcClass, Kwargs, Qtrue, Qfalse, Runtime } from "./runtime";
+import { ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, Kwargs, Qtrue, Qfalse, Runtime } from "./runtime";
 import { Binding } from "./runtime/binding";
 import { Hash } from "./runtime/hash";
 import { Object } from "./runtime/object";
 import { String } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
+import { Proc } from "./runtime/proc";
 
 export type ExecutionResult = JumpResult | LeaveResult | null;
 
@@ -530,7 +531,7 @@ export class ExecutionContext {
         }
 
         if (!block && call_data && call_data.has_flag(CallDataFlag.ARGS_BLOCKARG)) {
-            if (locals.length > 0 && locals[locals.length - 1].klass === ProcClass) {
+            if (locals.length > 0 && locals[locals.length - 1].klass === Proc.klass) {
                 block = locals.pop();
             } else {
                 // this code path should not be possible, raise an error?

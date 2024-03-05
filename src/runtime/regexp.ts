@@ -1,6 +1,6 @@
-import { IndexError, RuntimeError } from "../errors";
+import { IndexError, NameError, RuntimeError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Class, ObjectClass, Qnil, RValue, RegexpClass, Runtime } from "../runtime";
+import { Class, ObjectClass, Qnil, RValue, Runtime } from "../runtime";
 import { String as RubyString } from "../runtime/string";
 import * as WASM from "../wasm";
 import { Integer } from "./integer";
@@ -90,20 +90,20 @@ export const init = async () => {
     const onigmo_instance = await WASM.load_module("onigmo");
     onigmo = { exports: new OnigmoExportsWrapper(onigmo_instance.exports as unknown as OnigmoExports) };
 
-    const regexp = RegexpClass.get_data<Class>();
+    Runtime.define_class("Regexp", ObjectClass, (klass: Class) => {
+        klass.define_native_method("=~", (self: RValue, args: RValue[]): RValue => {
+            const str = Runtime.coerce_to_string(args[0]);
+            const str_data = str.get_data<string>();
+            const regexp = self.get_data<Regexp>();
+            const result = regexp.search(str_data);
 
-    regexp.define_native_method("=~", (self: RValue, args: RValue[]): RValue => {
-        const str = Runtime.coerce_to_string(args[0]);
-        const str_data = str.get_data<string>();
-        const regexp = self.get_data<Regexp>();
-        const result = regexp.search(str_data);
-
-        if (result) {
-            Regexp.set_svars(result);
-            return Integer.get(result.captures[0][0]);
-        } else {
-            return Qnil;
-        }
+            if (result) {
+                Regexp.set_svars(result);
+                return Integer.get(result.captures[0][0]);
+            } else {
+                return Qnil;
+            }
+        });
     });
 
     Runtime.define_class("MatchData", ObjectClass, (klass: Class) => {
@@ -425,14 +425,18 @@ export class MatchData {
         return new MatchData(str, captures);
     }
 
-    private static constant_: RValue | null = null;
+    private static klass_: RValue;
 
-    static get constant(): RValue {
-        if (!this.constant_) {
-            this.constant_ = Object.find_constant("MatchData")!
+    static get klass(): RValue {
+        const klass = Object.find_constant("MatchData");
+
+        if (klass) {
+            this.klass_ = klass;
+        } else {
+            throw new NameError(`missing constant MatchData`);
         }
 
-        return this.constant_;
+        return this.klass_;
     }
 
     public str: string;
@@ -446,7 +450,7 @@ export class MatchData {
 
     to_rval() {
         if (!this.rval) {
-            this.rval = new RValue(MatchData.constant, this);
+            this.rval = new RValue(MatchData.klass, this);
         }
 
         return this.rval;
@@ -479,8 +483,22 @@ export class MatchData {
 }
 
 export class Regexp {
+    private static klass_: RValue;
+
+    static get klass(): RValue {
+        const klass = Object.find_constant("Regexp");
+
+        if (klass) {
+            this.klass_ = klass;
+        } else {
+            throw new NameError(`missing constant Regexp`);
+        }
+
+        return this.klass_;
+    }
+
     static new(pattern: string, options: string): RValue {
-        return new RValue(RegexpClass, this.compile(pattern, options));
+        return new RValue(this.klass, this.compile(pattern, options));
     }
 
     static make_compile_info(): CompileInfoFields {

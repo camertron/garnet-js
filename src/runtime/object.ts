@@ -1,7 +1,7 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
 import { FrozenError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Callable, Class, KernelModule, ObjectClass, RValue, Runtime, SymbolClass, Qtrue, Qfalse, Module, Kwargs } from "../runtime";
+import { Callable, Class, KernelModule, ObjectClass, RValue, Runtime, Qtrue, Qfalse, Module, Kwargs } from "../runtime";
 import { Symbol } from "./symbol";
 import { String } from "../runtime/string";
 
@@ -20,7 +20,7 @@ export class Object {
 
         const method = Object.find_method_under(receiver, method_name);
 
-        if (block?.klass === SymbolClass) {
+        if (block?.klass === Symbol.klass) {
             block = Symbol.to_proc(block);
         }
 
@@ -186,7 +186,7 @@ export const init = () => {
         klass.define_native_method("send", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData) => {
             const method_name = args[0];
 
-            if (method_name.klass === String.klass || method_name.klass === SymbolClass) {
+            if (method_name.klass === String.klass || method_name.klass === Symbol.klass) {
                 if (call_data) {
                     const new_call_data = MethodCallData.create(method_name.get_data<string>(), call_data.argc - 1, call_data.flag, call_data.kw_arg);
                     return Object.send(self, new_call_data, args.slice(1), kwargs, block);

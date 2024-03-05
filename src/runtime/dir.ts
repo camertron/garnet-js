@@ -1,5 +1,5 @@
-import { BreakError } from "../execution_context";
-import { ExecutionContext, Qtrue } from "../garnet";
+import { BreakError, ExecutionContext } from "../execution_context";
+import { Qtrue } from "../runtime";
 import { Class, Kwargs, ObjectClass, Qnil, Runtime, RValue, } from "../runtime";
 import { String } from "../runtime/string";
 import { parse_glob } from "./parse-glob";

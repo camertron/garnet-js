@@ -1,7 +1,7 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
+import { NilClass } from "../runtime";
 import Instruction from "../instruction";
 import { Label } from "../instruction_sequence";
-import { NilClass } from "../runtime";
 
 export class BranchNil extends Instruction {
     public label: Label;

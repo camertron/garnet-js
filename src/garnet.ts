@@ -96,7 +96,6 @@ export {
     ModuleClass,
     ObjectClass,
     BasicObjectClass,
-    RegexpClass,
     NilClass,
     Qnil,
     TrueClass,
