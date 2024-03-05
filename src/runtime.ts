@@ -851,7 +851,7 @@ export const BasicObjectClass = object_class.constants["BasicObject"] = new RVal
 export const ObjectClass      = object_class.constants["Object"]      = new RValue(ClassClass, object_class);
 // export const StringClass      = object_class.constants["String"]      = new RValue(ClassClass, new Class("String", ObjectClass));
 // export const ArrayClass       = object_class.constants["Array"]       = new RValue(ClassClass, new Class("Array", ObjectClass));
-export const HashClass        = object_class.constants["Hash"]        = new RValue(ClassClass, new Class("Hash", ObjectClass));
+// export const HashClass        = object_class.constants["Hash"]        = new RValue(ClassClass, new Class("Hash", ObjectClass));
 export const NumericClass     = object_class.constants["Numeric"]     = new RValue(ClassClass, new Class("Numeric", ObjectClass));
 export const IntegerClass     = object_class.constants["Integer"]     = new RValue(ClassClass, new Class("Integer", NumericClass));
 export const FloatClass       = object_class.constants["Float"]       = new RValue(ClassClass, new Class("Float", NumericClass));
@@ -871,7 +871,7 @@ module_class.rval = ModuleClass;
 class_class.rval = ClassClass;
 // StringClass.get_data<Class>().rval = StringClass;
 // ArrayClass.get_data<Class>().rval = ArrayClass;
-HashClass.get_data<Class>().rval = HashClass;
+// HashClass.get_data<Class>().rval = HashClass;
 NumericClass.get_data<Class>().rval = NumericClass;
 IntegerClass.get_data<Class>().rval = IntegerClass;
 FloatClass.get_data<Class>().rval = FloatClass;

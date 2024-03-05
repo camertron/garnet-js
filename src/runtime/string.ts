@@ -1,5 +1,5 @@
 import { ArgumentError, EncodingConverterNotFoundError, IndexError, NotImplementedError, RangeError } from "../errors";
-import { Class, Qnil, RValue, IntegerClass, Runtime, Float, Qtrue, Qfalse, RegexpClass, NumericClass, HashClass, ObjectClass } from "../runtime";
+import { Class, Qnil, RValue, IntegerClass, Runtime, Float, Qtrue, Qfalse, RegexpClass, NumericClass, ObjectClass } from "../runtime";
 import { hash_string } from "../util/string_utils";
 import { Integer } from "./integer";
 import { MatchData, Regexp } from "./regexp";
@@ -211,7 +211,7 @@ export const init = () => {
                 const chunks = [];
                 let last_pos = 0;
 
-                if (replacements.klass === HashClass) {
+                if (replacements.klass === Hash.klass) {
                     const replacement_hash = replacements.get_data<Hash>();
 
                     for (let i = 0; i < matches.length; i ++) {

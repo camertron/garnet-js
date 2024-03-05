@@ -1,7 +1,7 @@
 import { is_node } from "../env";
 import { ArgumentError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
 import { BreakError, ExecutionContext, ThrowError } from "../execution_context";
-import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, HashClass, SymbolClass, FloatClass, Kwargs, Visibility } from "../runtime";
+import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, SymbolClass, FloatClass, Kwargs, Visibility } from "../runtime";
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
@@ -12,6 +12,7 @@ import { BacktraceLocation } from "../lib/thread";
 import { Range } from "./range";
 import { MethodCallData } from "../call_data";
 import { RubyArray } from "../runtime/array";
+import { Hash } from "./hash";
 
 export class Kernel {
     public static exit_handlers: RValue[] = [];
@@ -279,7 +280,7 @@ export const init = async () => {
                 // kexec(first_arg.get_data<string>());
                 return Qnil;
             }
-        } else if (first_arg.klass === HashClass) {
+        } else if (first_arg.klass === Hash.klass) {
             throw new NotImplementedError("passing a hash as the first argument to Kernel#exec is not yet supported");
         } else if (first_arg.klass === RubyArray.klass) {
             const elems = args[0].get_data<RubyArray>().elements;

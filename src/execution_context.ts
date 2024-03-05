@@ -4,7 +4,7 @@ import { BlockFrame, ClassFrame, Frame, MethodFrame, RescueFrame, TopFrame } fro
 import Instruction from "./instruction";
 import { CatchBreak, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
 import { Local } from "./local_table";
-import { ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, ProcClass, Kwargs, Qtrue, Qfalse, Runtime, HashClass } from "./runtime";
+import { ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, ProcClass, Kwargs, Qtrue, Qfalse, Runtime } from "./runtime";
 import { Binding } from "./runtime/binding";
 import { Hash } from "./runtime/hash";
 import { Object } from "./runtime/object";
@@ -519,7 +519,7 @@ export class ExecutionContext {
         // }
 
         if (iseq.argument_options.keyword_rest_start != null && iseq.argument_options.keyword_rest_start > -1 && !call_data.has_flag(CallDataFlag.KWARG) && !call_data.has_flag(CallDataFlag.KW_SPLAT)) {
-            if (locals.length > 0 && locals[locals.length - 1].klass === HashClass) {
+            if (locals.length > 0 && locals[locals.length - 1].klass === Hash.klass) {
                 const kwargs_hash = locals.pop()!;
                 kwargs ||= new Map();
 
