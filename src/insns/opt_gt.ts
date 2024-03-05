@@ -1,7 +1,8 @@
 import { MethodCallData } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { IntegerClass, Qfalse, Qtrue } from "../runtime";
+import { Qfalse, Qtrue } from "../runtime";
+import { Integer } from "../runtime/integer";
 import { Object } from "../runtime/object"
 
 export default class OptGt extends Instruction {
@@ -18,7 +19,7 @@ export default class OptGt extends Instruction {
 
         // This is supposed to be equivalent to MRI's "fast path" for comparing ints/floats.
         // @TODO: do the same thing for floats
-        if (receiver.klass == IntegerClass && args[0].klass == IntegerClass) {
+        if (receiver.klass == Integer.klass && args[0].klass == Integer.klass) {
             if (receiver.get_data<number>() > args[0].get_data<number>()) {
                 context.push(Qtrue);
             } else {

@@ -1,4 +1,4 @@
-import { ArgumentError, KeyError } from "../errors";
+import { ArgumentError, KeyError, NameError } from "../errors";
 import { BreakError, ExecutionContext } from "../execution_context";
 import { RValue, Class, Qtrue, Qfalse, Qnil, ProcClass, Runtime, Kwargs, KwargsHash, ObjectClass } from "../runtime";
 import { Object } from "./object";
@@ -25,8 +25,12 @@ export class Hash {
     private static klass_: RValue;
 
     static get klass(): RValue {
-        if (!this.klass_) {
-            this.klass_ = Object.find_constant("Hash")!;
+        const klass = Object.find_constant("Hash");
+
+        if (klass) {
+            this.klass_ = klass;
+        } else {
+            throw new NameError(`missing constant Hash`);
         }
 
         return this.klass_;

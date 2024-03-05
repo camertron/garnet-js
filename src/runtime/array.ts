@@ -1,13 +1,13 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
 import { BreakError, ExecutionContext } from "../execution_context";
-import { Class, IntegerClass, Kwargs, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
+import { Class, Kwargs, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { hash_combine } from "../util/hash_utils";
 import { Integer } from "./integer";
 import { Object } from "./object";
 import { String } from "../runtime/string";
 import { Range } from "./range";
 import { Hash } from "./hash";
-import { ArgumentError, TypeError } from "../errors";
+import { ArgumentError, NameError, TypeError } from "../errors";
 import { Proc } from "./proc";
 
 export class RubyArray {
@@ -19,7 +19,13 @@ export class RubyArray {
 
     static get klass(): RValue {
         if (!this.klass_) {
-            this.klass_ = Object.find_constant("Array")!
+            const klass = Object.find_constant("Array");
+
+            if (klass) {
+                this.klass_ = klass;
+            } else {
+                throw new NameError(`missing constant Array`);
+            }
         }
 
         return this.klass_;
@@ -51,7 +57,7 @@ export const init = () => {
                 if (args[0].klass === RubyArray.klass) {
                     init_arr = [...args[0].get_data<RubyArray>().elements];
                 } else {
-                    Runtime.assert_type(args[0], IntegerClass);
+                    Runtime.assert_type(args[0], Integer.klass);
                     const size = args[0].get_data<number>();
 
                     // block supercedes default value
@@ -267,8 +273,8 @@ export const init = () => {
             if (args[0].klass == Object.find_constant("Range")!) {
                 const range = args[0].get_data<Range>();
 
-                Runtime.assert_type(range.begin, IntegerClass);
-                Runtime.assert_type(range.end, IntegerClass);
+                Runtime.assert_type(range.begin, Integer.klass);
+                Runtime.assert_type(range.end, Integer.klass);
 
                 let start_pos = range.begin.get_data<number>();
 
@@ -295,7 +301,7 @@ export const init = () => {
                 const index = args[0].get_data<number>();
 
                 if (args.length > 1) {
-                    Runtime.assert_type(args[1], IntegerClass);
+                    Runtime.assert_type(args[1], Integer.klass);
                     const length = args[1].get_data<number>();
                     return RubyArray.new(elements.slice(index, index + length));
                 } else {
@@ -356,7 +362,7 @@ export const init = () => {
             let count = 1;
 
             if (args.length > 0) {
-                Runtime.assert_type(args[0], IntegerClass);
+                Runtime.assert_type(args[0], Integer.klass);
                 count = args[0].get_data<number>();
             }
 
@@ -492,7 +498,7 @@ export const init = () => {
 
             for (const element of elements) {
                 const elem_hash = Object.send(element, "hash");
-                Runtime.assert_type(elem_hash, IntegerClass);
+                Runtime.assert_type(elem_hash, Integer.klass);
                 hash = hash_combine(hash, elem_hash.get_data<number>());
             }
 

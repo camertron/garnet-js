@@ -2,12 +2,13 @@ import { BlockCallData, CallData, MethodCallData } from "../call_data";
 import { Compiler } from "../compiler";
 import { ArgumentError, NameError } from "../errors";
 import { CallingConvention, ExecutionContext } from "../execution_context";
-import { Module, ModuleClass, RValue, Runtime, SymbolClass, Visibility, Qnil, Class, Qtrue, Qfalse, IntegerClass, Kwargs, TrueClass, FalseClass } from "../runtime";
+import { Module, ModuleClass, RValue, Runtime, SymbolClass, Visibility, Qnil, Class, Qtrue, Qfalse, Kwargs, TrueClass, FalseClass } from "../runtime";
 import { Kernel } from "./kernel";
 import { Object } from "./object";
 import { InterpretedProc, Proc } from "./proc";
 import { String } from "../runtime/string";
 import { RubyArray } from "../runtime/array";
+import { Integer } from "./integer";
 
 let inited = false;
 
@@ -217,7 +218,7 @@ export const init = () => {
             }
 
             if (args[2]) {
-                Runtime.assert_type(args[2], IntegerClass);
+                Runtime.assert_type(args[2], Integer.klass);
                 line_offset = args[2].get_data<number>() - 1;  // convert line to offset
             } else {
                 line_offset = 0;

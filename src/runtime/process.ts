@@ -1,6 +1,7 @@
 import { is_node } from "../env";
 import { ErrnoEINVAL } from "../errors";
-import { Float, IntegerClass, Module, RValue, Runtime } from "../runtime"
+import { Module, RValue, Runtime } from "../runtime"
+import { Float } from "./float";
 import { Integer } from "./integer";
 
 let inited = false;
@@ -28,7 +29,7 @@ export const init = () => {
             if (args[0] === mod.constants["CLOCK_MONOTONIC"]) {
                 return Float.new(performance.now());
             } else {
-                Runtime.assert_type(args[0], IntegerClass);
+                Runtime.assert_type(args[0], Integer.klass);
                 const clock_num = args[0].get_data<number>();
                 throw new ErrnoEINVAL(`Invalid argument - clock_gettime(${clock_num})`);
             }

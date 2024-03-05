@@ -1,6 +1,8 @@
 import { NotImplementedError } from "../errors";
-import { Class, Float, NumericClass, ObjectClass, RValue, Runtime } from "../runtime";
+import { Class, ObjectClass, RValue, Runtime } from "../runtime";
+import { Float } from "../runtime/float";
 import { Kernel } from "../runtime/kernel";
+import { Numeric } from "../runtime/numeric";
 import { Object } from "../runtime/object";
 
 class Time {
@@ -24,7 +26,7 @@ export const init = () => {
         });
 
         klass.define_native_method("-", (self: RValue, args: RValue[]): RValue => {
-            if (Kernel.is_a(args[0], NumericClass)) {
+            if (Kernel.is_a(args[0], Numeric.klass)) {
                 throw new NotImplementedError("Time#- with a numeric argument is not yet implemented");
             } else if (args[0].klass === self.klass) {
                 const millis = self.get_data<Time>().date.getMilliseconds() - args[0].get_data<Time>().date.getMilliseconds();

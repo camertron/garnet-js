@@ -1,5 +1,5 @@
-import { ArgumentError, EncodingConverterNotFoundError, IndexError, NotImplementedError, RangeError } from "../errors";
-import { Class, Qnil, RValue, IntegerClass, Runtime, Float, Qtrue, Qfalse, RegexpClass, NumericClass, ObjectClass } from "../runtime";
+import { ArgumentError, EncodingConverterNotFoundError, IndexError, NameError, NotImplementedError, RangeError } from "../errors";
+import { Class, Qnil, RValue, Runtime, Qtrue, Qfalse, RegexpClass, ObjectClass } from "../runtime";
 import { hash_string } from "../util/string_utils";
 import { Integer } from "./integer";
 import { MatchData, Regexp } from "./regexp";
@@ -11,6 +11,8 @@ import { String as RubyString } from "../runtime/string";
 import { CharSelector } from "./char-selector";
 import { Hash } from "./hash";
 import { RubyArray } from "../runtime/array";
+import { Numeric } from "./numeric";
+import { Float } from "./float";
 
 // 7-bit strings are implicitly valid.
 // If both the valid _and_ 7bit bits are set, the string is broken.e
@@ -33,8 +35,12 @@ export class String {
     }
 
     static get klass(): RValue {
-        if (!this.klass_) {
-            this.klass_ = Object.find_constant("String")!
+        const klass = Object.find_constant("String");
+
+        if (klass) {
+            this.klass_ = klass;
+        } else {
+            throw new NameError(`missing constant String`);
         }
 
         return this.klass_;
@@ -180,7 +186,7 @@ export const init = () => {
 
         klass.define_native_method("*", (self: RValue, args: RValue[]): RValue => {
             const multiplier = args[0];
-            Runtime.assert_type(multiplier, NumericClass);  // @TODO: handle floats (yes, you can multiply strings by floats, oh ruby)
+            Runtime.assert_type(multiplier, Numeric.klass);  // @TODO: handle floats (yes, you can multiply strings by floats, oh ruby)
             return RubyString.new(self.get_data<string>().repeat(multiplier.get_data<number>()));
         });
 
@@ -467,8 +473,8 @@ export const init = () => {
             if (args[0].klass == Object.find_constant("Range")!) {
                 const range = args[0].get_data<Range>();
 
-                Runtime.assert_type(range.begin, IntegerClass);
-                Runtime.assert_type(range.end, IntegerClass);
+                Runtime.assert_type(range.begin, Integer.klass);
+                Runtime.assert_type(range.end, Integer.klass);
 
                 let start_pos = range.begin.get_data<number>();
 
@@ -500,11 +506,11 @@ export const init = () => {
             } else if (args[0].klass === RegexpClass) {
                 throw new NotImplementedError("String#[](Regexp) is not yet implemented");
             } else {
-                Runtime.assert_type(args[0], IntegerClass);
+                Runtime.assert_type(args[0], Integer.klass);
                 const start = args[0].get_data<number>();
 
                 if (args.length > 1) {
-                    Runtime.assert_type(args[1], IntegerClass);
+                    Runtime.assert_type(args[1], Integer.klass);
                     const len = args[1].get_data<number>();
                     return data.substring(start, start + len);
                 } else {
@@ -543,8 +549,8 @@ export const init = () => {
             if (args[0].klass == Object.find_constant("Range")!) {
                 const range = args[0].get_data<Range>();
 
-                Runtime.assert_type(range.begin, IntegerClass);
-                Runtime.assert_type(range.end, IntegerClass);
+                Runtime.assert_type(range.begin, Integer.klass);
+                Runtime.assert_type(range.end, Integer.klass);
 
                 start_pos = range.begin.get_data<number>();
 
@@ -578,11 +584,11 @@ export const init = () => {
             } else if (args[0].klass === RegexpClass) {
                 throw new NotImplementedError("String#[]=(Regexp) is not yet implemented");
             } else {
-                Runtime.assert_type(args[0], IntegerClass);
+                Runtime.assert_type(args[0], Integer.klass);
                 start_pos = args[0].get_data<number>();
 
                 if (args.length > 2) {
-                    Runtime.assert_type(args[1], IntegerClass);
+                    Runtime.assert_type(args[1], Integer.klass);
                     end_pos = args[1].get_data<number>();
                     replacement_pos = 2;
                 } else {
@@ -603,7 +609,7 @@ export const init = () => {
 
         klass.define_native_method("ljust", (self: RValue, args: RValue[]): RValue => {
             const data = self.get_data<string>();
-            Runtime.assert_type(args[0], IntegerClass);
+            Runtime.assert_type(args[0], Integer.klass);
             const size = args[0].get_data<number>();
 
             let pad_str;
@@ -672,7 +678,7 @@ export const init = () => {
         const append_to = (str: RValue, val: RValue): void => {
             const encoding = RubyString.get_encoding(str);
 
-            if (val.klass === IntegerClass) {
+            if (val.klass === Integer.klass) {
                 const num = val.get_data<number>();
 
                 if (!encoding.codepoint_valid(num)) {

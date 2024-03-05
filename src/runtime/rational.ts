@@ -1,8 +1,9 @@
-import { ArgumentError, ZeroDivisionError } from "../errors";
+import { ArgumentError, NameError, ZeroDivisionError } from "../errors";
 import { Class, Object, RValue, Runtime } from "../garnet";
-import { FloatClass, IntegerClass, NumericClass } from "../runtime";
 import { String } from "../runtime/string";
+import { Float } from "./float";
 import { Integer } from "./integer";
+import { Numeric } from "./numeric";
 
 let inited = false;
 
@@ -76,7 +77,7 @@ export class Rational {
             throw new ZeroDivisionError("divided by 0");
         }
 
-        return new RValue(this.rational_class, new Rational(n, d, s < 0));
+        return new RValue(this.klass, new Rational(n, d, s < 0));
     }
 
     static from_string(p1: string): RValue {
@@ -139,7 +140,7 @@ export class Rational {
             throw new ZeroDivisionError("divided by 0");
         }
 
-        return new RValue(this.rational_class, new Rational(n, d, s < 0));
+        return new RValue(this.klass, new Rational(n, d, s < 0));
     }
 
     private static assign(n: string, s: number, p1: string): number {
@@ -152,18 +153,22 @@ export class Rational {
         return n_prime * s;
     }
 
-    private static rational_class_: RValue;
+    private static klass_: RValue;
 
-    static get rational_class(): RValue {
-        if (!this.rational_class_) {
-            this.rational_class_ = Object.find_constant("Rational")!;
+    static get klass(): RValue {
+        const klass = Object.find_constant("Rational");
+
+        if (klass) {
+            this.klass_ = klass;
+        } else {
+            throw new NameError(`missing constant Rational`);
         }
 
-        return this.rational_class_;
+        return this.klass_;
     }
 
     static new(n: number, d: number): RValue {
-        return new RValue(this.rational_class, new Rational(Math.abs(n), Math.abs(d), (n < 0) !== (d < 0)));
+        return new RValue(this.klass, new Rational(Math.abs(n), Math.abs(d), (n < 0) !== (d < 0)));
     }
 
     public n: number;
@@ -198,7 +203,7 @@ export class Rational {
 export const init = () => {
     if (inited) return;
 
-    Runtime.define_class("Rational", NumericClass, (klass: Class) => {
+    Runtime.define_class("Rational", Numeric.klass, (klass: Class) => {
         klass.define_native_singleton_method("new", (self: RValue, args: RValue[]): RValue => {
             let rational;
 
@@ -208,12 +213,12 @@ export const init = () => {
                         rational = Rational.from_string(args[0].get_data<string>());
                         break;
 
-                    case IntegerClass:
+                    case Integer.klass:
                         const n = args[0].get_data<number>();
                         rational = Rational.new(n, 1);
                         break;
 
-                    case FloatClass:
+                    case Float.klass:
                         rational = Rational.from_float(args[0].get_data<number>());
                         break;
 
@@ -222,8 +227,8 @@ export const init = () => {
                 }
             } else {
                 // @TODO: support float arguments
-                Runtime.assert_type(args[0], IntegerClass);
-                Runtime.assert_type(args[1], IntegerClass);
+                Runtime.assert_type(args[0], Integer.klass);
+                Runtime.assert_type(args[1], Integer.klass);
 
                 const n = args[0].get_data<number>();
                 const d = args[1].get_data<number>();
@@ -244,8 +249,8 @@ export const init = () => {
             let n: number, other_n: number;
 
             switch (args[0].klass) {
-                case IntegerClass:
-                case FloatClass:
+                case Integer.klass:
+                case Float.klass:
                     n = args[0].get_data<number>();
                     other_n = args[0].get_data<number>() * rational.d;
 
@@ -259,7 +264,7 @@ export const init = () => {
 
                     break;
 
-                case Rational.rational_class:
+                case Rational.klass:
                     const other_rational = args[0].get_data<Rational>();
                     n = rational.n * other_rational.d;
                     other_n = other_rational.n * rational.d;

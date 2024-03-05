@@ -852,9 +852,9 @@ export const ObjectClass      = object_class.constants["Object"]      = new RVal
 // export const StringClass      = object_class.constants["String"]      = new RValue(ClassClass, new Class("String", ObjectClass));
 // export const ArrayClass       = object_class.constants["Array"]       = new RValue(ClassClass, new Class("Array", ObjectClass));
 // export const HashClass        = object_class.constants["Hash"]        = new RValue(ClassClass, new Class("Hash", ObjectClass));
-export const NumericClass     = object_class.constants["Numeric"]     = new RValue(ClassClass, new Class("Numeric", ObjectClass));
-export const IntegerClass     = object_class.constants["Integer"]     = new RValue(ClassClass, new Class("Integer", NumericClass));
-export const FloatClass       = object_class.constants["Float"]       = new RValue(ClassClass, new Class("Float", NumericClass));
+// export const NumericClass     = object_class.constants["Numeric"]     = new RValue(ClassClass, new Class("Numeric", ObjectClass));
+// export const IntegerClass     = object_class.constants["Integer"]     = new RValue(ClassClass, new Class("Integer", NumericClass));
+// export const FloatClass       = object_class.constants["Float"]       = new RValue(ClassClass, new Class("Float", NumericClass));
 export const SymbolClass      = object_class.constants["Symbol"]      = new RValue(ClassClass, new Class("Symbol", ObjectClass));
 export const ProcClass        = object_class.constants["Proc"]        = new RValue(ClassClass, new Class("Proc", ObjectClass));
 export const NilClass         = object_class.constants["NilClass"]    = new RValue(ClassClass, new Class("NilClass", ObjectClass));
@@ -872,9 +872,9 @@ class_class.rval = ClassClass;
 // StringClass.get_data<Class>().rval = StringClass;
 // ArrayClass.get_data<Class>().rval = ArrayClass;
 // HashClass.get_data<Class>().rval = HashClass;
-NumericClass.get_data<Class>().rval = NumericClass;
-IntegerClass.get_data<Class>().rval = IntegerClass;
-FloatClass.get_data<Class>().rval = FloatClass;
+// NumericClass.get_data<Class>().rval = NumericClass;
+// IntegerClass.get_data<Class>().rval = IntegerClass;
+// FloatClass.get_data<Class>().rval = FloatClass;
 SymbolClass.get_data<Class>().rval = SymbolClass;
 ProcClass.get_data<Class>().rval = ProcClass;
 NilClass.get_data<Class>().rval = NilClass;
@@ -1140,15 +1140,6 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
     });
 });
 
-ObjectClass.get_data<Class>().constants["RUBY_VERSION"] = String.new("3.2.2");
-ObjectClass.get_data<Class>().constants["RUBY_ENGINE"] = String.new("Garnet.js");
-
-export class Float {
-    static new(value: number): RValue {
-        return new RValue(FloatClass, value);
-    }
-}
-
 export interface IO {
     puts(val: string): void;
     write(val: string): void;
@@ -1259,6 +1250,8 @@ export const STDERR = ObjectClass.get_data<Class>().constants["STDERR"] = is_nod
 export const init = async () => {
     module_init();
     string_init();
+    comparable_init();
+    numeric_init();
     rational_init();
     integer_init();
     float_init();
@@ -1271,8 +1264,6 @@ export const init = async () => {
     env_init();
     file_init();
     dir_init();
-    comparable_init();
-    numeric_init();
     await kernel_init();
     object_init();
     range_init();
@@ -1327,13 +1318,16 @@ export const init = async () => {
         }
     })();
 
+    ObjectClass.get_data<Class>().constants["RUBY_VERSION"] = String.new("3.2.2");
+    ObjectClass.get_data<Class>().constants["RUBY_ENGINE"] = String.new("Garnet.js");
+
     ObjectClass.get_data<Class>().constants["RUBY_DESCRIPTION"] = String.new(
         `Garnet.js ${ObjectClass.get_data<Class>().constants["RUBY_VERSION"].get_data<string>()} [${ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"].get_data<string>()}]`
     );
-}
 
-if (is_node) {
-    Dir.setwd(process.env.PWD!);
-} else {
-    Dir.setwd(vmfs.root_path());
+    if (is_node) {
+        Dir.setwd(process.env.PWD!);
+    } else {
+        Dir.setwd(vmfs.root_path());
+    }
 }

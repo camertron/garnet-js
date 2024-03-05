@@ -1,6 +1,6 @@
 import { ArgumentError, NotImplementedError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Class, IntegerClass, Kwargs, Qnil, RValue, Runtime } from "../runtime"
+import { Class, Kwargs, Qnil, RValue, Runtime } from "../runtime"
 import { Hash } from "./hash";
 import { Integer } from "./integer";
 import { Proc } from "./proc";
@@ -82,7 +82,7 @@ export const init = () => {
                 });
 
                 return block;
-            } else if (sig_no.klass === IntegerClass) {
+            } else if (sig_no.klass === Integer.klass) {
                 // not implemented yet
                 throw new NotImplementedError("Signal.trap cannot accept integer signal codes yet");
             } else {

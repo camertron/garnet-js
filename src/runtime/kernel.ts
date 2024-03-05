@@ -1,7 +1,7 @@
 import { is_node } from "../env";
 import { ArgumentError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
 import { BreakError, ExecutionContext, ThrowError } from "../execution_context";
-import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, IntegerClass, SymbolClass, FloatClass, Kwargs, Visibility } from "../runtime";
+import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, SymbolClass, Kwargs, Visibility } from "../runtime";
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
@@ -13,6 +13,7 @@ import { Range } from "./range";
 import { MethodCallData } from "../call_data";
 import { RubyArray } from "../runtime/array";
 import { Hash } from "./hash";
+import { Float } from "./float";
 
 export class Kernel {
     public static exit_handlers: RValue[] = [];
@@ -159,10 +160,10 @@ export const init = async () => {
 
     mod.define_native_method("Integer", (self: RValue, args: RValue[]): RValue => {
         switch (args[0].klass) {
-            case IntegerClass:
+            case Integer.klass:
                 return args[0];
 
-            case FloatClass:
+            case Float.klass:
                 return Integer.get(Math.floor(args[0].get_data<number>()));
 
             case String.klass:
@@ -241,7 +242,7 @@ export const init = async () => {
         let message = null;
 
         if (args.length > 0) {
-            Runtime.assert_type(args[0], IntegerClass);
+            Runtime.assert_type(args[0], Integer.klass);
             status = args[0].get_data<number>();
         }
 
@@ -380,14 +381,14 @@ export const init = async () => {
         if (args.length === 1) {
             if (args[0].klass === Object.find_constant("Range")!) {
                 const range = args[0].get_data<Range>();
-                Runtime.assert_type(range.begin, IntegerClass);
-                Runtime.assert_type(range.end, IntegerClass);
+                Runtime.assert_type(range.begin, Integer.klass);
+                Runtime.assert_type(range.end, Integer.klass);
                 start = range.begin.get_data<number>();
                 length = range.end.get_data<number>() - start;
             }
         } else if (args.length === 2) {
-            Runtime.assert_type(args[0], IntegerClass);
-            Runtime.assert_type(args[1], IntegerClass);
+            Runtime.assert_type(args[0], Integer.klass);
+            Runtime.assert_type(args[1], Integer.klass);
             start = args[0].get_data<number>();
             length = args[1].get_data<number>();
         }
@@ -460,7 +461,7 @@ export const init = async () => {
     }
 
     mod.define_native_method("sleep", (_self: RValue, args: RValue[]): RValue => {
-        if (args[0].klass !== IntegerClass && args[0].klass !== FloatClass) {
+        if (args[0].klass !== Integer.klass && args[0].klass !== Float.klass) {
             throw new ArgumentError(`can't convert ${args[0].klass.get_data<Class>().name} into time interval`);
         }
 

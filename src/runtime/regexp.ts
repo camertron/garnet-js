@@ -1,6 +1,6 @@
 import { IndexError, RuntimeError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Class, IntegerClass, ObjectClass, Qnil, RValue, RegexpClass, Runtime } from "../runtime";
+import { Class, ObjectClass, Qnil, RValue, RegexpClass, Runtime } from "../runtime";
 import { String as RubyString } from "../runtime/string";
 import * as WASM from "../wasm";
 import { Integer } from "./integer";
@@ -121,21 +121,21 @@ export const init = async () => {
 
         klass.define_native_method("begin", (self: RValue, args: RValue[]): RValue => {
             const match_data = self.get_data<MatchData>();
-            Runtime.assert_type(args[0], IntegerClass);
+            Runtime.assert_type(args[0], Integer.klass);
             const index = args[0].get_data<number>();
             return Integer.get(match_data.begin(index));
         });
 
         klass.define_native_method("end", (self: RValue, args: RValue[]): RValue => {
             const match_data = self.get_data<MatchData>();
-            Runtime.assert_type(args[0], IntegerClass);
+            Runtime.assert_type(args[0], Integer.klass);
             const index = args[0].get_data<number>();
             return Integer.get(match_data.end(index));
         });
 
         klass.define_native_method("match", (self: RValue, args: RValue[]): RValue => {
             const match_data = self.get_data<MatchData>();
-            Runtime.assert_type(args[0], IntegerClass);
+            Runtime.assert_type(args[0], Integer.klass);
             const index = args[0].get_data<number>();
             return RubyString.new(match_data.match(index));
         });

@@ -2,13 +2,18 @@ import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../run
 import { String } from "../runtime/string";
 import { spaceship_compare } from "./comparable";
 import { Object } from "../runtime/object";
+import { NameError } from "../errors";
 
 export class Range {
     private static klass_: RValue;
 
     private static get klass(): RValue {
-        if (!this.klass_) {
-            this.klass_ = Object.find_constant("Range")!;
+        const klass = Object.find_constant("Range");
+
+        if (klass) {
+            this.klass_ = klass;
+        } else {
+            throw new NameError(`missing constant Range`);
         }
 
         return this.klass_;

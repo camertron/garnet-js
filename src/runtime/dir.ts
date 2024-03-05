@@ -1,10 +1,11 @@
 import { BreakError } from "../execution_context";
 import { ExecutionContext, Qtrue } from "../garnet";
-import { Class, Kwargs, NumericClass, ObjectClass, Qnil, Runtime, RValue, } from "../runtime";
+import { Class, Kwargs, ObjectClass, Qnil, Runtime, RValue, } from "../runtime";
 import { String } from "../runtime/string";
 import { parse_glob } from "./parse-glob";
 import { Proc } from "./proc";
 import { RubyArray } from "../runtime/array";
+import { Numeric } from "./numeric";
 
 export class Dir {
     private static wd: string;
@@ -46,7 +47,7 @@ export const init = () => {
 
             if (kwargs && kwargs.has("flags")) {
                 const f = kwargs.get("flags")!;
-                Runtime.assert_type(f, NumericClass);
+                Runtime.assert_type(f, Numeric.klass);
                 flags = f.get_data<number>();
             }
 

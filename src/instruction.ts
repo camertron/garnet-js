@@ -1,5 +1,6 @@
 import { ExecutionContext, ExecutionResult } from "./execution_context";
-import { Float, Qfalse, Qnil, Qtrue, Runtime, RValue } from "./runtime";
+import { Qfalse, Qnil, Qtrue, Runtime, RValue } from "./runtime";
+import { Float } from "./runtime/float";
 import { Integer } from "./runtime/integer";
 import { String } from "./runtime/string";
 
