@@ -109,6 +109,7 @@ import { GetSpecialType } from "./insns/getspecial";
 import { SyntaxError } from "./errors";
 import { ThrowType } from "./insns/throw";
 import { String } from "./runtime/string";
+import { ParameterMetadata, ParametersMetadataBuilder } from "./runtime/parameter-meta";
 
 export type ParseLocal = {
     name: string
@@ -124,6 +125,59 @@ export type ParseOptions = {
     scopes?: ParseLocal[][],
 }
 
+export class LexicalScope {
+    private file: string;
+    private start_line: number;
+    private end_line: number;
+    private parent?: LexicalScope;
+    public id: number;
+
+    private static id: number;
+
+    static next_id(): number {
+        if (this.id === undefined) {
+            this.id = 0;
+        } else {
+            this.id ++;
+        }
+
+        return this.id;
+    }
+
+    constructor(file: string, start_line: number, end_line: number, parent?: LexicalScope) {
+        this.file = file;
+        this.start_line = start_line;
+        this.end_line = end_line;
+        this.parent = parent;
+        this.id = LexicalScope.next_id();
+    }
+}
+
+class LexicalScopeStack {
+    private stack: LexicalScope[] = [];
+
+    constructor() {
+        this.stack = [];
+    }
+
+    push(scope: LexicalScope): LexicalScope {
+        this.stack.push(scope);
+        return scope;
+    }
+
+    pop(): LexicalScope | undefined {
+        return this.stack.pop();
+    }
+
+    empty(): boolean {
+        return this.stack.length === 0;
+    }
+
+    current(): LexicalScope {
+        return this.stack[this.stack.length - 1];
+    }
+}
+
 export class Compiler extends Visitor {
     private compiler_options: CompilerOptions;
     private source: string;
@@ -135,6 +189,7 @@ export class Compiler extends Visitor {
     private current_line: number;
     private line_offset: number;  // offset to add to all line numbers, used by class_eval and friends
     private used_stack: boolean[];
+    private lexical_scope_stack: LexicalScopeStack;
 
     public static parse: (code: string) => ParseResult;
 
@@ -148,6 +203,7 @@ export class Compiler extends Visitor {
         this.local_catch_table_stack = new CatchTableStack();
         this.line_offset = line;
         this.used_stack = [];
+        this.lexical_scope_stack = new LexicalScopeStack();
     }
 
     static compile(source: string, path: string, ast: any, line_offset: number = 0, compiler_options?: CompilerOptions): InstructionSequence {
@@ -195,7 +251,17 @@ export class Compiler extends Visitor {
     }
 
     override visitProgramNode(node: ProgramNode): InstructionSequence {
-        const top_iseq = new InstructionSequence("<main>", this.path, this.start_line_for_loc(node.location)!, "top", null, this.compiler_options);
+        const lexical_scope = this.lexical_scope_stack.push(
+            new LexicalScope(
+                this.path,
+                this.start_line_for_loc(node.location)!,
+                this.start_line_for_loc(
+                    node.statements.body[node.statements.body.length - 1].location
+                )!
+            )
+        );
+
+        const top_iseq = new InstructionSequence("<main>", this.path, this.start_line_for_loc(node.location)!, "top", lexical_scope, null, this.compiler_options);
 
         node.locals.forEach((local: string) => {
             top_iseq.local_table.plain(local);
@@ -262,7 +328,29 @@ export class Compiler extends Visitor {
     }
 
     override visitArgumentsNode(node: ArgumentsNode) {
-        this.visitAll(node.arguments_);
+        let found_splat = false;
+
+        for (const argument of node.arguments_) {
+            this.visit(argument);
+
+            if (argument instanceof SplatNode) {
+                this.iseq.splatarray(!found_splat);
+
+                if (found_splat) {
+                    this.iseq.concatarray();
+                }
+
+                found_splat = true;
+            } else if (argument instanceof KeywordHashNode) {
+                // stop coalescing positional args
+                found_splat = false;
+            } else {
+                if (found_splat) {
+                    this.iseq.newarray(1);
+                    this.iseq.concatarray();
+                }
+            }
+        }
     }
 
     override visitCallNode(node: CallNode) {
@@ -283,42 +371,41 @@ export class Compiler extends Visitor {
         let argc = 0;
         let flags = 0;
         let kw_arg: string[] = [];
+        let found_splat = false;
+        let found_kwsplat = false;
 
         if (node.arguments_) {
-            argc = node.arguments_.arguments_.length;
             this.with_used(true, () => this.visit(node.arguments_!));
 
-            node.arguments_.arguments_.forEach((argument) => {
-                switch (argument.constructor.name) {
-                    case "SplatNode":
-                        flags |= CallDataFlag.ARGS_SPLAT;
-                        break;
-
-                    case "ForwardingArgumentsNode":
-                        flags |= CallDataFlag.ARGS_SPLAT;
-                        flags |= CallDataFlag.ARGS_BLOCKARG;
-                        break;
-
-                    case "KeywordHashNode":
-                        argc --;
-
-                        (argument as KeywordHashNode).elements.forEach((element) => {
-                            switch (element.constructor.name) {
-                                case "AssocNode":
-                                    flags |= CallDataFlag.KWARG;
-                                    const assoc_node = element as AssocNode;
-                                    kw_arg.push((assoc_node.key as SymbolNode).unescaped);
-                                    break;
-
-                                case "AssocSplatNode":
-                                    flags |= CallDataFlag.KW_SPLAT;
-                                    kw_arg.push("**");
-                                    break;
-                            }
-                        });
-                        break;
+            for (const argument of node.arguments_.arguments_) {
+                if (argument instanceof SplatNode) {
+                    flags |= CallDataFlag.ARGS_SPLAT;
+                    if (!found_splat) {
+                        argc ++;
+                    }
+                    found_splat = true;
+                } else if (argument instanceof ForwardingArgumentsNode) {
+                    argc ++; // is this correct?
+                    flags |= CallDataFlag.ARGS_SPLAT;
+                    flags |= CallDataFlag.ARGS_BLOCKARG;
+                } else if (argument instanceof KeywordHashNode) {
+                    for (const element of argument.elements) {
+                        if (element instanceof AssocNode) {
+                            flags |= CallDataFlag.KWARG;
+                            const assoc_node = element as AssocNode;
+                            kw_arg.push((assoc_node.key as SymbolNode).unescaped);
+                        } else if (element instanceof AssocSplatNode) {
+                            found_kwsplat = true;
+                            flags |= CallDataFlag.KW_SPLAT;
+                            kw_arg.push("**");
+                        }
+                    }
+                } else {
+                    if (!found_splat) {
+                        argc ++;
+                    }
                 }
-            });
+            }
         }
 
         let block_iseq = null;
@@ -359,7 +446,7 @@ export class Compiler extends Visitor {
     }
 
     override visitBlockNode(node: BlockNode): InstructionSequence {
-        return this.with_child_iseq(this.iseq.block_child_iseq(this.start_line_for_loc(node.location)!), () => {
+        return this.with_child_iseq(this.iseq.block_child_iseq(this.start_line_for_loc(node.location)!, this.lexical_scope_stack.current()!), () => {
             const begin_label = this.iseq.label();
             const end_label = this.iseq.label();
 
@@ -397,8 +484,7 @@ export class Compiler extends Visitor {
 
     override visitFloatNode(node: FloatNode) {
         if (this.used) {
-            const floatVal = this.text_for_loc(node.location);
-            this.iseq.putobject({ type: "Float", value: parseFloat(floatVal) });
+            this.iseq.putobject({ type: "Float", value: node.value });
         }
     }
 
@@ -520,7 +606,10 @@ export class Compiler extends Visitor {
         this.visitAll(node.elements);
 
         if (this.used) {
-            this.iseq.newarray(node.elements.length);
+            // don't wrap single-element arrays that only contain a splat node
+            if (node.elements.length !== 1 || !(node.elements[0] instanceof SplatNode)) {
+                this.iseq.newarray(node.elements.length);
+            }
         }
     }
 
@@ -569,8 +658,18 @@ export class Compiler extends Visitor {
     }
 
     override visitDefNode(node: DefNode) {
+        const lexical_scope = this.lexical_scope_stack.push(
+            new LexicalScope(
+                this.iseq.file,
+                this.start_line_for_loc(node.defKeywordLoc)!,
+                this.start_line_for_loc(
+                    (node.endKeywordLoc || node.body?.location)!
+                )!
+            )
+        );
+
         const name = node.name;
-        const method_iseq = this.iseq.method_child_iseq(name, this.start_line_for_loc(node.location)!);
+        const method_iseq = this.iseq.method_child_iseq(name, this.start_line_for_loc(node.location)!, lexical_scope);
 
         this.with_child_iseq(method_iseq, () => {
             node.locals.forEach((local) => {
@@ -590,16 +689,61 @@ export class Compiler extends Visitor {
             this.iseq.leave()
         })
 
+        const parameters_meta = this.get_parameters_meta(node.parameters);
+
         if (node.receiver) {
             this.with_used(true, () => this.visit(node.receiver!));
-            this.iseq.definesmethod(name, method_iseq)
+            this.iseq.definesmethod(name, method_iseq, parameters_meta, lexical_scope)
         } else {
-            this.iseq.definemethod(name, method_iseq);
+            this.iseq.definemethod(name, method_iseq, parameters_meta, lexical_scope);
         }
 
         if (this.used) {
             this.iseq.putobject({type: "Symbol", value: name});
         }
+    }
+
+    private get_parameters_meta(node: ParametersNode | null): ParameterMetadata[] {
+        if (!node) return []
+
+        const builder = new ParametersMetadataBuilder();
+        const children = node.childNodes();
+
+        for (const req of node.requireds as RequiredParameterNode[]) {
+            builder.req(req.name, children.indexOf(req));
+        }
+
+        for (const opt of node.optionals as OptionalParameterNode[]) {
+            builder.opt(opt.name, children.indexOf(opt));
+        }
+
+        if (node.rest) {
+            const rest = node.rest as RestParameterNode;
+            builder.rest(rest.name || "*", children.indexOf(rest));
+        }
+
+        for (const post of node.posts as RequiredParameterNode[]) {
+            builder.req(post.name, children.indexOf(post));
+        }
+
+        for (const keyword of node.keywords) {
+            if (keyword instanceof RequiredKeywordParameterNode) {
+                builder.keyreq(keyword.name, children.indexOf(keyword));
+            } else if (keyword instanceof OptionalKeywordParameterNode) {
+                builder.key(keyword.name, children.indexOf(keyword));
+            }
+        }
+
+        if (node.keywordRest) {
+            const keyword_rest = node.keywordRest as KeywordRestParameterNode;
+            builder.keyrest(keyword_rest.name || "**", children.indexOf(keyword_rest));
+        }
+
+        if (node.block) {
+            builder.block(node.block.name || "&", children.indexOf(node.block));
+        }
+
+        return builder.parameters;
     }
 
     // (required, optional = nil, *rest, post, keywords:, **keywordRest, &block)
@@ -734,6 +878,7 @@ export class Compiler extends Visitor {
     override visitSplatNode(node: SplatNode) {
         if (node.expression) {
             this.visit(node.expression);
+            this.iseq.splatarray(true);
         }
     }
 
@@ -852,7 +997,17 @@ export class Compiler extends Visitor {
     }
 
     override visitClassNode(node: ClassNode) {
-        const class_iseq = this.iseq.class_child_iseq(node.name, this.start_line_for_loc(node.location)!);
+        const lexical_scope = this.lexical_scope_stack.push(
+            new LexicalScope(
+                this.iseq.file,
+                this.start_line_for_loc(node.classKeywordLoc)!,
+                this.start_line_for_loc(node.endKeywordLoc)!,
+                this.lexical_scope_stack.current()
+            )
+        );
+
+        const class_iseq = this.iseq.class_child_iseq(node.name, this.start_line_for_loc(node.location)!, lexical_scope);
+
         this.with_child_iseq(class_iseq, () => {
             if (node.body) {
                 this.with_used(true, () => this.visit(node.body!));
@@ -891,7 +1046,17 @@ export class Compiler extends Visitor {
     }
 
     override visitModuleNode(node: ModuleNode) {
-        const module_iseq = this.iseq.module_child_iseq(node.name, this.start_line_for_loc(node.location)!);
+        const lexical_scope = this.lexical_scope_stack.push(
+            new LexicalScope(
+                this.iseq.file,
+                this.start_line_for_loc(node.moduleKeywordLoc)!,
+                this.start_line_for_loc(node.endKeywordLoc)!,
+                this.lexical_scope_stack.current()
+            )
+        );
+
+        const module_iseq = this.iseq.module_child_iseq(node.name, this.start_line_for_loc(node.location)!, lexical_scope);
+
         this.with_child_iseq(module_iseq, () => {
             if (node.body) {
                 this.with_used(true, () => this.visit(node.body!));
@@ -1030,7 +1195,7 @@ export class Compiler extends Visitor {
         this.local_depth ++;
 
         if (node.rescueClause) {
-            const rescue_iseq = this.iseq.rescue_child_iseq(this.start_line_for_loc(node.location)!);
+            const rescue_iseq = this.iseq.rescue_child_iseq(this.start_line_for_loc(node.location)!, this.lexical_scope_stack.current());
 
             this.with_child_iseq(rescue_iseq, () => {
                 this.with_used(true, () => this.visit(node.rescueClause!));
@@ -1134,10 +1299,13 @@ export class Compiler extends Visitor {
     }
 
     override visitInterpolatedStringNode(node: InterpolatedStringNode) {
-        this.with_used(true, () => this.visitAll(node.parts));
-        this.iseq.dup();
-        this.iseq.objtostring(MethodCallData.create("to_s", 0, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE));
-        this.iseq.anytostring()
+        for (const part of node.parts) {
+            this.with_used(true, () => this.visit(part));
+            this.iseq.dup();
+            this.iseq.objtostring(MethodCallData.create("to_s", 0, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE));
+            this.iseq.anytostring()
+        }
+
         this.iseq.concatstrings(node.parts.length);
 
         if (!this.used) {
@@ -1146,10 +1314,13 @@ export class Compiler extends Visitor {
     }
 
     override visitInterpolatedSymbolNode(node: InterpolatedSymbolNode) {
-        this.with_used(true, () => this.visitAll(node.parts));
-        this.iseq.dup();
-        this.iseq.objtostring(MethodCallData.create("to_s", 0, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE));
-        this.iseq.anytostring();
+        for (const part of node.parts) {
+            this.with_used(true, () => this.visit(part));
+            this.iseq.dup();
+            this.iseq.objtostring(MethodCallData.create("to_s", 0, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE));
+            this.iseq.anytostring()
+        }
+
         this.iseq.concatstrings(node.parts.length);
         this.iseq.intern();
     }
@@ -1309,26 +1480,6 @@ export class Compiler extends Visitor {
             const value = (element as AssocNode | AssocSplatNode).value;
             if (value) this.visit(value);
         }
-
-        // if (node.elements.length > 0) {
-        //     for (const element of node.elements) {
-        //         if (element.constructor.name === "AssocSplatNode") {
-        //             const splat_node = element as AssocSplatNode;
-        //             if (splat_node.value) {
-        //                 this.with_used(true, () => this.visit(splat_node.value!));
-        //             }
-        //         } else if (element.constructor.name === "AssocNode") {
-        //             const assoc_node = element as AssocNode;
-        //             if (assoc_node.value) {
-        //                 // The CallData object maintains information about the kwargs
-        //                 // a method was called with, meaning we don't have to visit the
-        //                 // keys here, just the values. The send instruction will sort
-        //                 // everything out.
-        //                 this.with_used(true, () => this.visit(assoc_node.value!));
-        //             }
-        //         }
-        //     }
-        // }
     }
 
     override visitInstanceVariableOrWriteNode(node: InstanceVariableOrWriteNode) {
@@ -1359,10 +1510,19 @@ export class Compiler extends Visitor {
     }
 
     override visitSingletonClassNode(node: SingletonClassNode) {
+        const lexical_scope = this.lexical_scope_stack.push(
+            new LexicalScope(
+                this.iseq.file,
+                this.start_line_for_loc(node.classKeywordLoc)!,
+                this.start_line_for_loc(node.endKeywordLoc)!,
+                this.lexical_scope_stack.current()
+            )
+        );
+
         this.with_used(true, () => this.visit(node.expression));
         this.iseq.putnil()
 
-        const singleton_iseq = this.iseq.singleton_class_child_iseq(this.start_line_for_loc(node.location)!);
+        const singleton_iseq = this.iseq.singleton_class_child_iseq(this.start_line_for_loc(node.location)!, lexical_scope);
 
         this.with_child_iseq(singleton_iseq, () => {
             if (node.body) {
@@ -1497,7 +1657,16 @@ export class Compiler extends Visitor {
     }
 
     override visitLambdaNode(node: LambdaNode) {
-        const lambda_iseq = this.iseq.block_child_iseq(this.start_line_for_loc(node.location)!);
+        const lexical_scope = this.lexical_scope_stack.push(
+            new LexicalScope(
+                this.iseq.file,
+                this.start_line_for_loc(node.openingLoc)!,
+                this.start_line_for_loc(node.closingLoc)!,
+                this.lexical_scope_stack.current()
+            )
+        );
+
+        const lambda_iseq = this.iseq.block_child_iseq(this.start_line_for_loc(node.location)!, lexical_scope);
 
         this.with_child_iseq(lambda_iseq, () => {
             if (node.parameters) {
@@ -1606,10 +1775,13 @@ export class Compiler extends Visitor {
         let flags = CallDataFlag.FCALL | CallDataFlag.SUPER | CallDataFlag.ZSUPER;
         let block_iseq = null;
 
-        if (node.block) {
-          block_iseq = this.with_used<InstructionSequence>(true, () => this.visitBlockNode(node.block as BlockNode));
+        if (node.block instanceof BlockNode) {
+            block_iseq = this.with_used<InstructionSequence>(true, () => this.visitBlockNode(node.block as BlockNode));
+        } else if (node.block instanceof BlockArgumentNode) {
+            this.with_used(true, () => this.visit(node.block as BlockArgumentNode));
+            flags |= CallDataFlag.ARGS_BLOCKARG;
         } else {
-          flags |= CallDataFlag.ARGS_SIMPLE;
+            flags |= CallDataFlag.ARGS_SIMPLE;
         }
 
         this.iseq.putself();

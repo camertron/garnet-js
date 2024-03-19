@@ -22,6 +22,16 @@ export class Hash {
         return val;
     }
 
+    static from_kwargs(kwargs: Kwargs): RValue {
+        const result = new Hash();
+
+        for (const [k, v] of kwargs) {
+            result.set(Runtime.intern(k), v);
+        }
+
+        return Hash.from_hash(result);
+    }
+
     private static klass_: RValue;
 
     static get klass(): RValue {
@@ -351,7 +361,52 @@ export const init = () => {
             return Integer.get(hash);
         });
 
-        klass.define_native_singleton_method("[]", (_self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("==", (self: RValue, args: RValue[]): RValue => {
+            const hash = self.get_data<Hash>();
+            const other_hash_rval = args[0];
+
+            if (other_hash_rval.klass !== Hash.klass) {
+                return Qfalse;
+            }
+
+            const other_hash = other_hash_rval.get_data<Hash>();
+            const seen_keys = new Set<number>();
+
+            for (const [k_hash, _] of hash.keys) {
+                seen_keys.add(k_hash);
+
+                if (!other_hash.keys.has(k_hash)) {
+                    return Qfalse;
+                }
+
+                const value = hash.values.get(k_hash)!;
+                const other_value = other_hash.values.get(k_hash)!;
+
+                if (!Object.send(value, "==", [other_value]).is_truthy()) {
+                    return Qfalse;
+                }
+            }
+
+            for (const [k_hash, _] of other_hash.keys) {
+                // already compared the values for this key
+                if (seen_keys.has(k_hash)) continue;
+
+                if (!hash.keys.has(k_hash)) {
+                    return Qfalse;
+                }
+
+                const value = hash.values.get(k_hash)!;
+                const other_value = other_hash.values.get(k_hash)!;
+
+                if (!Object.send(value, "==", [other_value]).is_truthy()) {
+                    return Qfalse;
+                }
+            }
+
+            return Qtrue;
+        });
+
+        klass.define_native_singleton_method("[]", (_self: RValue, args: RValue[], kwargs?: Kwargs): RValue => {
             const hash = new Hash();
 
             if (args.length === 1 && args[0].klass === Hash.klass) {
@@ -375,6 +430,12 @@ export const init = () => {
                     } else {
                         throw new ArgumentError(`wrong element type ${arg.klass.get_data<Class>().name} at ${i} (expected array)`)
                     }
+                }
+            } else if (args.length === 1 && kwargs) {
+                hash.set(args[0], Hash.from_kwargs(kwargs));
+            } else if (args.length === 0 && kwargs) {
+                for (const [k, v] of kwargs) {
+                    hash.set(Runtime.intern(k), v);
                 }
             } else {
                 if (args.length % 2 != 0) {

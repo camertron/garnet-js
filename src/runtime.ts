@@ -1,5 +1,5 @@
 import { InstructionSequence } from "./instruction_sequence";
-import { Compiler } from "./compiler";
+import { Compiler, LexicalScope } from "./compiler";
 import { LoadError, TypeError, NoMethodError, NotImplementedError, NameError } from "./errors";
 import { CallingConvention, ExecutionContext } from "./execution_context";
 import { init as array_init } from "./runtime/array";
@@ -37,11 +37,13 @@ import { init as regexp_init} from "./runtime/regexp";
 import { init as encoding_init } from "./runtime/encoding";
 import { init as struct_init } from "./runtime/struct";
 import { init as rational_init } from "./runtime/rational";
+import { init as enumerator_init } from "./runtime/enumerator";
 import { obj_id_hash } from "./util/object_id";
 import { String } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
 import { Symbol } from "./runtime/symbol";
 import * as tty from "node:tty";
+import { ParameterMetadata } from "./runtime/parameter-meta";
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
@@ -266,7 +268,6 @@ export class Runtime {
     }
 
     static require(path: string): boolean {
-        // console.log(`Require ${path}`);
         const ec = ExecutionContext.current;
         const loaded_features = ec.globals['$"'].get_data<RubyArray>().elements;
         const full_path = this.find_on_load_path(path) || path;
@@ -294,8 +295,6 @@ export class Runtime {
     }
 
     static require_relative(path: string, requiring_path: string) {
-        // console.log(`Require relative ${path}`);
-
         let require_path = path;
 
         if (vmfs.is_relative(path)) {
@@ -307,7 +306,6 @@ export class Runtime {
     }
 
     static load(path: string): boolean {
-        // console.log(`Load ${path}`);
         const ec = ExecutionContext.current;
         const full_path = vmfs.is_relative(path) ? this.find_on_load_path(path, false) : path;
 
@@ -372,7 +370,7 @@ export enum Visibility {
 export abstract class Callable {
     public visibility: Visibility;
 
-    abstract call(context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: CallData): RValue;
+abstract call(context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: CallData): RValue;
 }
 
 export class InterpretedCallable extends Callable {
@@ -380,14 +378,18 @@ export class InterpretedCallable extends Callable {
     public iseq: InstructionSequence;
     public nesting: RValue[];
     public owner?: RValue;
+    public parameters_meta: ParameterMetadata[];
+    public lexical_scope: LexicalScope;
 
-    constructor(name: string, iseq: InstructionSequence, visibility: Visibility, nesting: RValue[], owner?: RValue) {
+    constructor(name: string, iseq: InstructionSequence, visibility: Visibility, nesting: RValue[], parameters_meta: ParameterMetadata[], lexical_scope: LexicalScope, owner?: RValue) {
         super();
 
         this.name = name;
         this.iseq = iseq;
         this.visibility = visibility;
         this.nesting = nesting;
+        this.parameters_meta = parameters_meta;
+        this.lexical_scope = lexical_scope;
         this.owner = owner;
     }
 
@@ -410,6 +412,16 @@ export class NativeCallable extends Callable {
     }
 
     call(_context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData): RValue {
+        // Native methods expect to be called with all positional arguments, so we unfurl splats here
+        if (call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
+            // splatted array is always the last element
+            const splat_arr = args[call_data.argc - 1];
+
+            if (splat_arr && splat_arr.klass === RubyArray.klass) {
+                args.splice(call_data.argc - 1, 1, ...splat_arr.get_data<RubyArray>().elements);
+            }
+        }
+
         return this.method(receiver, args, kwargs, block, call_data);
     }
 }
@@ -497,16 +509,16 @@ export class Module {
         this.autoloads.set(constant, file);
     }
 
-    define_method(name: string, body: InstructionSequence) {
-        this.methods[name] = new InterpretedCallable(name, body, this.default_visibility, ExecutionContext.current.frame!.nesting, this.rval);
+    define_method(name: string, body: InstructionSequence, parameters_meta: ParameterMetadata[], lexical_scope: LexicalScope) {
+        this.methods[name] = new InterpretedCallable(name, body, this.default_visibility, ExecutionContext.current.frame!.nesting, parameters_meta, lexical_scope, this.rval);
     }
 
     define_native_method(name: string, body: NativeMethod, visibility?: Visibility) {
         this.methods[name] = new NativeCallable(body, visibility, this);
     }
 
-    define_singleton_method(name: string, body: InstructionSequence) {
-        (this.get_singleton_class().get_data<Module>()).define_method(name, body);
+    define_singleton_method(name: string, body: InstructionSequence, parameters_meta: ParameterMetadata[], lexical_scope: LexicalScope) {
+        (this.get_singleton_class().get_data<Module>()).define_method(name, body, parameters_meta, lexical_scope);
     }
 
     define_native_singleton_method(name: string, body: NativeMethod) {
@@ -1185,6 +1197,7 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
         const io = self.get_data<IO>();
 
         for (const arg of args) {
+            // this shouldn't be necessary anymore?
             if (arg.klass === RubyArray.klass && call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
                 for (const elem of arg.get_data<RubyArray>().elements) {
                     io.puts(Object.send(elem, "to_s").get_data<string>());
@@ -1201,6 +1214,7 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
         const io = self.get_data<IO>();
 
         for (const arg of args) {
+            // this shouldn't be necessary anymore?
             if (arg.klass === RubyArray.klass && call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
                 for (const elem of arg.get_data<RubyArray>().elements) {
                     io.write(Object.send(elem, "to_s").get_data<string>());
@@ -1240,6 +1254,7 @@ export const init = async () => {
     float_init();
     symbol_init();
     enumerable_init();
+    enumerator_init();
     hash_init();
     proc_init();
     error_init();

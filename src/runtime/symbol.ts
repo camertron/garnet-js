@@ -59,6 +59,11 @@ export const init = () => {
             return Integer.new(hash_string(self.get_data<string>()));
         });
 
+        klass.define_native_method("==", (self: RValue, args: RValue[]): RValue => {
+            if (args[0].klass != Symbol.klass) return Qfalse;
+            return args[0].get_data<string>() === self.get_data<string>() ? Qtrue : Qfalse;
+        });
+
         klass.define_native_method("===", (self: RValue, args: RValue[]): RValue => {
             if (args[0].klass != Symbol.klass) return Qfalse;
             return args[0].get_data<string>() === self.get_data<string>() ? Qtrue : Qfalse;

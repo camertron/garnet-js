@@ -1,13 +1,24 @@
 import {beforeAll, describe, expect, test} from '@jest/globals';
 import * as Garnet from "../garnet";
 import { TrueClass } from '../runtime';
-import { LoadError } from '../errors';
 import { RubyArray } from "../runtime/array";
 import { Symbol } from "../runtime/symbol";
 
 beforeAll(() => {
     return Garnet.init();
 });
+
+const evaluate = async (code: string): Promise<Garnet.RValue> => {
+    try {
+        return await Garnet.unsafe_evaluate(code);
+    } catch (e) {
+        if (e instanceof Garnet.RValue) {
+            throw e.get_data<Error>();
+        }
+
+        throw e;
+    }
+};
 
 // Can't get this to work with ts
 // expect.extend({
@@ -47,7 +58,7 @@ describe("begin / rescue / end", () => {
             outcome
         `;
 
-        const result = await Garnet.evaluate(code);
+        const result = await evaluate(code);
         expect(result.klass).toBe(Symbol.klass);
         expect(result.get_data<string>()).toEqual("handled");
     });
@@ -68,7 +79,7 @@ describe("begin / rescue / end", () => {
             [handled_name_error, handled_load_error]
         `;
 
-        const result = await Garnet.evaluate(code);
+        const result = await evaluate(code);
         expect(result.klass).toBe(RubyArray.klass);
         const results = result.get_data<RubyArray>().elements.map((val) => val.get_data<boolean>());
         expect(results).toEqual([false, true]);
@@ -86,7 +97,7 @@ describe("begin / rescue / end", () => {
             outcome
         `;
 
-        const result = await Garnet.evaluate(code);
+        const result = await evaluate(code);
         expect(result.klass).toBe(Symbol.klass);
         expect(result.get_data<string>()).toEqual("handled");
     });
@@ -103,7 +114,7 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        const result = await Garnet.evaluate(code);
+        const result = await evaluate(code);
         expect(result.klass).toBe(Symbol.klass);
         expect(result.get_data<string>()).toEqual("handled");
     });
@@ -117,7 +128,7 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        const result = await Garnet.evaluate(code);
+        const result = await evaluate(code);
         expect(result.klass).toBe(Symbol.klass);
         expect(result.get_data<string>()).toEqual("no_error");
     });
@@ -132,7 +143,7 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        const result = await Garnet.evaluate(code);
+        const result = await evaluate(code);
         expect(result.klass).toBe(Symbol.klass);
         expect(result.get_data<string>()).toEqual("handled");
     });
@@ -148,7 +159,7 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        const result = await Garnet.evaluate(code);
+        const result = await evaluate(code);
         expect(result.klass).toBe(Symbol.klass);
         expect(result.get_data<string>()).toEqual("no_error");
     });
@@ -165,12 +176,12 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        const result = await Garnet.evaluate(code);
+        const result = await evaluate(code);
         expect(result.klass).toBe(Symbol.klass);
         expect(result.get_data<string>()).toEqual("handled");
     });
 
-    test("re-raises unhandled errors", () => {
+    test("re-raises unhandled errors", async () => {
         const code = `
             begin
                 require "foo"
@@ -180,7 +191,7 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        expect(() => Garnet.evaluate(code)).toThrow(LoadError);
+        expect(() => evaluate(code)).rejects.toThrow(Garnet.LoadError);
     });
 
     test("rescues StandardError by default if no error class is provided", () => {
@@ -193,7 +204,7 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        expect(() => Garnet.evaluate(code)).toThrow(LoadError);
+        expect(() => evaluate(code)).rejects.toThrow(Garnet.LoadError);
     });
 
     test("runs the ensure clause on error", async () => {
@@ -211,7 +222,7 @@ describe("begin / rescue / end", () => {
             ensure_reached
         `;
 
-        const result = await Garnet.evaluate(code);
+        const result = await evaluate(code);
         expect(result.klass).toBe(TrueClass);
     });
 
@@ -229,7 +240,7 @@ describe("begin / rescue / end", () => {
             ensure_reached
         `;
 
-        const result = await Garnet.evaluate(code);
+        const result = await evaluate(code);
         expect(result.klass).toBe(TrueClass);
     });
 
@@ -249,7 +260,7 @@ describe("begin / rescue / end", () => {
             ensure_reached
         `;
 
-        const result = await Garnet.evaluate(code);
+        const result = await evaluate(code);
         expect(result.klass).toBe(TrueClass);
     });
 
@@ -262,7 +273,7 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        const result = await Garnet.evaluate(code);
+        const result = await evaluate(code);
         expect(result.klass).toBe(Garnet.String.klass);
         expect(result.get_data<string>()).toEqual("cannot load such file -- foo");
     });

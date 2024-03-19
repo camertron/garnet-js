@@ -1,10 +1,14 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Qnil, RValue } from "../runtime";
+import { Class, Qnil, RValue } from "../runtime";
 import { Object } from "../runtime/object";
 import { TypeError } from "../errors";
 import { RubyArray } from "../runtime/array";
 
+// `splatarray` coerces the array object at the top of the stack into Array
+// by calling `to_a`. It pushes a duplicate of the array if there is a flag,
+// and the original array if there isn't one.
+//
 export default class SplatArray extends Instruction {
     private flag: boolean;
 
@@ -15,29 +19,27 @@ export default class SplatArray extends Instruction {
 
     call(context: ExecutionContext): ExecutionResult {
         const value = context.pop()!;
-        let arr: RValue;
 
         if (value.klass === RubyArray.klass) {
-            arr = RubyArray.new([...value?.get_data<RubyArray>().elements]);
-        } else if (value === Qnil) {
-            arr = RubyArray.new([]);
+            if (this.flag) {
+                context.push(RubyArray.new([...value.get_data<RubyArray>().elements]))
+            } else {
+                context.push(value);
+            }
         } else {
             if (Object.respond_to(value, "to_a")) {
-                const result = Object.send(value, "to_a");
+                const arr = Object.send(value, "to_a");
 
-                if (result === Qnil) {
-                    arr = RubyArray.new([value]);
-                } else if (result.klass !== RubyArray.klass) {
-                    throw new TypeError("expected to_a to return an Array");
+                if (arr.klass === RubyArray.klass) {
+                    context.push(arr);
                 } else {
-                    arr = result;
+                    const class_name = value.klass.get_data<Class>().name;
+                    throw new TypeError(`can't convert ${class_name} to Array (${class_name}#to_a gives ${arr.klass.get_data<Class>().name})`);
                 }
             } else {
-                arr = RubyArray.new([value]);
+                context.push(RubyArray.new([value]));
             }
         }
-
-        context.push(arr);
 
         return null;
     }

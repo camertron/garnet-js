@@ -9,6 +9,7 @@ import { Range } from "./range";
 import { Hash } from "./hash";
 import { ArgumentError, NameError, TypeError } from "../errors";
 import { Proc } from "./proc";
+import { Enumerator } from "./enumerator";
 
 export class RubyArray {
     private static klass_: RValue;
@@ -24,7 +25,7 @@ export class RubyArray {
             if (klass) {
                 this.klass_ = klass;
             } else {
-                throw new NameError(`missing constant Array`);
+                throw new NameError("missing constant Array");
             }
         }
 
@@ -100,6 +101,8 @@ export const init = () => {
             return String.new(`[${strings.join(", ")}]`);
         });
 
+        klass.alias_method("to_s", "inspect");
+
         klass.define_native_method("each", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
             if (block) {
                 try {
@@ -118,7 +121,13 @@ export const init = () => {
                     }
                 }
             } else {
-                // @TODO: return an Enumerator
+                const elements = self.get_data<RubyArray>().elements;
+
+                return Enumerator.for_native_generator(function* () {
+                    for (const element of elements) {
+                        yield element;
+                    }
+                });
             }
 
             return self;
@@ -337,9 +346,16 @@ export const init = () => {
         }
 
         klass.define_native_method("join", (self: RValue, args: RValue[]): RValue => {
-            Runtime.assert_type(args[0], String.klass);
-            const separator = args[0] || ExecutionContext.current.globals["$,"];
-            const separator_str = separator.is_truthy() ? separator.get_data<string>() : "";
+            const separator = args[0] || ExecutionContext.current.globals["$,"] || Qnil;
+            let separator_str;
+
+            if (separator.is_truthy()) {
+                Runtime.assert_type(separator, String.klass);
+                separator_str = separator.get_data<string>();
+            } else {
+                separator_str = "";
+            }
+
             const result = stringify_and_flatten(self.get_data<RubyArray>().elements).join(separator_str);
             return String.new(result);
         });
@@ -555,6 +571,36 @@ export const init = () => {
         klass.define_native_method("reverse!", (self: RValue): RValue => {
             self.get_data<RubyArray>().elements.reverse();
             return self;
+        });
+
+        klass.define_native_method("==", (self: RValue, args: RValue[]): RValue => {
+            const array = self.get_data<RubyArray>().elements;
+            const other_array = args[0];
+
+            if (!Object.respond_to(other_array, "size")) {
+                return Qfalse;
+            }
+
+            const other_array_size = Object.send(other_array, "size");
+
+            if (other_array_size.klass !== Integer.klass) {
+                return Qfalse;
+            }
+
+            if (array.length !== other_array_size.get_data<number>()) {
+                return Qfalse;
+            }
+
+            for (let i = 0; i < array.length; i ++) {
+                const obj = array[i];
+                const other_obj = Object.send(other_array, "[]", [Integer.get(i)]);
+
+                if (!Object.send(obj, "==", [other_obj]).is_truthy()) {
+                    return Qfalse;
+                }
+            }
+
+            return Qtrue;
         });
     });
 

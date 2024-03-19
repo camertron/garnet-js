@@ -1,12 +1,36 @@
 import { BreakError, ExecutionContext } from "../execution_context";
-import { Module, Qnil, RValue, Runtime, Qfalse, Qtrue, Kwargs } from "../runtime"
+import { Module, Qnil, RValue, Runtime, Qfalse, Qtrue, Kwargs, Class, ObjectClass } from "../runtime"
 import { spaceship_compare } from "./comparable";
 import { Integer } from "./integer";
 import { Object } from "./object";
 import { Proc } from "./proc";
 import { RubyArray } from "../runtime/array";
+import { ArgumentError, NameError } from "../errors";
+import { Lazy } from "./enumerator";
+
+export class Enumerable {
+    private static module_: RValue;
+
+    static get module(): RValue {
+        if (!this.module_) {
+            const klass = Object.find_constant("Enumerable");
+
+            if (klass) {
+                this.module_ = klass;
+            } else {
+                throw new NameError("missing constant Enumerable");
+            }
+        }
+
+        return this.module_;
+    }
+}
+
+let inited = false;
 
 export const init = () => {
+    if (inited) return;
+
     Runtime.define_module("Enumerable", (mod: Module) => {
         mod.define_native_method("map", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
             if (block) {
@@ -58,19 +82,20 @@ export const init = () => {
         mod.define_native_method("any?", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
             try {
                 const proc = block ? block.get_data<Proc>() : null;
+                let found = false;
 
                 Object.send(self, "each", [], undefined, Proc.from_native_fn(ExecutionContext.current, (_self: RValue, args: RValue[]): RValue => {
                     const item = proc ? proc.call(ExecutionContext.current, args) : args[0];
 
                     if (item.is_truthy()) {
-                        throw new BreakError(Qtrue);
+                        found = true;
+                        throw new BreakError(Qnil);
                     }
 
                     return Qnil;
                 }));
 
-                // no match found
-                return Qfalse;
+                return found ? Qtrue : Qfalse;
             } catch (e) {
                 if (e instanceof BreakError) {
                     // match found, return value
@@ -205,5 +230,54 @@ export const init = () => {
                 return Qnil;
             }
         });
+
+        mod.define_native_method("first", (self: RValue, args: RValue[]): RValue => {
+            const found: RValue[] = [];
+            let count: number;
+
+            if (args.length > 0) {
+                count = args[0].get_data<number>();
+
+                if (count < 0) {
+                    throw new ArgumentError("attempt to take negative size");
+                }
+            } else {
+                count = 1;
+            }
+
+            if (count === 0) {
+                return RubyArray.new([]);
+            }
+
+            try {
+                Object.send(self, "each", [], undefined, Proc.from_native_fn(ExecutionContext.current, (_self: RValue, args: RValue[]): RValue => {
+                    found.push(args[0]);
+
+                    if (found.length === count) {
+                        throw new BreakError(Qnil);
+                    }
+
+                    return Qnil;
+                }));
+            } catch (e) {
+                if (!(e instanceof BreakError)) {
+                    throw e;
+                }
+            }
+
+            // Only return an array if a length argument was provided.
+            // If no length argument, return the first item not wrapped in an array.
+            if (args.length > 0) {
+                return RubyArray.new(found);
+            } else {
+                return found[0];
+            }
+        });
+
+        mod.define_native_method("lazy", (self: RValue): RValue => {
+            return Lazy.new(self);
+        });
     });
+
+    inited = true;
 };

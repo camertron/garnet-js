@@ -1,5 +1,4 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
-import { Frame } from "../frame";
 import Instruction from "../instruction";
 
 export default class SetLocal extends Instruction {
@@ -14,6 +13,7 @@ export default class SetLocal extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
+        const local = context.frame?.frame_at(context, this.depth)?.iseq.local_table.locals[this.index]
         const value = context.pop()!;
         context.local_set(this.index, this.depth, value);
         return null;

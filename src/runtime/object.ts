@@ -164,7 +164,11 @@ export class Object {
     }
 
     static find_constant(name: string): RValue | null {
-        return ObjectClass.get_data<Class>().find_constant(name);
+        return this.find_constant_under(ObjectClass, name);
+    }
+
+    static find_constant_under(mod: RValue, name: string): RValue | null {
+        return mod.get_data<Module>().find_constant(name);
     }
 
     static new() {

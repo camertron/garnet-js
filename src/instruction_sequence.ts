@@ -60,6 +60,9 @@ import SetClassVariable from "./insns/setclassvariable";
 import GetClassVariable from "./insns/getclassvariable";
 import SplatArray from "./insns/splatarray";
 import GetBlockParamProxy from "./insns/getblockparamproxy";
+import ConcatArray from "./insns/concatarray";
+import { ParameterMetadata } from "./runtime/parameter-meta";
+import { LexicalScope } from "./compiler";
 
 class Node {
     public instruction: Instruction;
@@ -357,6 +360,7 @@ export class InstructionSequence {
     public file: string;
     public line: number;
     public type: string;
+    public lexical_scope: LexicalScope;
     public parent_iseq: InstructionSequence | null;
     public options: CompilerOptions
 
@@ -370,11 +374,12 @@ export class InstructionSequence {
     public storage_index: number;
     public stack: Stack;
 
-    constructor(name: string, file: string, line: number, type: string, parent_iseq: InstructionSequence | null = null, options: CompilerOptions) {
+    constructor(name: string, file: string, line: number, type: string, lexical_scope: LexicalScope, parent_iseq: InstructionSequence | null = null, options: CompilerOptions) {
         this.name = name;
         this.file = file;
         this.line = line;
         this.type = type;
+        this.lexical_scope = lexical_scope;
         this.parent_iseq = parent_iseq;
 
         this.argument_size = 0;
@@ -551,12 +556,12 @@ export class InstructionSequence {
         this.push(new Send(calldata, block_iseq));
     }
 
-    definemethod(name: string, method_iseq: InstructionSequence) {
-        this.push(new DefineMethod(name, method_iseq));
+    definemethod(name: string, method_iseq: InstructionSequence, parameters_meta: ParameterMetadata[], lexical_scope: LexicalScope) {
+        this.push(new DefineMethod(name, method_iseq, parameters_meta, lexical_scope));
     }
 
-    definesmethod(name: string, method_iseq: InstructionSequence) {
-        this.push(new DefineSMethod(name, method_iseq));
+    definesmethod(name: string, method_iseq: InstructionSequence, parameters_meta: ParameterMetadata[], lexical_scope: LexicalScope) {
+        this.push(new DefineSMethod(name, method_iseq, parameters_meta, lexical_scope));
     }
 
     defineclass(name: string, iseq: InstructionSequence, flags: number) {
@@ -669,19 +674,23 @@ export class InstructionSequence {
         this.push(new SplatArray(flag));
     }
 
+    concatarray() {
+        this.push(new ConcatArray());
+    }
+
     getblockparamproxy(index: number, depth: number) {
         this.push(new GetBlockParamProxy(index, depth));
     }
 
-    private child_iseq(name: string, line: number, type: string): InstructionSequence {
-        return new InstructionSequence(name, this.file, line, type, this, this.options);
+    private child_iseq(name: string, line: number, type: string, lexical_scope: LexicalScope): InstructionSequence {
+        return new InstructionSequence(name, this.file, line, type, lexical_scope, this, this.options);
     }
 
-    method_child_iseq(name: string, line: number) {
-        return this.child_iseq(name, line, "method");
+    method_child_iseq(name: string, line: number, lexical_scope: LexicalScope) {
+        return this.child_iseq(name, line, "method", lexical_scope);
     }
 
-    block_child_iseq(line: number): InstructionSequence {
+    block_child_iseq(line: number, lexical_scope: LexicalScope): InstructionSequence {
         let current: InstructionSequence = this;
 
         while (current.type == "block") {
@@ -689,23 +698,23 @@ export class InstructionSequence {
             current = current.parent_iseq;
         }
 
-        return this.child_iseq(`block in ${current.name}`, line, "block");
+        return this.child_iseq(`block in ${current.name}`, line, "block", lexical_scope);
     }
 
-    class_child_iseq(name: string, line: number): InstructionSequence {
-        return this.child_iseq(`<class:${name}>`, line, "class");
+    class_child_iseq(name: string, line: number, lexical_scope: LexicalScope): InstructionSequence {
+        return this.child_iseq(`<class:${name}>`, line, "class", lexical_scope);
     }
 
-    module_child_iseq(name: string, line: number) {
-        return this.child_iseq(`<module:${name}>`, line, "class");
+    module_child_iseq(name: string, line: number, lexical_scope: LexicalScope) {
+        return this.child_iseq(`<module:${name}>`, line, "class", lexical_scope);
     }
 
-    singleton_class_child_iseq(line: number) {
-        return this.child_iseq("singleton class", line, "class");
+    singleton_class_child_iseq(line: number, lexical_scope: LexicalScope) {
+        return this.child_iseq("singleton class", line, "class", lexical_scope);
     }
 
-    rescue_child_iseq(line: number): InstructionSequence {
-        return this.child_iseq(`rescue in ${this.name}`, line, "rescue");
+    rescue_child_iseq(line: number, lexical_scope: LexicalScope): InstructionSequence {
+        return this.child_iseq(`rescue in ${this.name}`, line, "rescue", lexical_scope);
     }
 
     compile() {

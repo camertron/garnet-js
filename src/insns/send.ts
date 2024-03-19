@@ -1,12 +1,12 @@
 import { MethodCallData, CallDataFlag } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
+import { Qtrue, RubyArray } from "../garnet";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { Kwargs, RValue } from "../runtime";
+import { Class, Kwargs, RValue } from "../runtime";
 import { Hash } from "../runtime/hash";
 import { Object } from "../runtime/object"
 import { Proc } from "../runtime/proc";
-import { RubyArray } from "../runtime/array";
 
 export default class Send extends Instruction {
     public call_data: MethodCallData;
@@ -49,20 +49,9 @@ export default class Send extends Instruction {
             }
         }
 
-        let args = context.popn(this.call_data.argc);
-
-        if (this.call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
-            // @TODO, ok but which arguments are splatted and which aren't?
-            args = args.flatMap((arg) => {
-                if (arg.klass === RubyArray.klass) {
-                    return arg.get_data<RubyArray>().elements;
-                } else {
-                    return arg;
-                }
-            })
-        }
-
+        const args = context.popn(this.call_data.argc);
         const receiver = context.pop()!;
+
         const result = Object.send(receiver, this.call_data, args, kwargs, block);
         context.push(result);
 

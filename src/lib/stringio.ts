@@ -1,4 +1,4 @@
-import { Class, NilClass, ObjectClass, RValue, Runtime } from "../runtime";
+import { Class, NilClass, ObjectClass, Qnil, RValue, Runtime } from "../runtime";
 import { Integer } from "../runtime/integer";
 import { String } from "../runtime/string"
 import { Object } from "../runtime/object"
@@ -32,6 +32,11 @@ export const init = () => {
     Runtime.define_class("StringIO", ObjectClass, (klass: Class) => {
         // @TODO: also include IO::generic_readable and IO::generic_writable
         klass.include(Object.find_constant("Enumerable")!);
+
+        klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
+            self.data = args.length > 0 ? args[0].get_data<string>() : "";
+            return Qnil;
+        })
 
         klass.define_native_method("write", (self: RValue, args: RValue[]): RValue => {
             let val;

@@ -34,7 +34,7 @@ export class Frame {
         context.stack[this.frame_at(context, depth)!.stack_index + index] = value;
     }
 
-    protected frame_at(context: ExecutionContext, depth: number): Frame | null {
+    /*protected*/ frame_at(context: ExecutionContext, depth: number): Frame | null {
         let current: Frame = context.frame!;
 
         for (let i = 0; i < depth; i ++) {

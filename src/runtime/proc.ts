@@ -2,7 +2,7 @@ import { BlockCallData, MethodCallData } from "../call_data";
 import { CallingConvention, ExecutionContext } from "../execution_context";
 import { BlockFrame } from "../frame";
 import { InstructionSequence } from "../instruction_sequence";
-import { RValue, Class, NativeMethod, Kwargs, ObjectClass, Runtime } from "../runtime";
+import { RValue, Class, NativeMethod, Kwargs, ObjectClass, Runtime, Callable } from "../runtime";
 import { Binding } from "./binding";
 import { Object } from "../runtime/object";
 import { Integer } from "./integer";
@@ -80,9 +80,9 @@ export class InterpretedProc extends Proc {
         this.calling_convention = calling_convention;
     }
 
-    call(context: ExecutionContext, args: RValue[], kwargs?: Kwargs, call_data?: BlockCallData): RValue {
+    call(context: ExecutionContext, args: RValue[], kwargs?: Kwargs, call_data?: BlockCallData, frame_callback?: (frame: BlockFrame) => void): RValue {
         call_data ||= BlockCallData.create(args.length);
-        return context.run_block_frame(call_data, this.calling_convention, this.iseq, this.binding, args, kwargs);
+        return context.run_block_frame(call_data, this.calling_convention, this.iseq, this.binding, args, kwargs, frame_callback);
     }
 
     with_binding(new_binding: Binding): InterpretedProc {

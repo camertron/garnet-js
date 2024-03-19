@@ -498,7 +498,7 @@ export const init = () => {
                     return data.substring(start_pos, end_pos + 1);
                 }
             } else if (args[0].klass === String.klass) {
-                if (data.indexOf(args[0].get_data<string>()) > 0) {
+                if (data.indexOf(args[0].get_data<string>()) > -1) {
                     return args[0].get_data<string>();
                 } else {
                     return null;
@@ -523,23 +523,23 @@ export const init = () => {
             }
         };
 
-        klass.define_native_method("slice", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("slice!", (self: RValue, args: RValue[]): RValue => {
             const substring = slice(self, args);
 
             if (substring) {
                 self.data = substring
                 return self;
-            }
+        }
 
             return Qnil;
         });
 
-        klass.alias_method("[]", "slice");
-
-        klass.define_native_method("slice!", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("slice", (self: RValue, args: RValue[]): RValue => {
             const substring = slice(self, args);
             return substring ? RubyString.new(substring) : Qnil;
         });
+
+        klass.alias_method("[]", "slice");
 
         klass.define_native_method("[]=", (self: RValue, args: RValue[]): RValue => {
             const data = self.get_data<string>();

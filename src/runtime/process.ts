@@ -27,7 +27,7 @@ export const init = () => {
 
         mod.define_native_singleton_method("clock_gettime", (_self: RValue, args: RValue[]): RValue => {
             if (args[0] === mod.constants["CLOCK_MONOTONIC"]) {
-                return Float.new(performance.now());
+                return Float.new(performance.now() / 1000);
             } else {
                 Runtime.assert_type(args[0], Integer.klass);
                 const clock_num = args[0].get_data<number>();

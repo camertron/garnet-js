@@ -62,12 +62,10 @@ export const init = () => {
             const begin_cmp = spaceship_compare(range.begin, args[0]);
             const end_cmp = spaceship_compare(range.end, args[0]);
 
-            if (begin_cmp && end_cmp) {
-                if (range.exclude_end) {
-                    return begin_cmp >= 0 && end_cmp < 0 ? Qtrue : Qfalse;
-                } else {
-                    return begin_cmp >= 0 && end_cmp <= 0 ? Qtrue : Qfalse;
-                }
+            if (range.exclude_end) {
+                return begin_cmp <= 0 && end_cmp > 0 ? Qtrue : Qfalse;
+            } else {
+                return begin_cmp <= 0 && end_cmp >= 0 ? Qtrue : Qfalse;
             }
 
             return Qnil;
@@ -80,7 +78,9 @@ export const init = () => {
             const dots = range.exclude_end ? "..." : "..";
 
             return String.new(`${begin_str}${dots}${end_str}`);
-        })
+        });
+
+        klass.alias_method("to_s", "inspect");
     });
 
     inited = true;

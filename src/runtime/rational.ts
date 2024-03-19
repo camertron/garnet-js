@@ -252,7 +252,7 @@ export const init = () => {
             switch (args[0].klass) {
                 case Integer.klass:
                 case Float.klass:
-                    n = args[0].get_data<number>();
+                    n = rational.n;
                     other_n = args[0].get_data<number>() * rational.d;
 
                     if (n > other_n) {

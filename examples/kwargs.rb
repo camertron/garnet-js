@@ -18,4 +18,6 @@ def foo(foo, foo2 = "foo2", foo3 = fooo, *foo_rest, bar:, baz: "baz", boo: booo,
   puts kw_rest.inspect
 end
 
-foo("foo", "foo2", "foo3", "foo4", "foo5", bar: "bar", extra: "extra", **{ moar: "moar" }, extra2: "extra2", **{ even_moar: "even_moar" })
+kwargs1 = { moar: "moar" }
+kwargs2 = { even_moar: "even_moar" }
+foo("foo", "foo2", "foo3", "foo4", "foo5", bar: "bar", extra: "extra", **kwargs1, extra2: "extra2", **kwargs2)

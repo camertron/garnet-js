@@ -26,7 +26,7 @@ export default class ExpandArray extends Instruction {
         object = (() => {
             if (object.klass == RubyArray.klass) {
                 // dup
-                return new RValue(RubyArray.klass, new Array([...object.get_data<RubyArray>().elements]));
+                return RubyArray.new([...object.get_data<RubyArray>().elements]);
             } else if (Object.send(object, "respond_to?", [Runtime.intern("to_ary"), Qtrue]).is_truthy()) {
                 return Object.send(object, "to_ary");
             } else {

@@ -86,6 +86,7 @@ export const init = () => {
     const LocalJumpErrorClass = Runtime.define_class("LocalJumpError", StandardErrorClass);
     const RuntimeErrorClass = Runtime.define_class("RuntimeError", StandardErrorClass);
     const IndexErrorClass = Runtime.define_class("IndexError", StandardErrorClass);
+    const StopIterationClass = Runtime.define_class("StopIteration", IndexErrorClass);
     const RangeErrorClass = Runtime.define_class("RangeError", StandardErrorClass);
     const EncodingErrorClass = Runtime.define_class("EncodingError", StandardErrorClass);
     const ThreadErrorClass = Runtime.define_class("ThreadErrorError", StandardErrorClass);
@@ -284,6 +285,19 @@ export class IndexError extends RubyError {
 
     get ruby_class(): RValue {
         return IndexError.ruby_class ||= Object.find_constant("IndexError")!;
+    }
+}
+
+export class StopIteration extends RubyError {
+    private static ruby_class: RValue | null;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "StopIteration";
+    }
+
+    get ruby_class(): RValue {
+        return StopIteration.ruby_class ||= Object.find_constant("StopIteration")!;
     }
 }
 

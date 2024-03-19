@@ -44,7 +44,7 @@ export default class Throw extends Instruction {
                 break;
 
             case ThrowType.RETURN:
-                throw new ReturnError(value);
+                throw new ReturnError(value, context.frame!.iseq.lexical_scope);
 
             case ThrowType.BREAK:
                 throw new BreakError(value);

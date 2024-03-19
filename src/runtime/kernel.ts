@@ -1,7 +1,7 @@
 import { is_node } from "../env";
 import { ArgumentError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
 import { BreakError, ExecutionContext, ThrowError } from "../execution_context";
-import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, Kwargs, Visibility } from "../runtime";
+import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, Kwargs, Visibility, Callable, ObjectClass, InterpretedCallable, NativeCallable } from "../runtime";
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
@@ -10,11 +10,12 @@ import { Proc } from "./proc";
 import { obj_id_hash } from "../util/object_id";
 import { BacktraceLocation } from "../lib/thread";
 import { Range } from "./range";
-import { MethodCallData } from "../call_data";
+import { CallDataFlag, MethodCallData } from "../call_data";
 import { RubyArray } from "../runtime/array";
 import { Symbol } from "../runtime/symbol";
 import { Hash } from "./hash";
 import { Float } from "./float";
+import { Enumerator } from "./enumerator";
 
 export class Kernel {
     public static exit_handlers: RValue[] = [];
@@ -35,7 +36,54 @@ export class Kernel {
     }
 }
 
+export class Method {
+    private static klass_: RValue;
+
+    static new(callable: Callable): RValue {
+        return new RValue(this.klass, new Method(callable));
+    }
+
+    static get klass(): RValue {
+        if (!this.klass_) {
+            const klass = Object.find_constant("Method");
+
+            if (klass) {
+                this.klass_ = klass;
+            } else {
+                throw new NameError("missing constant Method");
+            }
+        }
+
+        return this.klass_;
+    }
+
+    public callable: Callable;
+
+    constructor(callable: Callable) {
+        this.callable = callable;
+    }
+}
+
 export const init = async () => {
+    Runtime.define_class("Method", ObjectClass, (klass: Class) => {
+        klass.define_native_method("parameters", (self: RValue): RValue => {
+            const callable = self.get_data<Method>().callable;
+
+            if (!(callable instanceof InterpretedCallable)) {
+                throw new ArgumentError("getting parameters for native methods is not yet supported");
+            }
+
+            return RubyArray.new(
+                callable.parameters_meta.map((meta) => {
+                    return RubyArray.new([
+                        Runtime.intern(meta.type_str),
+                        Runtime.intern(meta.name)
+                    ]);
+                })
+            );
+        });
+    });
+
     const mod = KernelModule.get_data<Module>();
     let child_process: unknown;
     // let kexec: (executable: string, args?: string[]) => never;
@@ -130,7 +178,7 @@ export const init = async () => {
     });
 
     mod.define_native_method("respond_to?", (self: RValue, args: RValue[]): RValue => {
-        if (Object.find_method_under(self.klass, args[0].get_data<string>())) {
+        if (Object.find_method_under(self, args[0].get_data<string>())) {
             return Qtrue;
         } else {
             return Qfalse;
@@ -424,7 +472,7 @@ export const init = async () => {
             return proc.call(ExecutionContext.current, [tag]);
         } catch (e) {
             if (e instanceof ThrowError) {
-                if (e.tag.object_id === tag.object_id) {
+                if (Object.send(e.tag, "==", [tag]).is_truthy()) {
                     return e.value;
                 }
             }
@@ -454,7 +502,42 @@ export const init = async () => {
             throw new NoMethodError(`${visibility_str} \`${method_name}' called for ${Object.send(self, "inspect").get_data<string>()}`);
         }
 
-        return method.call(ExecutionContext.current, self, args.slice(1), kwargs, block, call_data);
+        let forwarded_call_data = call_data;
+        let forwarded_args = args.slice(1);
+
+        if (method instanceof NativeCallable) {
+            // Forward the call to a native method by splatting the remaining args.
+            forwarded_call_data = MethodCallData.create(
+                method_name,
+                args.length - 1,
+                CallDataFlag.ARGS_SIMPLE | CallDataFlag.ARGS_SPLAT,
+                call_data?.kw_arg || (kwargs ? Array.from(kwargs.keys()) : [])
+            )
+
+            /* Native methods automatically unwrap splatted args. For an args list
+             * where the first arg is an array, the native method dispatch logic will
+             * unwrap it, which may or may not be the right thing to do. If the
+             * forwarded method does not receive a splat, then all is well. If the
+             * forwarded method does receive a splat however, then because of the
+             * automatic unwrapping logic, it will receive three individual,
+             * non-splatted args instead. To avoid this problem, we call the
+             * forwarded method with splatted args, and wrap the original set of
+             * args in an array. This way, the native method will remove only the
+             * wrapper array and leave the rest of the args intact. Note that this
+             * isn't a problem for interpreted methods because they perform much
+             * smarter arg unwrapping via ExecutionContext.setup_arguments.
+             */
+            forwarded_args = [RubyArray.new(forwarded_args)];
+        }
+
+        return method.call(
+            ExecutionContext.current,
+            self,
+            forwarded_args,
+            kwargs,
+            block,
+            forwarded_call_data
+        );
     });
 
     const msleep = (n: number) => {
@@ -470,5 +553,45 @@ export const init = async () => {
         msleep(interval_secs * 1000);
 
         return args[0];
+    });
+
+    mod.define_native_method("to_enum", (self: RValue, args: RValue[], kwargs?: Kwargs): RValue => {
+        const method_name = args[0].get_data<string>();
+        return Enumerator.for_method(self, method_name, args.slice(1), kwargs);
+    });
+
+    mod.define_native_method("loop", (_self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        if (block) {
+            const proc = block.get_data<Proc>();
+
+            try {
+                while (true) {
+                    proc.call(ExecutionContext.current, []);
+                }
+            } catch (e) {
+                if (e instanceof BreakError) {
+                    return e.value;
+                }
+
+                throw e;
+            }
+        } else {
+            return Enumerator.for_native_generator(function* () {
+                while (true) {
+                    yield Qnil;
+                }
+            });
+        }
+    });
+
+    mod.define_native_method("method", (self: RValue, args: RValue[]): RValue => {
+        const method_name = Runtime.coerce_to_string(args[0]).get_data<string>();
+        const callable = Object.find_method_under(self, method_name);
+
+        if (callable) {
+            return Method.new(callable);
+        }
+
+        throw new NameError(`undefined method \`${method_name}' for class ${self.klass.get_data<Class>().name}`);
     });
 };

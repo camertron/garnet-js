@@ -92,6 +92,16 @@ export const init = () => {
         klass.define_native_method("to_f", (self: RValue): RValue => {
             return self;
         });
+
+        klass.define_native_method("to_s", (self: RValue): RValue => {
+            const num = self.get_data<number>();
+
+            if (Number.isInteger(num)) {
+                return String.new(num.toFixed(1));
+            } else {
+                return String.new(num.toString());
+            }
+        });
     });
 
     inited = true;

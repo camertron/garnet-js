@@ -11,6 +11,8 @@ import { Object } from "./runtime/object";
 import { String } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
 import { Proc } from "./runtime/proc";
+import { ParameterMetadata } from "./runtime/parameter-meta";
+import { LexicalScope } from "./compiler";
 
 export type ExecutionResult = JumpResult | LeaveResult | null;
 
@@ -40,12 +42,22 @@ class ThrownError extends Error {
 }
 
 export class ReturnError extends ThrownError {
+    public lexical_scope: LexicalScope;
+
+    constructor(value: RValue, lexical_scope: LexicalScope) {
+        super(value);
+
+        this.lexical_scope = lexical_scope;
+    }
 }
 
 export class BreakError extends ThrownError {
 }
 
 export class NextError extends ThrownError {
+}
+
+export class PauseError extends ThrownError {
 }
 
 export class ThrowError extends ThrownError {
@@ -121,16 +133,16 @@ export class ExecutionContext {
         return this.frame!.iseq;
     }
 
-    define_method(object: RValue, name: string, iseq: InstructionSequence) {
+    define_method(object: RValue, name: string, iseq: InstructionSequence, parameters_meta: ParameterMetadata[], lexical_scope: LexicalScope) {
         if (object.klass === ClassClass || object.klass == ModuleClass) {
-            object.get_data<Class>().define_method(name, iseq);
+            object.get_data<Class>().define_method(name, iseq, parameters_meta, lexical_scope);
         } else {
-            object.klass.get_data<Class>().define_method(name, iseq);
+            object.klass.get_data<Class>().define_method(name, iseq, parameters_meta, lexical_scope);
         }
     }
 
     run_frame(frame: Frame, cb?: () => Label | null): RValue {
-        // First, set the current frame to the given value.
+        // Set the current frame to the given value.
         let previous = this.frame;
         this.frame = frame;
 
@@ -145,6 +157,12 @@ export class ExecutionContext {
         if (start_label) {
             frame.pc = frame.iseq.compiled_insns.indexOf(start_label);
         }
+
+        return this.execute_frame(frame, previous);
+    }
+
+    execute_frame(frame: Frame, previous: Frame | null): RValue {
+        this.frame = frame;
 
         // Finally we can execute the instructions one at a time. If they return
         // jumps or leaves we will handle those appropriately.
@@ -180,31 +198,51 @@ export class ExecutionContext {
                     } catch (error) {
                         if (error instanceof ReturnError) {
                             // if this is a lambda, return from the block instead of the enclosing method
-                            if (this.frame instanceof BlockFrame && this.frame.calling_convention === CallingConvention.METHOD_LAMBDA) {
+                            // if (this.frame instanceof BlockFrame && this.frame.calling_convention === CallingConvention.METHOD_LAMBDA) {
+                            //     throw error;
+                            // }
+
+                            // const last_frame = this.frame;
+
+                            if (this.frame!.iseq.lexical_scope.id === error.lexical_scope.id) {
+                                this.frame = this.frame.parent;
                                 throw error;
+                            } else {
+                                return error.value;
                             }
 
-                            let method_frame: Frame = this.frame;
+                            // let return_frame: Frame | null = this.frame;
 
-                            while (!(method_frame instanceof MethodFrame)) {
-                                if (!method_frame.parent) break;
-                                method_frame = method_frame.parent;
-                            }
+                            // while (return_frame && return_frame.iseq.lexical_scope.id === lexical_scope.id) {
+                            //     return_frame = return_frame?.parent;
+                            // }
 
-                            if (!method_frame) {
-                                throw new LocalJumpError("unexpected return");
-                            }
+                            // return_frame = return_frame ? return_frame.parent : null;
+
+                            // if (!return_frame) {
+                            //     throw new LocalJumpError("unexpected return");
+                            // }
+
+                            // let method_frame: Frame | null = this.frame;
+
+                            // while (method_frame && !(method_frame instanceof MethodFrame)) {
+                            //     method_frame = method_frame.parent;
+                            // }
+
+                            // if (!method_frame) {
+                            //     throw new LocalJumpError("unexpected return");
+                            // }
 
                             // Don't mess with the block's stack, which is the stack snapshot held
                             // in the block's binding. Truncating it here means the block will not
                             // have access to locals it may have closed over.
-                            if (!(this.frame instanceof BlockFrame)) {
-                                this.stack.splice(method_frame.stack_index);
-                            }
+                            // if (!(return_frame instanceof BlockFrame)) {
+                                // this.stack.splice(return_frame.stack_index);
+                            // }
 
-                            this.frame = previous || method_frame.parent; // implicit Leave
+                            // this.frame = return_frame;
 
-                            throw error;
+                            // throw error;
                         } else if (error instanceof BreakError) {
                             if (frame.iseq.type != "block") {
                                 throw new Error(`Expected frame type to be 'block', was '${frame.iseq.type}' instead`);
@@ -239,6 +277,11 @@ export class ExecutionContext {
                             frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.cont_label);
                             result = error.value
                             this.stack.push(result);
+                        } else if (error instanceof PauseError) {
+                            frame.pc += 1;
+                            this.stack.splice(frame.stack_index);
+                            this.frame = previous || frame.parent;
+                            throw error;
                         } else {
                             // I really need to clean up errors and error handling, what a mess
                             if (error instanceof RubyError || error instanceof RValue) {
@@ -269,7 +312,7 @@ export class ExecutionContext {
                                 this.stack.push(result);
                             } else {
                                 // re-raise javascript errors
-                                if (error instanceof RubyError || error instanceof NativeError) {
+                                if (error instanceof ThrowError ||error instanceof RubyError || error instanceof NativeError) {
                                     throw error
                                 } else if (error instanceof Error) {
                                     throw new NativeError(error, this.create_backtrace());
@@ -310,7 +353,7 @@ export class ExecutionContext {
 
         while (current) {
             if (frame_idx >= start) {
-                backtrace.push(`${current.iseq.file}:${current.line + 1} in ${current.iseq.name}`);
+                backtrace.push(`${current.iseq.file}:${current.line} in ${current.iseq.name}`);
             }
 
             current = current.parent;
@@ -391,12 +434,15 @@ export class ExecutionContext {
     }
 
     // this is also used to call lambdas
-    run_block_frame(call_data: BlockCallData, calling_convention: CallingConvention, iseq: InstructionSequence, binding: Binding, args: RValue[], kwargs?: Kwargs): RValue {
+    run_block_frame(call_data: BlockCallData, calling_convention: CallingConvention, iseq: InstructionSequence, binding: Binding, args: RValue[], kwargs?: Kwargs, frame_callback?: (frame: BlockFrame) => void): RValue {
         const original_stack = this.stack;
 
         try {
             return this.with_stack(binding.stack, () => {
-                return this.run_frame(new BlockFrame(call_data, calling_convention,iseq, binding, original_stack), () => {
+                const block_frame = new BlockFrame(call_data, calling_convention,iseq, binding, original_stack);
+                frame_callback?.(block_frame);
+
+                return this.run_frame(block_frame, () => {
                     return this.setup_arguments(call_data, calling_convention, iseq, args, kwargs, undefined);
                 });
             });
@@ -444,10 +490,10 @@ export class ExecutionContext {
             });
         } catch (e) {
             if (e instanceof ReturnError) {
-                return e.value;
-            } else {
-                throw e;
+                this.stack.splice(method_frame.stack_index);
             }
+
+            throw e;
         }
     }
 
@@ -508,18 +554,17 @@ export class ExecutionContext {
         let local_index = this.inc_local_index(-1, iseq);
         let start_label: Label | null = null;
 
-        // if (call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
-        //     locals = locals.flatMap((elem) => {
-        //         // @TODO: we should probably check for respond_to?(:to_ary) here
-        //         if (elem.klass === ArrayClass) {
-        //             return elem.get_data<RubyArray>().elements;
-        //         } else {
-        //             return elem;
-        //         }
-        //     })
-        // }
+        if (call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
+            // splatted array is always the last element
+            const splat_arr = locals[call_data.argc - 1];
 
-        if (iseq.argument_options.keyword_rest_start != null && iseq.argument_options.keyword_rest_start > -1 && !call_data.has_flag(CallDataFlag.KWARG) && !call_data.has_flag(CallDataFlag.KW_SPLAT)) {
+            if (splat_arr && splat_arr.klass === RubyArray.klass) {
+                locals.splice(call_data.argc - 1, 1, ...splat_arr.get_data<RubyArray>().elements);
+            }
+        }
+
+        // if (iseq.argument_options.keyword_rest_start != null && iseq.argument_options.keyword_rest_start > -1 && !call_data.has_flag(CallDataFlag.KWARG) && !call_data.has_flag(CallDataFlag.KW_SPLAT)) {
+        if (iseq.argument_options.keyword_bits_index != null && !call_data.has_flag(CallDataFlag.KWARG) && !call_data.has_flag(CallDataFlag.KW_SPLAT)) {
             if (locals.length > 0 && locals[locals.length - 1].klass === Hash.klass) {
                 const kwargs_hash = locals.pop()!;
                 kwargs ||= new Map();
@@ -546,7 +591,7 @@ export class ExecutionContext {
         // Eg. {}.map { |a, b| ... } automatically destructures [a, b] while {}.map { |a| ... } does not,
         // and instead passes a two-element array to the block.
         if (calling_convention === CallingConvention.BLOCK_PROC && locals[0]?.klass === RubyArray.klass) {
-            const elements = locals[0].get_data<RubyArray>().elements;
+            const elements = [...locals[0].get_data<RubyArray>().elements];
 
             if (elements.length <= lead_num) {
                 for (let i = 0; i < lead_num; i ++) {
