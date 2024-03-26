@@ -80,31 +80,28 @@ export const init = () => {
         });
 
         mod.define_native_method("any?", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+            let found = false;
+
             try {
                 const proc = block ? block.get_data<Proc>() : null;
-                let found = false;
 
                 Object.send(self, "each", [], undefined, Proc.from_native_fn(ExecutionContext.current, (_self: RValue, args: RValue[]): RValue => {
                     const item = proc ? proc.call(ExecutionContext.current, args) : args[0];
 
                     if (item.is_truthy()) {
                         found = true;
-                        throw new BreakError(Qnil);
+                        throw "any?";
                     }
 
                     return Qnil;
                 }));
-
-                return found ? Qtrue : Qfalse;
             } catch (e) {
-                if (e instanceof BreakError) {
-                    // match found, return value
-                    return e.value;
-                } else {
-                    // an error occurred
+                if (e !== "any?") {
                     throw e;
                 }
             }
+
+            return found ? Qtrue : Qfalse;
         });
 
         mod.define_native_method("partition", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {

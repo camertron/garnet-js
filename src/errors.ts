@@ -21,6 +21,8 @@ export const init = () => {
             }
         });
 
+        klass.alias_method("to_s", "message");
+
         klass.define_native_method("full_message", (self: RValue): RValue => {
             const error = self.get_data<IRubyError>();
             const message = error.message instanceof RValue ? error.message.get_data<string>() : error.message;
@@ -52,7 +54,11 @@ export const init = () => {
         klass.define_native_method("backtrace", (self: RValue): RValue => {
             const error = self.get_data<IRubyError>();
 
-            if (!error.backtrace_rval) {
+            if (error.backtrace_rval === Qnil) {
+                if (!error.backtrace) {
+                    return Qnil;
+                }
+
                 const backtrace = [];
 
                 for (const element of error.backtrace) {
@@ -66,17 +72,7 @@ export const init = () => {
         });
 
         klass.define_native_method("backtrace_locations", (self: RValue): RValue => {
-            const backtrace = self.get_data<IRubyError>().backtrace;
-            const locations = []
-
-            for (const element of backtrace) {
-                // @TODO: avoid splitting a string here, maybe we can store backtraces as tuples?
-                const [path, line_and_label] = element.split(":");
-                const [line, label] = line_and_label.split(" in ");
-                locations.push(BacktraceLocation.new(path, parseInt(line), label));
-            }
-
-            return RubyArray.new(locations);
+            return self.get_data<IRubyError>().backtrace_locations_rval;
         });
     });
 
@@ -130,7 +126,9 @@ export class NativeError extends Error {
 export abstract class RubyError extends Error {
     private rvalue: RValue;
     public backtrace: string[];
-    public backtrace_rval: RValue;
+    public backtrace_rval: RValue = Qnil;
+    public backtrace_locations: RValue[];
+    public backtrace_locations_rval: RValue = Qnil;
 
     to_rvalue(): RValue {
         this.rvalue ||= new RValue(this.ruby_class, this);
@@ -144,7 +142,9 @@ export class UserDefinedException {
     private klass: RValue;
     public message: RValue;
     public backtrace: string[];
-    public backtrace_rval: RValue;
+    public backtrace_rval: RValue = Qnil;
+    public backtrace_locations: RValue[];
+    public backtrace_locations_rval: RValue = Qnil;
 
     constructor(klass: RValue, message: RValue) {
         this.klass = klass;
@@ -156,7 +156,7 @@ export class UserDefinedException {
     }
 }
 
-type IRubyError = RubyError | UserDefinedException;
+export type IRubyError = RubyError | UserDefinedException;
 
 export class StandardError extends RubyError {
     private static ruby_class: RValue | null;

@@ -1,6 +1,6 @@
 import { MethodCallData, CallDataFlag } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
-import { Qtrue, RubyArray } from "../garnet";
+import { Qnil, Qtrue, RubyArray } from "../garnet";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
 import { Class, Kwargs, RValue } from "../runtime";
@@ -24,7 +24,8 @@ export default class Send extends Instruction {
         if (this.block_iseq) {
             block = Proc.from_iseq(context, this.block_iseq);
         } else if (this.call_data.has_flag(CallDataFlag.ARGS_BLOCKARG)) {
-            block = context.pop();
+            block = context.pop()!;
+            if (block !== Qnil) block = Object.send(block, "to_proc");
         }
 
         let kwargs: Kwargs | undefined = undefined;

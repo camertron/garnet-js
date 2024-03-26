@@ -139,6 +139,11 @@ export const init = () => {
         klass.define_native_singleton_method("current", (_self: RValue): RValue => {
             return Thread.current;
         });
+
+        klass.define_native_method("join", (_self: RValue, _args: RValue[]) => {
+            // do nothing because we don't acually support threads
+            return Qnil;
+        })
     });
 
     const MutexClass = Runtime.define_class_under(ThreadClass, "Mutex", ObjectClass, (klass: Class) => {

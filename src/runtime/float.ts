@@ -102,6 +102,12 @@ export const init = () => {
                 return String.new(num.toString());
             }
         });
+
+        klass.define_native_method("%", (self: RValue, args: RValue[]): RValue => {
+            const f = self.get_data<number>();
+            const r = args[0].get_data<number>();
+            return Float.new(f % r);
+        });
     });
 
     inited = true;

@@ -206,17 +206,17 @@ export class Compiler extends Visitor {
         this.lexical_scope_stack = new LexicalScopeStack();
     }
 
-    static compile(source: string, path: string, ast: any, line_offset: number = 0, compiler_options?: CompilerOptions): InstructionSequence {
-        const compiler = new Compiler(source, path, line_offset, compiler_options);
+    static compile(source: string, require_path: string, ast: any, line_offset: number = 0, compiler_options?: CompilerOptions): InstructionSequence {
+        const compiler = new Compiler(source, require_path, line_offset, compiler_options);
 
         return compiler.with_used<InstructionSequence>(true, () => {
             return compiler.visitProgramNode(ast.value);
         })
     }
 
-    static compile_string(source: string, path: string, line_offset: number = 0, compiler_options?: CompilerOptions) {
+    static compile_string(source: string, require_path: string, line_offset: number = 0, compiler_options?: CompilerOptions) {
         const ast = Compiler.parse(source);
-        return this.compile(source, path, ast, line_offset, compiler_options);
+        return this.compile(source, require_path, ast, line_offset, compiler_options);
     }
 
     visit(node: Node) {
@@ -255,9 +255,7 @@ export class Compiler extends Visitor {
             new LexicalScope(
                 this.path,
                 this.start_line_for_loc(node.location)!,
-                this.start_line_for_loc(
-                    node.statements.body[node.statements.body.length - 1].location
-                )!
+                this.end_line_for_loc(node.location)!
             )
         );
 
@@ -1165,10 +1163,11 @@ export class Compiler extends Visitor {
         throw new SyntaxError("Invalid return");
     }
 
+    // this handles begin...end but also inline rescues, ensures, etc in method bodies
     override visitBeginNode(node: BeginNode) {
         const begin_label = this.iseq.label();
         const end_label = this.iseq.label();
-        const exit_label = this.iseq.label();
+        const cont_label = this.iseq.label();
         const else_label = this.iseq.label();
 
         this.iseq.push(begin_label);
@@ -1181,8 +1180,10 @@ export class Compiler extends Visitor {
             if (node.elseClause) {
                 this.iseq.jump(else_label);
             } else {
-                this.iseq.jump(exit_label);
+                this.iseq.jump(cont_label);
             }
+        } else {
+            this.iseq.putnil();
         }
 
         this.iseq.push(end_label);
@@ -1202,7 +1203,7 @@ export class Compiler extends Visitor {
             });
 
             this.iseq.catch_table.catch_rescue(
-                rescue_iseq, begin_label, end_label, exit_label, rescue_iseq.local_table.size()
+                rescue_iseq, begin_label, end_label, cont_label, rescue_iseq.local_table.size()
             );
         }
 
@@ -1213,10 +1214,27 @@ export class Compiler extends Visitor {
             this.visit(node.elseClause);
         }
 
-        this.iseq.push(exit_label);
+        this.iseq.push(cont_label);
 
         if (node.ensureClause) {
-            this.with_used(false, () => this.visit(node.ensureClause!));
+            const ensure_iseq = this.iseq.ensure_child_iseq(
+                this.start_line_for_loc(node.ensureClause.location)!,
+                this.lexical_scope_stack.current()
+            );
+
+            this.with_child_iseq(ensure_iseq, () => {
+                ensure_iseq.local_table.plain("$!");
+                this.with_used(false, () => this.visit(node.ensureClause!));
+                ensure_iseq.getlocal(0, 0);
+                ensure_iseq.throw(ThrowType.NONE);
+
+                // Ensure clauses are run inside their own stack frame. If no error occurred,
+                // then the .throw() above will do nothing and we need to manually leave()
+                // the frame.
+                ensure_iseq.leave();
+            });
+
+            this.iseq.catch_table.catch_ensure(ensure_iseq, begin_label, end_label, cont_label, 0);
         }
     }
 
@@ -1768,11 +1786,16 @@ export class Compiler extends Visitor {
     }
 
     override visitSuperNode(node: SuperNode) {
+        let flags = CallDataFlag.FCALL | CallDataFlag.SUPER;
+
         if (node.arguments_) {
             this.with_used(true, () => this.visit(node.arguments_!));
         }
 
-        let flags = CallDataFlag.FCALL | CallDataFlag.SUPER | CallDataFlag.ZSUPER;
+        if (!node.arguments_ && !node.lparenLoc) {
+            flags |= CallDataFlag.ZSUPER;
+        }
+
         let block_iseq = null;
 
         if (node.block instanceof BlockNode) {
@@ -1953,18 +1976,19 @@ export class Compiler extends Visitor {
         return current_iseq.local_table.find_or_throw(name, depth);
     }
 
-    private text_for_loc(location: Location): string {
-        return this.source.slice(
-            location.startOffset,
-            location.startOffset + location.length
-        );
+    private start_line_for_loc(location: Location): number | null {
+        return this.start_line_for_offset(location.startOffset);
     }
 
-    private start_line_for_loc(location: Location): number | null {
+    private end_line_for_loc(location: Location): number | null {
+        return this.start_line_for_offset(location.startOffset + location.length);
+    }
+
+    private start_line_for_offset(offset: number) {
         let last_line_offset = 0;
 
         for (let i = 0; i < this.line_offsets.length; i ++) {
-            if (location.startOffset > last_line_offset && location.startOffset <= this.line_offsets[i]) {
+            if (offset > last_line_offset && offset <= this.line_offsets[i]) {
                 return i;
             }
 

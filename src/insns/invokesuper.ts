@@ -1,10 +1,10 @@
 import { MethodCallData, CallDataFlag } from "../call_data";
 import { NoMethodError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
-import { MethodFrame } from "../frame";
+import { IFrameWithOwner, MethodFrame } from "../frame";
+import { Qtrue } from "../garnet";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { Class, ClassClass, Module, ModuleClass, Qtrue } from "../runtime";
 import { Object } from "../runtime/object";
 import { Proc } from "../runtime/proc";
 
@@ -22,7 +22,7 @@ export default class InvokeSuper extends Instruction {
     call(context: ExecutionContext): ExecutionResult {
         const self = context.pop()!;
         const method_frame = context.frame as MethodFrame;
-        const owner = (context.frame as MethodFrame).owner;
+        const owner = (context.frame as IFrameWithOwner).owner;
 
         if (owner) {
             const method = Object.find_super_method_under(self, owner, method_frame.call_data.mid);
@@ -35,16 +35,19 @@ export default class InvokeSuper extends Instruction {
             }
 
             if (method) {
-                let call_data;
+                let result;
 
                 // bare super call, meaning use same call_data as origial callsite to forward args
                 if (this.call_data.has_flag(CallDataFlag.ZSUPER)) {
-                    call_data = (context.frame as MethodFrame).call_data;
+                    const call_data = (context.frame as MethodFrame).call_data;
+                    result = method.call(context, self, method_frame.args, method_frame.kwargs, block, call_data);
                 } else {
-                    call_data = this.call_data;
+                    const call_data = this.call_data;
+                    const args = context.popn(call_data.argc);
+                    // TODO: handle kwargs
+                    result = method.call(context, self, args, undefined, block, call_data);
                 }
 
-                const result = method.call(context, self, method_frame.args, method_frame.kwargs, block, call_data);
                 context.push(result);
                 return null;
             }

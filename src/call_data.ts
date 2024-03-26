@@ -1,3 +1,5 @@
+import { Kwargs, RValue } from "./runtime";
+
 export enum CallDataFlag {
     ARGS_SPLAT    = 2 ** 0,  // m(*args)
     ARGS_BLOCKARG = 2 ** 1,  // m(&block)
@@ -17,7 +19,7 @@ export enum CallDataFlag {
 export abstract class CallData {
     public argc: number;
     public flag: number;
-    public kw_arg: any;
+    public kw_arg: string[] | null;
 
     has_flag(flag: CallDataFlag): boolean {
         return (this.flag & flag) != 0;
@@ -42,12 +44,25 @@ export class MethodCallData extends CallData {
     static create(method: string, argc: number = 0, flags: number = CallDataFlag.ARGS_SIMPLE, kw_arg: string[] | null = null) {
         return new MethodCallData(method, argc, flags, kw_arg);
     }
+
+    static from_args(method: string, args: RValue[], kwargs?: Kwargs, block?: RValue) {
+        let flag = CallDataFlag.FCALL;
+        if (block) flag |= CallDataFlag.ARGS_BLOCKARG;
+        if (kwargs) flag |= CallDataFlag.KWARG;
+
+        return MethodCallData.create(
+            method,
+            args.length,
+            flag,
+            kwargs ? Array.from(kwargs.keys()) : null
+        );
+    }
 }
 
 export class BlockCallData extends CallData {
     public argc: number;
     public flag: number;
-    public kw_arg: any;
+    public kw_arg: string[] | null;
 
     private static _empty: BlockCallData;
 

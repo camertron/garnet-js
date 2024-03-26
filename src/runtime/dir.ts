@@ -41,7 +41,7 @@ export const init = () => {
 
         klass.define_native_singleton_method("glob", (_self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
             const pattern_str = Runtime.coerce_to_string(args[0]).get_data<string>();
-            const base_path = kwargs && kwargs.has("base") ? Runtime.coerce_to_string(kwargs.get("base")!).get_data<string>() : ".";
+            const base_path = kwargs && kwargs.has("base") ? Runtime.coerce_to_string(kwargs.get("base")!).get_data<string>() : "";
             const sort = kwargs && kwargs.has("sort") ? kwargs.get("sort")!.is_truthy() : Qtrue;
             let flags = 0;
 

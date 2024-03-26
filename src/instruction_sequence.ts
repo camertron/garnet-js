@@ -717,6 +717,10 @@ export class InstructionSequence {
         return this.child_iseq(`rescue in ${this.name}`, line, "rescue", lexical_scope);
     }
 
+    ensure_child_iseq(line: number, lexical_scope: LexicalScope): InstructionSequence {
+        return this.child_iseq(`ensure in ${this.name}`, line, "ensure", lexical_scope);
+    }
+
     compile() {
         // @TODO: optimizations and specializations
 

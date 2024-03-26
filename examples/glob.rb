@@ -1,3 +1,5 @@
-Dir.glob("*.*", flags: 4) do |path|
-  puts path
+def print(file)
+  puts file
 end
+
+Dir.glob("*.*", &method(:print))

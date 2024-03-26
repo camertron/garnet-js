@@ -235,7 +235,7 @@ class InterpretedProcEnumerator extends Enumerator {
                     return this.ec.execute_frame(this.frame!, this.ec.frame);
                 })
             } else {
-                this.proc.call(this.ec, [this.yielder], undefined, undefined, (frame: BlockFrame) => {
+                this.proc.call(this.ec, [this.yielder], undefined, undefined, undefined, (frame: BlockFrame) => {
                     this.frame = frame;
                 });
             }

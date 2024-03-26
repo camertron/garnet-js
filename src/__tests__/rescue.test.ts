@@ -209,7 +209,7 @@ describe("begin / rescue / end", () => {
 
     test("runs the ensure clause on error", async () => {
         const code = `
-            ensure_reached = true
+            ensure_reached = false
 
             begin
                 require "foo"
@@ -228,7 +228,7 @@ describe("begin / rescue / end", () => {
 
     test("runs the ensure clause on else", async () => {
         const code = `
-            ensure_reached = true
+            ensure_reached = false
 
             begin
             else
@@ -246,7 +246,7 @@ describe("begin / rescue / end", () => {
 
     test("runs the ensure clause when error is unhandled", async () => {
         const code = `
-            ensure_reached = true
+            ensure_reached = false
 
             begin
                 begin

@@ -307,7 +307,8 @@ export const init = () => {
                     return RubyArray.new(elements.slice(start_pos, end_pos + 1));
                 }
             } else {
-                const index = args[0].get_data<number>();
+                // floor here because you can pass a float to Array#[]
+                const index = Math.floor(args[0].get_data<number>());
 
                 if (args.length > 1) {
                     Runtime.assert_type(args[1], Integer.klass);
@@ -442,13 +443,25 @@ export const init = () => {
 
         klass.alias_method("length", "size");
 
-        klass.define_native_method("first", (self: RValue): RValue => {
+        klass.define_native_method("first", (self: RValue, args: RValue[]): RValue => {
             const elements = self.get_data<RubyArray>().elements;
+            let count;
 
-            if (elements.length > 0) {
-                return elements[0];
+            if (args.length > 0) {
+                Runtime.assert_type(args[0], Integer.klass);
+                count = args[0].get_data<number>();
             } else {
-                return Qnil;
+                count = 1;
+            }
+
+            if (args.length === 0) {
+                if (elements.length > 0) {
+                    return elements[0];
+                } else {
+                    return Qnil;
+                }
+            } else {
+                return RubyArray.new(elements.slice(0, count));
             }
         });
 

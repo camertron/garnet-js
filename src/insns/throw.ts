@@ -1,4 +1,4 @@
-import { NotImplementedError } from "../errors";
+import { LocalJumpError, NotImplementedError } from "../errors";
 import { BreakError, ExecutionContext, ExecutionResult, NextError, ReturnError } from "../execution_context";
 import { NilClass } from "../runtime";
 import Instruction from "../instruction";
@@ -44,13 +44,32 @@ export default class Throw extends Instruction {
                 break;
 
             case ThrowType.RETURN:
-                throw new ReturnError(value, context.frame!.iseq.lexical_scope);
+                const lexical_scope = context.frame!.iseq.lexical_scope;
+                let current_frame = context.frame;
+                let topmost_frame_matching_lexical_scope;
+
+                while (current_frame) {
+                    if (current_frame.iseq.lexical_scope.id === lexical_scope.id) {
+                        topmost_frame_matching_lexical_scope = current_frame;
+                    }
+
+                    current_frame = current_frame.parent;
+                }
+
+                if (!topmost_frame_matching_lexical_scope) {
+                    throw new LocalJumpError("unexpected return");
+                }
+
+                throw new ReturnError(value, topmost_frame_matching_lexical_scope);
 
             case ThrowType.BREAK:
                 throw new BreakError(value);
 
             case ThrowType.NEXT:
                 throw new NextError(value);
+
+            case ThrowType.RAISE:
+                throw value;
 
             default:
                 throw new NotImplementedError(`Unknown throw kind ${state}`);

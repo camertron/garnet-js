@@ -196,6 +196,12 @@ export const init = () => {
             return Qnil;
         });
 
+        klass.define_native_method("==", (self: RValue, args: RValue[]): RValue => {
+            const num = self.get_data<number>();
+            const other_num = args[0].get_data<number>();
+            return num === other_num ? Qtrue : Qfalse;
+        });
+
         klass.define_native_method("to_i", (self: RValue): RValue => {
             return self;
         });

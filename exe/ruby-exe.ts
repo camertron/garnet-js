@@ -79,5 +79,12 @@ if (!code) {
     process.exit(0);
 }
 
-await Garnet.evaluate(code, code_path);
+try {
+    await Garnet.evaluate(code, code_path);
+} catch(e) {
+    // Garnet.evaluate should have printed the stack trace, etc, so all we
+    // have to do is exit abnormally
+    process.exit(1);
+}
+
 await Garnet.deinit();

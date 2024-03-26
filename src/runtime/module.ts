@@ -2,7 +2,7 @@ import { BlockCallData, CallData, MethodCallData } from "../call_data";
 import { Compiler } from "../compiler";
 import { ArgumentError, NameError } from "../errors";
 import { CallingConvention, ExecutionContext } from "../execution_context";
-import { Module, ModuleClass, RValue, Runtime, Visibility, Qnil, Class, Qtrue, Qfalse, Kwargs, TrueClass, FalseClass } from "../runtime";
+import { Module, ModuleClass, RValue, Runtime, Visibility, Qnil, Class, Qtrue, Qfalse, Kwargs, TrueClass, FalseClass, ObjectClass } from "../runtime";
 import { Kernel } from "./kernel";
 import { Object } from "./object";
 import { InterpretedProc, Proc } from "./proc";
@@ -33,13 +33,7 @@ export const init = () => {
     });
 
     mod.define_native_method("inspect", (self: RValue): RValue => {
-        const mod = self.get_data<Module>();
-
-        if (mod.name) {
-            return String.new(mod.name);
-        } else {
-            return String.new(`#<Module:${Object.object_id_to_str(self.object_id)}>`);
-        }
+        return String.new(self.get_data<Module>().full_name);
     });
 
     mod.alias_method("to_s", "inspect");
@@ -271,11 +265,24 @@ export const init = () => {
              * behavior for define_method, we do the same stack swapping dance before running the method frame.
              */
             // return ec.with_stack(proc.binding.stack, () => {
-            //     return ec.run_method_frame(call_data!, ec.frame!.nesting, proc.iseq, mtd_self, mtd_args, mtd_kwargs, mtd_block);
+            //     try {
+            //         const method_call_data = new MethodCallData(method_name, call_data!.argc, call_data!.flag, call_data!.kw_arg);
+            //         return ec.run_method_frame(method_call_data!, proc.binding.nesting, proc.iseq, mtd_self, mtd_args, mtd_kwargs, mtd_block, self);
+            //     } catch (e) {
+            //         // debugger;
+            //         throw e;
+            //     }
             // });
 
             const binding = proc.binding.with_self(mtd_self);
-            return proc.with_binding(binding).call(ExecutionContext.current, mtd_args, mtd_kwargs);
+
+            try {
+                const new_call_data = new MethodCallData(method_name, call_data!.argc, call_data!.flag, call_data!.kw_arg);
+                return proc.with_binding(binding).call(ExecutionContext.current, mtd_args, mtd_kwargs, new_call_data, self);
+            } catch (e) {
+                // debugger;
+                throw e;
+            }
         });
 
         return args[0];
@@ -357,7 +364,41 @@ export const init = () => {
     });
 
     mod.define_native_method("name", (self: RValue): RValue => {
-        return self.get_data<Module>().name_rval;
+        return self.get_data<Module>().full_name_rval;
+    });
+
+    const instance_methods_from = (mod: RValue): RValue[] => {
+        const results = [];
+        const mod_methods = mod.get_data<Module>().methods;
+
+        for (const method_name in mod_methods) {
+            const method = mod_methods[method_name];
+
+            switch (method.visibility) {
+                case Visibility.public:
+                case Visibility.protected:
+                    results.push(Runtime.intern(method_name));
+                    break;
+            }
+        }
+
+        return results;
+    }
+
+    mod.define_native_method("instance_methods", (self: RValue, args: RValue[]): RValue => {
+        const include_super = (args[0] || Qtrue).is_truthy();
+        const results = [];
+
+        if (include_super) {
+            Runtime.each_unique_ancestor(self, true, (ancestor: RValue): boolean => {
+                results.push(...instance_methods_from(ancestor));
+                return true;
+            });
+        } else {
+            results.push(...instance_methods_from(self));
+        }
+
+        return RubyArray.new(results);
     });
 
     inited = true;

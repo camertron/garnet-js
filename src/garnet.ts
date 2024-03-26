@@ -64,7 +64,7 @@ export async function unsafe_evaluate(code: string, path?: string, line: number 
 // Like unsafe_evaluate, but catches and prints errors
 export async function evaluate(code: string, path?: string, line: number = 1, compiler_options?: CompilerOptions): Promise<RValue> {
     try {
-        return unsafe_evaluate(code, path, line, compiler_options);
+        return await unsafe_evaluate(code, path, line, compiler_options);
     } catch (e) {
         // If we've gotten here, the error was not handled in Ruby or js, so
         // we print the backtrace and re-throw the error. The re-thrown error
@@ -84,8 +84,10 @@ export async function evaluate(code: string, path?: string, line: number = 1, co
             }
 
             if (Object.send(e, "is_a?", [Object.find_constant("Exception")!]).is_truthy()) {
-                console.log(Object.send(e, "full_message").get_data<string>());
+                ExecutionContext.print_backtrace_rval(e);
             }
+        } else {
+            console.error(e);
         }
 
         return Qnil;

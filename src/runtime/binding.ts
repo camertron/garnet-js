@@ -1,19 +1,19 @@
 import { Frame } from "../frame";
-import { ObjectClass, RValue, Runtime } from "../runtime"
+import { ObjectClass, RValue, RValuePointer, Runtime } from "../runtime"
 import { Object } from "../runtime/object";
 
 export class Binding {
     public self: RValue;
     public nesting: RValue[];
-    public stack: RValue[];
+    public stack: RValuePointer[];
     public parent_frame: Frame;
     public stack_index: number;
 
-    static new(self: RValue, nesting: RValue[], stack: RValue[], parent_frame: Frame, stack_index: number = 0): RValue {
+    static new(self: RValue, nesting: RValue[], stack: RValuePointer[], parent_frame: Frame, stack_index: number = 0): RValue {
         return new RValue(Object.find_constant("Binding")!, new Binding(self, nesting, stack, parent_frame, stack_index));
     }
 
-    constructor(self: RValue, nesting: RValue[], stack: RValue[], parent_frame: Frame, stack_index: number) {
+    constructor(self: RValue, nesting: RValue[], stack: RValuePointer[], parent_frame: Frame, stack_index: number) {
         this.self = self;
         this.nesting = nesting;
         this.stack = stack;

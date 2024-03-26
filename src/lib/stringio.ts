@@ -1,4 +1,4 @@
-import { Class, NilClass, ObjectClass, Qnil, RValue, Runtime } from "../runtime";
+import { Class, NilClass, ObjectClass, Qfalse, Qnil, RValue, Runtime } from "../runtime";
 import { Integer } from "../runtime/integer";
 import { String } from "../runtime/string"
 import { Object } from "../runtime/object"
@@ -56,9 +56,22 @@ export const init = () => {
             }
         });
 
+        klass.define_native_method("puts", (self: RValue, args: RValue[]): RValue => {
+            for (const arg of args) {
+                self.data += Object.send(arg, "to_s").get_data<string>();
+            }
+
+            self.data += "\n";
+            return Qnil;
+        });
+
         klass.define_native_method("string", (self: RValue): RValue => {
             // @TODO: handle string encoding
             return String.new(self.get_data<string>());
+        });
+
+        klass.define_native_method("isatty", (self: RValue): RValue => {
+            return Qfalse;
         });
     });
 

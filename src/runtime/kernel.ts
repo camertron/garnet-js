@@ -1,5 +1,5 @@
 import { is_node } from "../env";
-import { ArgumentError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
+import { ArgumentError, IRubyError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
 import { BreakError, ExecutionContext, ThrowError } from "../execution_context";
 import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, Kwargs, Visibility, Callable, ObjectClass, InterpretedCallable, NativeCallable } from "../runtime";
 import { vmfs } from "../vmfs";
@@ -39,8 +39,8 @@ export class Kernel {
 export class Method {
     private static klass_: RValue;
 
-    static new(callable: Callable): RValue {
-        return new RValue(this.klass, new Method(callable));
+    static new(name: string, callable: Callable): RValue {
+        return new RValue(this.klass, new Method(name, callable));
     }
 
     static get klass(): RValue {
@@ -57,9 +57,11 @@ export class Method {
         return this.klass_;
     }
 
+    public name: string;
     public callable: Callable;
 
-    constructor(callable: Callable) {
+    constructor(name: string, callable: Callable) {
+        this.name = name;
         this.callable = callable;
     }
 }
@@ -81,6 +83,33 @@ export const init = async () => {
                     ]);
                 })
             );
+        });
+
+        klass.define_native_method("to_proc", (self: RValue): RValue => {
+            return Proc.from_native_fn(ExecutionContext.current, (block_self: RValue, block_args: RValue[], block_kwargs?: Kwargs, block_block?: RValue, block_call_data?: MethodCallData): RValue => {
+                const mtd = self.get_data<Method>();
+                let mtd_call_data;
+
+                if (block_call_data) {
+                    mtd_call_data = MethodCallData.create(
+                        mtd.name,
+                        block_call_data.argc,
+                        block_call_data.flag,
+                        block_call_data.kw_arg
+                    );
+                } else {
+                    mtd_call_data = MethodCallData.from_args(mtd.name, block_args, block_kwargs);
+                }
+
+                return mtd.callable.call(
+                    ExecutionContext.current,
+                    block_self,
+                    block_args,
+                    block_kwargs,
+                    block_block,
+                    mtd_call_data
+                );
+            });
         });
     });
 
@@ -118,7 +147,7 @@ export const init = async () => {
     mod.define_native_method("load", (_self: RValue, args: RValue[]): RValue => {
         const path = args[0];
         Runtime.assert_type(path, String.klass);
-        return Runtime.load(path.get_data<string>()) ? Qtrue : Qfalse;
+        return Runtime.load(path.get_data<string>(), path.get_data<string>()) ? Qtrue : Qfalse;
     });
 
     mod.define_native_method("===", (self: RValue, args: RValue[]): RValue => {
@@ -149,12 +178,12 @@ export const init = async () => {
         }
     });
 
+    mod.alias_method("kind_of?", "is_a?");
+
     mod.define_native_method("instance_of?", (self: RValue, args: RValue[]): RValue => {
         Runtime.assert_type(args[0], ClassClass);
         return self.klass === args[0] ? Qtrue : Qfalse;
     });
-
-    mod.alias_method("kind_of?", "instance_of?");
 
     mod.define_native_method("raise", (_self: RValue, args: RValue[]): RValue => {
         let instance;
@@ -172,7 +201,26 @@ export const init = async () => {
                 instance = args[0];
         }
 
-        Object.send(instance, "set_backtrace", [ExecutionContext.current.create_backtrace_rvalue()]);
+        const backtrace = ExecutionContext.current.create_backtrace_rvalue();
+        const locations: RValue[] = [];
+
+        try {
+            for (const element of backtrace.get_data<RubyArray>().elements) {
+                // @TODO: avoid all this error-prone string processing
+                const [path, line_and_label] = element.get_data<string>().split(":");
+                const [line, label] = line_and_label.split(" in ");
+                locations.push(BacktraceLocation.new(path, parseInt(line), label));
+            }
+        } catch (e) {
+            debugger;
+        }
+
+        const ruby_error = instance.get_data<IRubyError>();
+
+        ruby_error.backtrace = backtrace.get_data<string[]>();
+        ruby_error.backtrace_rval = backtrace;
+        ruby_error.backtrace_locations = locations;
+        ruby_error.backtrace_locations_rval = RubyArray.new(locations);
 
         throw instance;
     });
@@ -423,6 +471,10 @@ export const init = async () => {
         return Integer.get(obj_id_hash(self.object_id));
     });
 
+    mod.define_native_method("caller", (_self: RValue): RValue => {
+        return ExecutionContext.current.create_backtrace_rvalue();
+    });
+
     mod.define_native_method("caller_locations", (_self: RValue, args: RValue[]): RValue => {
         let start = 0;
         let length = -1;
@@ -589,7 +641,7 @@ export const init = async () => {
         const callable = Object.find_method_under(self, method_name);
 
         if (callable) {
-            return Method.new(callable);
+            return Method.new(method_name, callable);
         }
 
         throw new NameError(`undefined method \`${method_name}' for class ${self.klass.get_data<Class>().name}`);

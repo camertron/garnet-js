@@ -1,10 +1,10 @@
 import { BlockCallData, CallData, CallDataFlag, MethodCallData } from "./call_data";
 import { ArgumentError, LocalJumpError, NativeError, RubyError } from "./errors";
-import { BlockFrame, ClassFrame, Frame, MethodFrame, RescueFrame, TopFrame } from "./frame";
+import { BlockFrame, ClassFrame, EnsureFrame, Frame, MethodFrame, RescueFrame, TopFrame } from "./frame";
 import Instruction from "./instruction";
-import { CatchBreak, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
+import { CatchBreak, CatchEnsure, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
 import { Local } from "./local_table";
-import { ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, Kwargs, Qtrue, Qfalse, Runtime } from "./runtime";
+import { ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, Kwargs, Qtrue, Qfalse, Runtime, RValuePointer } from "./runtime";
 import { Binding } from "./runtime/binding";
 import { Hash } from "./runtime/hash";
 import { Object } from "./runtime/object";
@@ -42,12 +42,12 @@ class ThrownError extends Error {
 }
 
 export class ReturnError extends ThrownError {
-    public lexical_scope: LexicalScope;
+    public return_from_frame: Frame;
 
-    constructor(value: RValue, lexical_scope: LexicalScope) {
+    constructor(value: RValue, return_from_frame: Frame) {
         super(value);
 
-        this.lexical_scope = lexical_scope;
+        this.return_from_frame = return_from_frame;
     }
 }
 
@@ -83,7 +83,7 @@ export class ExecutionContext {
     static current: ExecutionContext;
 
     // The system stack that tracks values through the execution of the program.
-    public stack: RValue[];
+    public stack: RValuePointer[];
 
     // The global variables accessible to the program. These mirror the runtime
     // global variables if they have not been overridden.
@@ -149,7 +149,13 @@ export class ExecutionContext {
         // Next, set up the local table for the frame. This is actually incorrect
         // as it could use the values already on the stack, but for now we're
         // just doing this for simplicity.
-        this.stack.push(...Array(frame.iseq.local_table.size()).fill(Qnil));
+        const locals = Array<RValuePointer>(frame.iseq.local_table.size());
+
+        for (let i = 0; i < locals.length; i ++) {
+            locals[i] = new RValuePointer(Qnil);
+        }
+
+        this.stack.push(...locals);
 
         // Yield so that some frame-specific setup can be done.
         const start_label = cb ? cb() : null;
@@ -168,6 +174,10 @@ export class ExecutionContext {
         // jumps or leaves we will handle those appropriately.
         while (true) {
             const insn = frame.iseq.compiled_insns[frame.pc];
+
+            // if (this.globals["$cameron"] === Qtrue) {
+            //     debugger;
+            // }
 
             switch (insn.constructor) {
                 case Number:
@@ -192,57 +202,15 @@ export class ExecutionContext {
 
                         // @TODO: remove me
                         // @ts-ignore
-                        if (this.stack.includes(undefined)) {
-                            debugger;
+                        for (const elem of this.stack) {
+                            if (elem.rval === undefined) {
+                                debugger;
+                            }
                         }
                     } catch (error) {
                         if (error instanceof ReturnError) {
-                            // if this is a lambda, return from the block instead of the enclosing method
-                            // if (this.frame instanceof BlockFrame && this.frame.calling_convention === CallingConvention.METHOD_LAMBDA) {
-                            //     throw error;
-                            // }
-
-                            // const last_frame = this.frame;
-
-                            if (this.frame!.iseq.lexical_scope.id === error.lexical_scope.id) {
-                                this.frame = this.frame.parent;
-                                throw error;
-                            } else {
-                                return error.value;
-                            }
-
-                            // let return_frame: Frame | null = this.frame;
-
-                            // while (return_frame && return_frame.iseq.lexical_scope.id === lexical_scope.id) {
-                            //     return_frame = return_frame?.parent;
-                            // }
-
-                            // return_frame = return_frame ? return_frame.parent : null;
-
-                            // if (!return_frame) {
-                            //     throw new LocalJumpError("unexpected return");
-                            // }
-
-                            // let method_frame: Frame | null = this.frame;
-
-                            // while (method_frame && !(method_frame instanceof MethodFrame)) {
-                            //     method_frame = method_frame.parent;
-                            // }
-
-                            // if (!method_frame) {
-                            //     throw new LocalJumpError("unexpected return");
-                            // }
-
-                            // Don't mess with the block's stack, which is the stack snapshot held
-                            // in the block's binding. Truncating it here means the block will not
-                            // have access to locals it may have closed over.
-                            // if (!(return_frame instanceof BlockFrame)) {
-                                // this.stack.splice(return_frame.stack_index);
-                            // }
-
-                            // this.frame = return_frame;
-
-                            // throw error;
+                            this.frame = previous || frame.parent;
+                            throw error;
                         } else if (error instanceof BreakError) {
                             if (frame.iseq.type != "block") {
                                 throw new Error(`Expected frame type to be 'block', was '${frame.iseq.type}' instead`);
@@ -259,7 +227,7 @@ export class ExecutionContext {
 
                             frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.cont_label);
                             result = error.value;
-                            this.stack.push(result);
+                            this.stack.push(new RValuePointer(result));
                         } else if (error instanceof NextError) {
                             if (frame.iseq.type != "block") {
                                 throw new Error(`Expected frame type to be 'block', was '${frame.iseq.type}' instead`);
@@ -276,7 +244,7 @@ export class ExecutionContext {
 
                             frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.cont_label);
                             result = error.value
-                            this.stack.push(result);
+                            this.stack.push(new RValuePointer(result));
                         } else if (error instanceof PauseError) {
                             frame.pc += 1;
                             this.stack.splice(frame.stack_index);
@@ -290,15 +258,7 @@ export class ExecutionContext {
                                 }
 
                                 const catch_entry = this.find_catch_entry(frame, CatchRescue)
-
-                                if (!catch_entry) {
-                                    // uncaught exception
-                                    throw error;
-                                }
-
-                                this.stack.splice!(frame.stack_index + frame.iseq.local_table.size() + catch_entry.restore_sp)
-                                this.frame = frame;
-
+                                const ensure_entry = this.find_catch_entry(frame, CatchEnsure);
                                 let error_rval;
 
                                 if (error instanceof RValue) {
@@ -307,12 +267,30 @@ export class ExecutionContext {
                                     error_rval = error.to_rvalue();
                                 }
 
+                                if (!catch_entry) {
+                                    if (ensure_entry) {
+                                        this.run_ensure_frame(ensure_entry.iseq!, frame, error_rval);
+                                    }
+
+                                    // uncaught exception
+                                    this.frame = frame;
+                                    throw error;
+                                }
+
+                                this.stack.splice!(frame.stack_index + frame.iseq.local_table.size() + catch_entry.restore_sp)
+                                this.frame = frame;
+
                                 frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.cont_label);
                                 result = this.run_rescue_frame(catch_entry.iseq!, frame, error_rval);
-                                this.stack.push(result);
+
+                                if (ensure_entry) {
+                                    this.run_ensure_frame(ensure_entry.iseq!, frame, Qnil);
+                                }
+
+                                this.stack.push(new RValuePointer(result));
                             } else {
                                 // re-raise javascript errors
-                                if (error instanceof ThrowError ||error instanceof RubyError || error instanceof NativeError) {
+                                if (error instanceof ThrowError || error instanceof RubyError || error instanceof NativeError) {
                                     throw error
                                 } else if (error instanceof Error) {
                                     throw new NativeError(error, this.create_backtrace());
@@ -382,6 +360,18 @@ export class ExecutionContext {
         }
     }
 
+    static print_backtrace_rval(rval: RValue) {
+        const backtrace = Object.send(rval, "backtrace").get_data<RubyArray>().elements;
+        const message = Object.send(rval, "message").get_data<string>();
+        const stdout = STDOUT.get_data<IO>();
+
+        stdout.puts(`${backtrace[0].get_data<string>()}: ${message} (${rval.klass.get_data<Class>().full_name})`);
+
+        for (let i = 1; i < backtrace.length; i ++) {
+            stdout.puts(`        ${backtrace[i].get_data<string>()}`);
+        }
+    }
+
     static print_backtrace_to_string(e: any): string {
         const backtrace = e.backtrace as string[];
         const lines = [`${backtrace[0]}: ${e.message} (${e.constructor.name})`];
@@ -434,12 +424,12 @@ export class ExecutionContext {
     }
 
     // this is also used to call lambdas
-    run_block_frame(call_data: BlockCallData, calling_convention: CallingConvention, iseq: InstructionSequence, binding: Binding, args: RValue[], kwargs?: Kwargs, frame_callback?: (frame: BlockFrame) => void): RValue {
+    run_block_frame(call_data: BlockCallData, calling_convention: CallingConvention, iseq: InstructionSequence, binding: Binding, args: RValue[], kwargs?: Kwargs, owner?: RValue, frame_callback?: (frame: BlockFrame) => void): RValue {
         const original_stack = this.stack;
 
         try {
             return this.with_stack(binding.stack, () => {
-                const block_frame = new BlockFrame(call_data, calling_convention,iseq, binding, original_stack);
+                const block_frame = new BlockFrame(call_data, calling_convention,iseq, binding, original_stack, args, kwargs, owner);
                 frame_callback?.(block_frame);
 
                 return this.run_frame(block_frame, () => {
@@ -455,7 +445,7 @@ export class ExecutionContext {
         }
     }
 
-    with_stack(stack: RValue[], cb: () => RValue): RValue {
+    with_stack(stack: RValuePointer[], cb: () => RValue): RValue {
         const old_stack = this.stack;
         this.stack = stack;
 
@@ -466,8 +456,8 @@ export class ExecutionContext {
         }
     }
 
-    run_class_frame(iseq: InstructionSequence, klass: RValue): RValue {
-        return this.run_frame(new ClassFrame(iseq, this.frame!, this.stack.length, klass));
+    run_class_frame(iseq: InstructionSequence, klass: RValue, nesting?: RValue[]): RValue {
+        return this.run_frame(new ClassFrame(iseq, this.frame!, this.stack.length, klass, nesting));
     }
 
     run_method_frame(call_data: MethodCallData, nesting: RValue[], iseq: InstructionSequence, self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, owner?: RValue): RValue {
@@ -485,12 +475,24 @@ export class ExecutionContext {
         );
 
         try {
-            return this.run_frame(method_frame, () => {
+            const return_value = this.run_frame(method_frame, () => {
                 return this.setup_arguments(call_data, CallingConvention.METHOD_LAMBDA, iseq, args, kwargs, block);
             });
+
+            const ensure_entry = iseq.catch_table.find_catch_entry(CatchEnsure);
+
+            if (ensure_entry) {
+                this.run_ensure_frame(ensure_entry.iseq!, method_frame, Qnil);
+            }
+
+            return return_value;
         } catch (e) {
             if (e instanceof ReturnError) {
                 this.stack.splice(method_frame.stack_index);
+
+                if (method_frame === e.return_from_frame) {
+                    return e.value;
+                }
             }
 
             throw e;
@@ -504,7 +506,14 @@ export class ExecutionContext {
         });
     }
 
-    private find_catch_entry<T extends CatchEntry>(frame: Frame, type: new (...args: any[]) => T) {
+    run_ensure_frame(iseq: InstructionSequence, frame: Frame, error: RValue): RValue {
+        return this.run_frame(new EnsureFrame(iseq, frame, this.stack.length), () => {
+            this.local_set(0, 0, error);
+            return null
+        });
+    }
+
+    private find_catch_entry<T extends CatchEntry>(frame: Frame, type: new (...args: any[]) => T): T | null {
         const iseq = frame.iseq;
 
         for (const catch_entry of iseq.catch_table.entries) {
@@ -560,18 +569,6 @@ export class ExecutionContext {
 
             if (splat_arr && splat_arr.klass === RubyArray.klass) {
                 locals.splice(call_data.argc - 1, 1, ...splat_arr.get_data<RubyArray>().elements);
-            }
-        }
-
-        // if (iseq.argument_options.keyword_rest_start != null && iseq.argument_options.keyword_rest_start > -1 && !call_data.has_flag(CallDataFlag.KWARG) && !call_data.has_flag(CallDataFlag.KW_SPLAT)) {
-        if (iseq.argument_options.keyword_bits_index != null && !call_data.has_flag(CallDataFlag.KWARG) && !call_data.has_flag(CallDataFlag.KW_SPLAT)) {
-            if (locals.length > 0 && locals[locals.length - 1].klass === Hash.klass) {
-                const kwargs_hash = locals.pop()!;
-                kwargs ||= new Map();
-
-                kwargs_hash.get_data<Hash>().each((k, v) => {
-                    kwargs!.set(k.get_data<string>(), v);
-                });
             }
         }
 
@@ -666,6 +663,18 @@ export class ExecutionContext {
             local_index = this.inc_local_index(local_index, iseq);
         }
 
+        // if (iseq.argument_options.keyword_rest_start != null && iseq.argument_options.keyword_rest_start > -1 && !call_data.has_flag(CallDataFlag.KWARG) && !call_data.has_flag(CallDataFlag.KW_SPLAT)) {
+        if (iseq.argument_options.keyword_bits_index != null && !call_data.has_flag(CallDataFlag.KWARG) && !call_data.has_flag(CallDataFlag.KW_SPLAT)) {
+            if (locals.length > 0 && locals[locals.length - 1].klass === Hash.klass) {
+                const kwargs_hash = locals.pop()!;
+                kwargs ||= new Map();
+
+                kwargs_hash.get_data<Hash>().each((k, v) => {
+                    kwargs!.set(k.get_data<string>(), v);
+                });
+            }
+        }
+
         const keyword_option = iseq.argument_options.keyword;
         if (keyword_option) {
             // First, set up the keyword bits array.
@@ -752,15 +761,15 @@ export class ExecutionContext {
     }
 
     pop(): RValue | undefined {
-        return this.stack.pop();
+        return this.stack.pop()?.rval;
     }
 
     push(...values: RValue[]): void {
-        this.stack.push(...values);
+        this.stack.push(...values.map(val => new RValuePointer(val)));
     }
 
     peek(): RValue {
-        return this.stack[this.stack.length - 1];
+        return this.stack[this.stack.length - 1].rval;
     }
 
     get stack_len(): number {
@@ -768,15 +777,15 @@ export class ExecutionContext {
     }
 
     popn(n: number = 1): RValue[] {
-        return this.stack.splice(this.stack.length - n, n);
+        return this.stack.splice(this.stack.length - n, n).map(ptr => ptr.rval);
     }
 
     topn(n: number): RValue {
-        return this.stack[this.stack_len - n - 1];
+        return this.stack[this.stack_len - n - 1].rval;
     }
 
     setn(n: number, value: RValue): void {
-        this.stack[this.stack_len - n - 1] = value;
+        this.stack[this.stack_len - n - 1].rval = value;
     }
 
     jump(label: Label): JumpResult {
@@ -784,7 +793,7 @@ export class ExecutionContext {
     }
 
     leave() {
-        return new LeaveResult(this.stack.pop()!);
+        return new LeaveResult(this.stack.pop()!.rval);
     }
 
     get_binding(): Binding {

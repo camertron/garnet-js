@@ -12,8 +12,7 @@ export default class AnyToString extends Instruction {
         if (value.klass == String.klass) {
             context.push(value);
         } else {
-            const class_name = original.klass.get_data<Class>().name;
-            const name = class_name ? class_name : "Class";
+            const name = original.klass.get_data<Class>().full_name;
             context.push(String.new(`#<${name}:${Object.object_id_to_str(original.object_id)}>`));
         }
 

@@ -231,8 +231,27 @@ export const init = () => {
             const hash = self.get_data<Hash>();
 
             if (block) {
+                const proc = block.get_data<Proc>();
+
                 for (const key of hash.keys.values()) {
-                    block.get_data<Proc>().call(ExecutionContext.current, [key]);
+                    proc.call(ExecutionContext.current, [key]);
+                }
+
+                return self;
+            } else {
+                // @TODO: return an Enumerator
+                return Qnil;
+            }
+        });
+
+        klass.define_native_method("each_value", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+            const hash = self.get_data<Hash>();
+
+            if (block) {
+                const proc = block.get_data<Proc>();
+
+                for (const value of hash.values.values()) {
+                    proc.call(ExecutionContext.current, [value]);
                 }
 
                 return self;

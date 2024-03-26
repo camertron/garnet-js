@@ -5,6 +5,9 @@ import { Kernel } from "../runtime/kernel";
 import { Numeric } from "../runtime/numeric";
 import { Object } from "../runtime/object";
 
+
+// JS:   1711152226.702
+// Ruby: 1711152191.542349
 class Time {
     public date: Date;
 
@@ -34,6 +37,10 @@ export const init = () => {
             } else {
                 throw new TypeError(`can't convert ${args[0].klass.get_data<Class>().name} into exact number`);
             }
+        });
+
+        klass.define_native_method("to_f", (self: RValue): RValue => {
+            return Float.new(self.get_data<Time>().date.getTime() / 1000);
         });
     });
 };

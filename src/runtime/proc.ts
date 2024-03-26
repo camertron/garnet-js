@@ -80,9 +80,9 @@ export class InterpretedProc extends Proc {
         this.calling_convention = calling_convention;
     }
 
-    call(context: ExecutionContext, args: RValue[], kwargs?: Kwargs, call_data?: BlockCallData, frame_callback?: (frame: BlockFrame) => void): RValue {
+    call(context: ExecutionContext, args: RValue[], kwargs?: Kwargs, call_data?: BlockCallData, owner?: RValue, frame_callback?: (frame: BlockFrame) => void): RValue {
         call_data ||= BlockCallData.create(args.length);
-        return context.run_block_frame(call_data, this.calling_convention, this.iseq, this.binding, args, kwargs, frame_callback);
+        return context.run_block_frame(call_data, this.calling_convention, this.iseq, this.binding, args, kwargs, owner, frame_callback);
     }
 
     with_binding(new_binding: Binding): InterpretedProc {
@@ -112,6 +112,10 @@ export const init = () => {
         });
 
         klass.alias_method("[]", "call");
+
+        klass.define_native_method("to_proc", (self: RValue): RValue => {
+            return self;
+        });
     });
 
     inited = true;

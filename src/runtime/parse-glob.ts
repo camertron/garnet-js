@@ -143,7 +143,15 @@ export class GlobPattern {
     }
 
     each_matching_path(base_path: string, cb: (matching_path: string) => void) {
-        this.each_matching_path_in(0, base_path, cb);
+        const base_path_parts = vmfs.split_path(base_path);
+
+        this.each_matching_path_in(0, base_path, (matching_path: string): void => {
+            if (base_path === "") {
+                cb(matching_path);
+            } else {
+                cb(vmfs.join_paths(...vmfs.split_path(matching_path).slice(base_path_parts.length)));
+            }
+        });
     }
 
     private each_matching_path_in(segment_index: number, base_path: string, cb: (matching_path: string) => void) {
@@ -269,30 +277,30 @@ const handle_segment = (context: ParseContext): ISegment => {
         return new RecursiveDirSegment(context.flags);
     }
 
-    const regex_chunks = [];
+    const chunks: [TokenType, string][] = [];
     let is_plain = true;
     let index = 0;
 
     while (context.current && context.current.type !== TokenType.SEPARATOR) {
         switch (context.current.type) {
             case TokenType.OPEN_BRACKET:
-                regex_chunks.push(handle_char_class(context));
+                chunks.push([context.current.type, handle_char_class(context)]);
                 is_plain = false;
                 break;
 
             case TokenType.OPEN_CURLY:
-                regex_chunks.push(handle_alternation_or_union(context));
+                chunks.push([context.current.type, handle_alternation_or_union(context)]);
                 is_plain = false;
                 break;
 
             case TokenType.STAR:
                 if (context.flags.dot_match) {
-                    regex_chunks.push(".*");
+                    chunks.push([context.current.type, ".*"]);
                 } else {
                     if (index === 0) {
-                        regex_chunks.push("[^.].*");
+                        chunks.push([context.current.type, "[^.].*"]);
                     } else {
-                        regex_chunks.push(".*");
+                        chunks.push([context.current.type, ".*"]);
                     }
                 }
 
@@ -300,21 +308,21 @@ const handle_segment = (context: ParseContext): ISegment => {
                 break;
 
             case TokenType.QUESTION_MARK:
-                regex_chunks.push(".");
+                chunks.push([context.current.type, "."]);
                 is_plain = false;
                 break;
 
             case TokenType.PLAIN:
-                regex_chunks.push(escape_regexp(context.current.value));
+                chunks.push([context.current.type, context.current.value]);
                 break;
 
             case TokenType.ESCAPED_PLAIN:
                 if (context.flags.no_escape) {
                     // use value without removing preceding backslash
-                    regex_chunks.push(escape_regexp(context.current.value));
+                    chunks.push([context.current.type, context.current.value]);
                 } else {
                     // remove preceding backslash before using value
-                    regex_chunks.push(escape_regexp(context.current.value.slice(1)));
+                    chunks.push([context.current.type, context.current.value.slice(1)]);
                 }
 
                 break;
@@ -325,10 +333,21 @@ const handle_segment = (context: ParseContext): ISegment => {
     }
 
     if (is_plain) {
-        return new StaticSegment(regex_chunks.join(""));
+        const plain_str = chunks.map(([_, value]) => value).join("");
+        return new StaticSegment(plain_str);
     }
 
-    return new RegExpSegment(new RegExp(`^${regex_chunks.join("")}$`));
+    const regexp_chunks = chunks.map(([type, value]) => {
+        switch (type) {
+            case TokenType.PLAIN:
+            case TokenType.ESCAPED_PLAIN:
+                return escape_regexp(value)
+            default:
+                return value;
+        }
+    });
+
+    return new RegExpSegment(new RegExp(`^${regexp_chunks.join("")}$`));
 }
 
 const handle_char_class = (context: ParseContext): string => {

@@ -50,6 +50,21 @@ abstract class FileSystem {
     abstract open(path: string): IFileHandle;
     abstract read(path: string): Buffer;
     abstract write(path: string, bytes: Buffer): void;
+
+    normalize_path(path: string): string {
+        const orig_segments = this.split_path(path);
+        const segments: string[] = [];
+
+        for (let segment of orig_segments) {
+            if (segment == "..") {
+                segments.pop();
+            } else if (segment != ".") {
+                segments.push(segment);
+            }
+        }
+
+        return this.join_paths(...segments);
+    }
 }
 
 const leading_separator_re_map: Map<string, RegExp> = new Map();
@@ -181,21 +196,6 @@ class VirtualFileSystem extends FileSystem {
         path = this.normalize_path(path);
         const p = this.split_path(path);
         this.files.set(p, bytes);
-    }
-
-    private normalize_path(path: string): string {
-        const orig_segments = this.split_path(path);
-        const segments: string[] = [];
-
-        for (let segment of orig_segments) {
-            if (segment == "..") {
-                segments.pop();
-            } else if (segment != ".") {
-                segments.push(segment);
-            }
-        }
-
-        return this.join_paths(...segments);
     }
 }
 

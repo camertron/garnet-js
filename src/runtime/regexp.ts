@@ -104,6 +104,11 @@ export const init = async () => {
                 return Qnil;
             }
         });
+
+        klass.define_native_method("inspect", (self: RValue, args: RValue[]): RValue => {
+            const pattern = self.get_data<Regexp>().pattern;
+            return RubyString.new(`/${pattern}/`);
+        });
     });
 
     Runtime.define_class("MatchData", ObjectClass, (klass: Class) => {

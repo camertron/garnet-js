@@ -118,6 +118,14 @@ export class Object {
     }
 
     static find_super_method_under(self: RValue, method_owner: RValue, method_name: string): Callable | null {
+        if (self.has_singleton_class()) {
+            return this.find_super_method_under_helper(self.get_singleton_class(), method_owner, method_name);
+        } else {
+            return this.find_super_method_under_helper(self.klass, method_owner, method_name);
+        }
+    }
+
+    static find_super_method_under_helper(self: RValue, method_owner: RValue, method_name: string) {
         let found_method_owner = false;
         let found_method: Callable | null = null;
 
@@ -130,7 +138,7 @@ export class Object {
          * have to search self's ancestry until we find owner, then start looking for the appropriate
          * method from there.
          */
-        Runtime.each_unique_ancestor(self.klass, true, (ancestor: RValue): boolean => {
+        Runtime.each_unique_ancestor(self, true, (ancestor: RValue): boolean => {
             if (ancestor === method_owner) {
                 found_method_owner = true;
                 return true;
@@ -203,8 +211,7 @@ export const init = () => {
         });
 
         klass.define_native_method("inspect", (self: RValue): RValue => {
-            const class_name = self.klass.get_data<Class>().name;
-            const name = class_name ? class_name : "Class";
+            const name = self.klass.get_data<Class>().full_name;
             let parts = [`${name}:${Object.object_id_to_str(self.object_id)}`];
 
             if (self.ivars) {

@@ -134,6 +134,8 @@ export class Runtime {
     }
 
     static define_class_under(parent: RValue, name: string, superclass: RValue, cb?: ClassDefinitionCallback): RValue {
+
+
         const parent_mod = parent.get_data<Module>();
 
         if (!parent_mod.constants[name]) {
@@ -256,42 +258,51 @@ export class Runtime {
                     if (Kernel.is_a(str, String.klass)) {
                         return str;
                     } else {
-                        const obj_class_name = obj.klass.get_data<Class>().name;
-                        const to_str_class_name = str.klass.get_data<Class>().name;
+                        const obj_class_name = obj.klass.get_data<Class>().full_name;
+                        const to_str_class_name = str.klass.get_data<Class>().full_name;
                         throw new TypeError(`can't convert ${obj_class_name} to String (${obj_class_name}#to_str gives ${to_str_class_name})`);
                     }
                 } else {
-                    const obj_class_name = obj.klass.get_data<Class>().name;
+                    const obj_class_name = obj.klass.get_data<Class>().full_name;
                     throw new TypeError(`no implicit conversion of ${obj_class_name} into String`);
                 }
         }
     }
 
-    static require(path: string): boolean {
+    static require(require_path: string): boolean {
+        require_path = vmfs.normalize_path(require_path);
+
         const ec = ExecutionContext.current;
+        const absolute_path = vmfs.is_relative(require_path) ? this.find_on_load_path(require_path, false) : require_path;
         const loaded_features = ec.globals['$"'].get_data<RubyArray>().elements;
-        const full_path = this.find_on_load_path(path) || path;
 
-        // required files are only evaluated once
-        for (const loaded_feature of loaded_features) {
-            if (loaded_feature.get_data<string>() === full_path) {
-                return false;
-            }
-        }
-
-        if (this.native_extensions[full_path]) {
-            this.load_native_extension(full_path);
-        } else {
-            if (!full_path) {
-                throw new LoadError(`cannot load such file -- ${path}`);
+        if (absolute_path) {
+            // required files are only evaluated once
+            for (const loaded_feature of loaded_features) {
+                if (loaded_feature.get_data<string>() === absolute_path) {
+                    return false;
+                }
             }
 
-            this.load(full_path);
+            this.load(require_path, absolute_path);
+            loaded_features.push(String.new(absolute_path!));
+            return true;
         }
 
-        loaded_features.push(String.new(full_path));
+        if (this.native_extensions[require_path]) {
+            for (const loaded_feature of loaded_features) {
+                if (loaded_feature.get_data<string>() === require_path) {
+                    return false;
+                }
+            }
 
-        return true;
+            this.load_native_extension(require_path);
+            loaded_features.push(String.new(require_path));
+
+            return true;
+        }
+
+        throw new LoadError(`cannot load such file -- ${require_path}`);
     }
 
     static require_relative(path: string, requiring_path: string) {
@@ -305,20 +316,23 @@ export class Runtime {
         return this.require(require_path);
     }
 
-    static load(path: string): boolean {
-        const ec = ExecutionContext.current;
-        const full_path = vmfs.is_relative(path) ? this.find_on_load_path(path, false) : path;
-
-        if (!full_path) {
-            if (this.native_extensions[path]) {
-                return this.load_native_extension(path);
-            }
-
-            throw new LoadError(`cannot load such file -- ${path}`);
+    static load(require_path: string, absolute_path: string | null): boolean {
+        if (!absolute_path) {
+            throw new LoadError(`cannot load such file -- ${require_path}`);
         }
 
-        const code = vmfs.read(full_path);
-        const insns = Compiler.compile_string(code.toString(), full_path);
+        return this.load_absolute_path(require_path, absolute_path);
+    }
+
+    static load_absolute_path(require_path: string, absolute_path: string) {
+        const ec = ExecutionContext.current;
+
+        if (this.native_extensions[absolute_path]) {
+            return this.load_native_extension(absolute_path);
+        }
+
+        const code = vmfs.read(absolute_path);
+        const insns = Compiler.compile_string(code.toString(), require_path);
         ec.run_top_frame(insns, ec.stack_len);
 
         return true;
@@ -327,13 +341,14 @@ export class Runtime {
     private static find_on_load_path(path: string, assume_extension: boolean = true): string | null {
         const ec = ExecutionContext.current;
         const load_paths = ec.globals["$:"].get_data<RubyArray>().elements;
+        const has_rb_ext = path.endsWith(".rb");
 
         for(let load_path of load_paths) {
-            let full_path = vmfs.join_paths(load_path.get_data<string>(), path);
-            if (!assume_extension) full_path = `${full_path}.rb`;
+            let absolute_path = vmfs.join_paths(load_path.get_data<string>(), path);
+            if (!assume_extension && !has_rb_ext) absolute_path = `${absolute_path}.rb`;
 
-            if (vmfs.is_file(full_path)) {
-                return full_path;
+            if (vmfs.is_file(absolute_path)) {
+                return absolute_path;
             }
         }
 
@@ -442,7 +457,10 @@ export class Module {
     private autoloads_: Map<string, string>;
 
     private rval_: RValue;
-    private name_rval_: RValue;
+    private full_name_rval_: RValue;
+
+    private full_name_: string;
+    private anonymous_name_str_: string;
 
     constructor(name: string | null, nesting_parent?: RValue) {
         this.name = name;
@@ -689,11 +707,43 @@ export class Module {
         return `module ${this.name}`;
     }
 
-    get name_rval(): RValue {
-        if (!this.name) return Qnil;
-        if (this.name_rval_) return this.name_rval_;
-        this.name_rval_ = String.new(this.name);
-        return this.name_rval_;
+    get full_name(): string {
+        if (!this.full_name_) {
+            let cur_parent: Module = this;
+            const parts = [];
+
+            while (cur_parent.nesting_parent && cur_parent != ObjectClass.get_data<Module>()) {
+                if (cur_parent.name) {
+                    parts.unshift(cur_parent.name);
+                } else {
+                    parts.unshift(cur_parent.anonymous_name_str);
+                }
+
+                cur_parent = cur_parent.nesting_parent.get_data<Module>();
+            }
+
+            this.full_name_ = parts.join("::");
+        }
+
+        return this.full_name_;
+    }
+
+    get anonymous_name_str(): string {
+        if (!this.anonymous_name_str_) {
+            const type_str = (this instanceof Module) ? "Module" : "Class";
+            this.anonymous_name_str_ = `#<Class:${Object.object_id_to_str(this.rval.object_id)}>`
+        }
+
+        return this.anonymous_name_str_;
+    }
+
+    get full_name_rval(): RValue {
+        if (!this.full_name_rval_) {
+            this.full_name_rval_ = String.new(this.full_name);
+            this.full_name_rval_.freeze();
+        }
+
+        return this.full_name_rval_;
     }
 
     get rval(): RValue {
@@ -775,7 +825,7 @@ export class RValue {
         }
 
         if (!this.singleton_class) {
-            let name = `#<Class:${this.klass.get_data<Class>().name}:${Object.object_id_to_str(this.object_id)}>`
+            let name = `#<Class:${this.klass.get_data<Class>().full_name}:${Object.object_id_to_str(this.object_id)}>`
             const klass = new Class(name, this.klass, true);
             this.singleton_class = new RValue(ClassClass, klass);
             klass.rval = this.singleton_class;
@@ -809,6 +859,14 @@ export class RValue {
     }
 }
 
+export class RValuePointer {
+    public rval: RValue;
+
+    constructor(rval: RValue) {
+        this.rval = rval;
+    }
+}
+
 export class Class extends Module {
     public superclass: RValue | null;
     public is_singleton_class: boolean;
@@ -835,7 +893,7 @@ export class Class extends Module {
                 superclass_singleton = ClassClass;
             }
 
-            const singleton_klass = new Class(`Class:${this.name}`, superclass_singleton, true);
+            const singleton_klass = new Class(`Class:${this.full_name}`, superclass_singleton, true);
             this.singleton_class = new RValue(ClassClass, singleton_klass);
             singleton_klass.rval = this.singleton_class;
         }
@@ -1052,27 +1110,10 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
     });
 
     klass.define_native_method("inspect", (self: RValue): RValue => {
-        const klass = self.get_data<Class>();
-
-        if (klass.name) {
-            return String.new(klass.name);
-        } else {
-            // once we figure out how to call super(), replace this hackery
-            return ObjectClass.get_data<Class>().methods["inspect"].call(
-                ExecutionContext.current, self, []
-            );
-        }
+        return String.new(self.get_data<Class>().full_name);
     });
 
-    klass.define_native_method("to_s", (self: RValue): RValue => {
-        const name = self.get_data<Class>().name;
-
-        if (name) {
-            return String.new(name);
-        } else {
-            return Object.send(self, "inspect");
-        }
-    });
+    klass.alias_method("to_s", "inspect");
 });
 
 (BasicObjectClass.get_data<Class>()).tap( (klass: Class) => {
