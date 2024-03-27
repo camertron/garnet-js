@@ -447,6 +447,7 @@ export class Module {
     public nesting_parent?: RValue;
     public default_visibility: Visibility = Visibility.public;
 
+    private temporary_name_: string | null;
     private constants_: {[key: string]: RValue};
     private deprecated_constants: {[key: string]: RValue};
     private methods_: {[key: string]: Callable};
@@ -457,10 +458,10 @@ export class Module {
     private autoloads_: Map<string, string>;
 
     private rval_: RValue;
-    private full_name_rval_: RValue;
+    private full_name_rval_: RValue | null = null;
 
-    private full_name_: string;
-    private anonymous_name_str_: string;
+    private full_name_: string | null = null;
+    private anonymous_name_str_: string | null = null;
 
     constructor(name: string | null, nesting_parent?: RValue) {
         this.name = name;
@@ -709,17 +710,19 @@ export class Module {
 
     get full_name(): string {
         if (!this.full_name_) {
-            let cur_parent: Module = this;
+            let cur_parent_rval: RValue | undefined = this.rval;
             const parts = [];
 
-            while (cur_parent.nesting_parent && cur_parent != ObjectClass.get_data<Module>()) {
+            while (cur_parent_rval && cur_parent_rval != ObjectClass) {
+                const cur_parent: Module = cur_parent_rval.get_data<Module>();
+
                 if (cur_parent.name) {
                     parts.unshift(cur_parent.name);
                 } else {
                     parts.unshift(cur_parent.anonymous_name_str);
                 }
 
-                cur_parent = cur_parent.nesting_parent.get_data<Module>();
+                cur_parent_rval = cur_parent.nesting_parent;
             }
 
             this.full_name_ = parts.join("::");
@@ -729,9 +732,13 @@ export class Module {
     }
 
     get anonymous_name_str(): string {
+        if (this.temporary_name) {
+            return this.temporary_name;
+        }
+
         if (!this.anonymous_name_str_) {
             const type_str = (this instanceof Module) ? "Module" : "Class";
-            this.anonymous_name_str_ = `#<Class:${Object.object_id_to_str(this.rval.object_id)}>`
+            this.anonymous_name_str_ = `#<${type_str}:${Object.object_id_to_str(this.rval.object_id)}>`
         }
 
         return this.anonymous_name_str_;
@@ -744,6 +751,17 @@ export class Module {
         }
 
         return this.full_name_rval_;
+    }
+
+    get temporary_name(): string | null {
+        return this.temporary_name_;
+    }
+
+    set temporary_name(new_name: string | null) {
+        this.temporary_name_ = new_name;
+        this.full_name_ = null;
+        this.full_name_rval_ = null;
+        this.anonymous_name_str_ = null;
     }
 
     get rval(): RValue {

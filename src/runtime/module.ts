@@ -348,7 +348,7 @@ export const init = () => {
     mod.define_native_method("method_defined?", (self: RValue, args: RValue[]): RValue => {
         const method_name = Runtime.coerce_to_string(args[0]).get_data<string>();
         const inherit = (args[1] || Qfalse).is_truthy();
-        return Object.find_method_under(self, method_name, true, inherit) ? Qtrue : Qfalse;
+        return Object.find_instance_method_under(self, method_name, true, inherit) ? Qtrue : Qfalse;
     });
 
     mod.define_native_method("class_exec", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: CallData): RValue => {
@@ -399,6 +399,12 @@ export const init = () => {
         }
 
         return RubyArray.new(results);
+    });
+
+    mod.define_native_method("set_temporary_name", (self: RValue, args: RValue[]): RValue => {
+        const temp_name = Runtime.coerce_to_string(args[0] || Qnil).get_data<string>();
+        self.get_data<Module>().temporary_name = temp_name;
+        return self;
     });
 
     inited = true;

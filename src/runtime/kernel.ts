@@ -16,6 +16,7 @@ import { Symbol } from "../runtime/symbol";
 import { Hash } from "./hash";
 import { Float } from "./float";
 import { Enumerator } from "./enumerator";
+import { Binding } from "./binding";
 
 export class Kernel {
     public static exit_handlers: RValue[] = [];
@@ -645,5 +646,9 @@ export const init = async () => {
         }
 
         throw new NameError(`undefined method \`${method_name}' for class ${self.klass.get_data<Class>().name}`);
+    });
+
+    mod.define_native_method("binding", (self: RValue): RValue => {
+        return Binding.from_binding(ExecutionContext.current.get_binding());
     });
 };

@@ -11,6 +11,11 @@ export const init = () => {
             // no-op for now
             return Qnil;
         });
+
+        klass.define_native_method("timeout", (): RValue => {
+            // no-op for now
+            return Qnil;
+        });
     });
 
     inited = true;
