@@ -1,7 +1,20 @@
 def foo
-  # require 'foo'
-ensure
-  puts "Ensured!"
+  puts "Begin"
+
+  begin
+    puts "Yielding"
+    yield
+    $cameron = true
+  rescue
+    puts "Rescued"
+  ensure
+    puts "Ensure ran!"
+  end
+
+  puts "End"
 end
 
-foo
+foo do
+  puts "Yielded"
+  # raise
+end

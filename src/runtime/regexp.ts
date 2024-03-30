@@ -11,6 +11,8 @@ let onigmo: Onigmo;
 let inited = false;
 
 class OnigmoExportsWrapper {
+    private static WASM_PAGE_SIZE_BYTES = Math.pow(2, 16);
+
     private original_exports: OnigmoExports;
 
     public memory: DataView;
@@ -32,13 +34,17 @@ class OnigmoExportsWrapper {
         } catch (e) {
             if (e instanceof Error && e.name === "RuntimeError") {
                 // hopefully increasing by an entire page is always enough :/
-                this.original_exports.memory.grow(1);
-                this.memory = new DataView(this.original_exports.memory.buffer);
+                this.grow(1);
                 return cb();
             }
 
             throw e;
         }
+    }
+
+    private grow(pages: number) {
+        this.original_exports.memory.grow(1);
+        this.memory = new DataView(this.original_exports.memory.buffer);
     }
 
     onig_new_deluxe(...params: Parameters<OnigmoExports["onig_new_deluxe"]>): ReturnType<OnigmoExports["onig_new_deluxe"]> {
@@ -74,9 +80,20 @@ class OnigmoExportsWrapper {
     }
 
     malloc(...params: Parameters<OnigmoExports["malloc"]>): ReturnType<OnigmoExports["malloc"]> {
-        return this.ensure_enough_memory(() => {
+        // Wrap the first malloc in ensure_enough_memory() in case it throws a RuntimeError.
+        const addr = this.ensure_enough_memory(() => this.original_exports.malloc(...params));
+        const size = params[0];
+
+        // Even when there isn't enough WASM memory, malloc still appears to succeed by returning an
+        // address. Although that address points to a valid memory location, malloc appears not to
+        // check that the requisite number of bytes are available after it, meaning we can index
+        // past the end of the buffer. This check is here to make sure enough bytes were allocated.
+        if ((addr + size) > this.memory.byteLength) {
+            this.grow(Math.ceil(size / OnigmoExportsWrapper.WASM_PAGE_SIZE_BYTES));
             return this.original_exports.malloc(...params);
-        });
+        }
+
+        return addr;
     }
 
     free(...params: Parameters<OnigmoExports["free"]>): ReturnType<OnigmoExports["free"]> {

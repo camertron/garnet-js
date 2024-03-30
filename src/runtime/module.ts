@@ -219,7 +219,7 @@ export const init = () => {
                 line_offset = 0;
             }
 
-            const iseq = Compiler.compile_string(code, path, line_offset);
+            const iseq = Compiler.compile_string(code, path, path, line_offset);
             return ExecutionContext.current.run_class_frame(iseq, self);
         }
     });
@@ -275,14 +275,9 @@ export const init = () => {
             // });
 
             const binding = proc.binding.with_self(mtd_self);
+            const new_call_data = new MethodCallData(method_name, call_data!.argc, call_data!.flag, call_data!.kw_arg);
 
-            try {
-                const new_call_data = new MethodCallData(method_name, call_data!.argc, call_data!.flag, call_data!.kw_arg);
-                return proc.with_binding(binding).call(ExecutionContext.current, mtd_args, mtd_kwargs, new_call_data, self);
-            } catch (e) {
-                // debugger;
-                throw e;
-            }
+            return proc.with_binding(binding).call(ExecutionContext.current, mtd_args, mtd_kwargs, new_call_data, self);
         });
 
         return args[0];
@@ -308,7 +303,7 @@ export const init = () => {
 
         for (const arg of args) {
             const name = Runtime.coerce_to_string(arg).get_data<string>();
-            const method = Object.find_method_under(self, name, true);
+            const method = Object.find_instance_method_under(self, name, true);
 
             if (method) {
                 mod.get_singleton_class().get_data<Class>().methods[name] = method;

@@ -332,7 +332,7 @@ export class Runtime {
         }
 
         const code = vmfs.read(absolute_path);
-        const insns = Compiler.compile_string(code.toString(), require_path);
+        const insns = Compiler.compile_string(code.toString(), require_path, absolute_path);
         ec.run_top_frame(insns, ec.stack_len);
 
         return true;
@@ -1096,14 +1096,16 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
 
 (ClassClass.get_data<Class>()).tap( (klass: Class) => {
     // create a new instance of the Class class, i.e. create a new user-defined class
-    klass.define_native_singleton_method("new", (_self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+    klass.define_native_singleton_method("new", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
         const superclass = args[0] || ObjectClass;
         const new_class = new Class(null, superclass);
         const new_class_rval = new RValue(ClassClass, new_class);
         new_class.rval = new_class_rval;
 
         if (block) {
-            block.get_data<Proc>().call(ExecutionContext.current, [new_class_rval]);
+            const proc = block!.get_data<Proc>();
+            const binding = proc.binding.with_self(new_class_rval);
+            proc.with_binding(binding).call(ExecutionContext.current, [new_class_rval]);
         }
 
         return new_class_rval;

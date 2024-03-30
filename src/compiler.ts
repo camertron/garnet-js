@@ -65,6 +65,7 @@ import {
     MultiWriteNode,
     NextNode,
     NilNode,
+    NoKeywordsParameterNode,
     Node,
     NumberedParametersNode,
     NumberedReferenceReadNode,
@@ -110,6 +111,8 @@ import { SyntaxError } from "./errors";
 import { ThrowType } from "./insns/throw";
 import { String } from "./runtime/string";
 import { ParameterMetadata, ParametersMetadataBuilder } from "./runtime/parameter-meta";
+import GetLocal from "./insns/getlocal";
+import SetLocal from "./insns/setlocal";
 
 export type ParseLocal = {
     name: string
@@ -182,6 +185,7 @@ export class Compiler extends Visitor {
     private compiler_options: CompilerOptions;
     private source: string;
     private path: string;
+    private absolute_path: string;
     private iseq: InstructionSequence;
     private line_offsets_: number[];
     private local_depth: number;
@@ -193,11 +197,12 @@ export class Compiler extends Visitor {
 
     public static parse: (code: string) => ParseResult;
 
-    constructor(source: string, path: string, line: number, compiler_options?: CompilerOptions) {
+    constructor(source: string, path: string, absolute_path: string, line: number, compiler_options?: CompilerOptions) {
         super();
 
         this.source = source;
         this.path = path;
+        this.absolute_path = absolute_path;
         this.compiler_options = compiler_options || new CompilerOptions();
         this.local_depth = 0;
         this.local_catch_table_stack = new CatchTableStack();
@@ -206,17 +211,17 @@ export class Compiler extends Visitor {
         this.lexical_scope_stack = new LexicalScopeStack();
     }
 
-    static compile(source: string, require_path: string, ast: any, line_offset: number = 0, compiler_options?: CompilerOptions): InstructionSequence {
-        const compiler = new Compiler(source, require_path, line_offset, compiler_options);
+    static compile(source: string, require_path: string, absolute_path: string, ast: any, line_offset: number = 0, compiler_options?: CompilerOptions): InstructionSequence {
+        const compiler = new Compiler(source, require_path, absolute_path, line_offset, compiler_options);
 
         return compiler.with_used<InstructionSequence>(true, () => {
             return compiler.visitProgramNode(ast.value);
         })
     }
 
-    static compile_string(source: string, require_path: string, line_offset: number = 0, compiler_options?: CompilerOptions) {
+    static compile_string(source: string, require_path: string, absolute_path: string, line_offset: number = 0, compiler_options?: CompilerOptions) {
         const ast = Compiler.parse(source);
-        return this.compile(source, require_path, ast, line_offset, compiler_options);
+        return this.compile(source, require_path, absolute_path, ast, line_offset, compiler_options);
     }
 
     visit(node: Node) {
@@ -259,7 +264,7 @@ export class Compiler extends Visitor {
             )
         );
 
-        const top_iseq = new InstructionSequence("<main>", this.path, this.start_line_for_loc(node.location)!, "top", lexical_scope, null, this.compiler_options);
+        const top_iseq = new InstructionSequence("<main>", this.path, this.absolute_path, this.start_line_for_loc(node.location)!, "top", lexical_scope, null, this.compiler_options);
 
         node.locals.forEach((local: string) => {
             top_iseq.local_table.plain(local);
@@ -391,9 +396,17 @@ export class Compiler extends Visitor {
                         if (element instanceof AssocNode) {
                             flags |= CallDataFlag.KWARG;
                             const assoc_node = element as AssocNode;
-                            kw_arg.push((assoc_node.key as SymbolNode).unescaped);
+
+                            // any kwargs that are not keyed by symbols must be optional and are
+                            // slurped up into the kwsplat hash
+                            if (assoc_node.key instanceof SymbolNode && !found_kwsplat) {
+                                kw_arg.push(assoc_node.key.unescaped);
+                            } else {
+                                found_kwsplat = true;
+                                kw_arg.length = 0; // clear array
+                                flags |= CallDataFlag.KW_SPLAT;
+                            }
                         } else if (element instanceof AssocSplatNode) {
-                            found_kwsplat = true;
                             flags |= CallDataFlag.KW_SPLAT;
                             kw_arg.push("**");
                         }
@@ -766,15 +779,19 @@ export class Compiler extends Visitor {
         }
 
         if (node.keywords) {
-            this.iseq.argument_options.keyword = [];
-            this.iseq.argument_options.keyword_bits_index = this.iseq.local_table.keyword_bits();
-            this.with_used(true, () => this.visitAll(node.keywords));
-            this.iseq.argument_size += this.iseq.argument_options.keyword.length;
+            if (!(node.keywordRest instanceof NoKeywordsParameterNode)) {
+                this.iseq.argument_options.keyword = [];
+                this.iseq.argument_options.keyword_bits_index = this.iseq.local_table.keyword_bits();
+                this.with_used(true, () => this.visitAll(node.keywords));
+                this.iseq.argument_size += this.iseq.argument_options.keyword.length;
+            }
         }
 
         if (node.keywordRest) {
-            this.iseq.argument_options.keyword_rest_start = this.iseq.argument_size;
-            this.with_used(true, () => this.visit(node.keywordRest!));
+            if (!(node.keywordRest instanceof NoKeywordsParameterNode)) {
+                this.iseq.argument_options.keyword_rest_start = this.iseq.argument_size;
+                this.with_used(true, () => this.visit(node.keywordRest!));
+            }
         }
 
         if (node.block) {
@@ -1217,6 +1234,8 @@ export class Compiler extends Visitor {
         this.iseq.push(cont_label);
 
         if (node.ensureClause) {
+            this.local_depth ++;
+
             const ensure_iseq = this.iseq.ensure_child_iseq(
                 this.start_line_for_loc(node.ensureClause.location)!,
                 this.lexical_scope_stack.current()
@@ -1233,6 +1252,12 @@ export class Compiler extends Visitor {
                 // the frame.
                 ensure_iseq.leave();
             });
+
+            this.local_depth --;
+
+            // Visit the ensure clause again. The frame created above runs if an error occurs,
+            // while these instructions will run if no error occurs.
+            this.with_used(false, () => this.visit(node.ensureClause!));
 
             this.iseq.catch_table.catch_ensure(ensure_iseq, begin_label, end_label, cont_label, 0);
         }
@@ -1499,6 +1524,47 @@ export class Compiler extends Visitor {
             if (value) this.visit(value);
         }
     }
+
+    // override visitKeywordHashNode(node: KeywordHashNode) {
+    //     let all_keys_are_symbols = true;
+
+    //     for (const element of node.elements) {
+    //         if (element instanceof AssocNode) {
+    //             if (!(element.key instanceof SymbolNode)) {
+    //                 all_keys_are_symbols = false;
+    //                 break;
+    //             }
+    //         }
+    //     }
+
+    //     let count = 0;
+
+    //     if (all_keys_are_symbols) {
+    //         // The CallData object maintains information about the kwargs
+    //         // a method was called with, meaning we don't have to visit the
+    //         // keys here, just the values. The send instruction will sort
+    //         // everything out.
+    //         for (const element of node.elements) {
+    //             const value = (element as AssocNode | AssocSplatNode).value;
+    //             if (value) this.visit(value);
+    //         }
+    //     } else {
+    //         // If even one of the keys is not a symbol, Ruby slurps everything
+    //         // up (even entries that _are_ keyed on symbols) into a kwsplat hash.
+    //         for (const element of node.elements) {
+    //             if (element instanceof AssocNode) {
+    //                 this.with_used(true, () => {
+    //                     this.visit(element.key);
+    //                     this.visit(element.value);
+    //                 });
+
+    //                 count ++;
+    //             }
+    //         }
+    //     }
+
+    //     this.iseq.newhash(count * 2);
+    // }
 
     override visitInstanceVariableOrWriteNode(node: InstanceVariableOrWriteNode) {
         const label = this.iseq.label();

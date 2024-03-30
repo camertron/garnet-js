@@ -1,5 +1,6 @@
 import { LexicalScope } from "../compiler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
+import { Qtrue } from "../garnet";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
 import { ParameterMetadata } from "../runtime/parameter-meta";

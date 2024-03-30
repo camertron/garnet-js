@@ -142,7 +142,7 @@ export const init = async () => {
     mod.define_native_method("require_relative", (_self: RValue, args: RValue[]): RValue => {
         const path = args[0];
         Runtime.assert_type(path, String.klass);
-        return Runtime.require_relative(path.get_data<string>(), ExecutionContext.current.frame!.iseq.file) ? Qtrue : Qfalse;
+        return Runtime.require_relative(path.get_data<string>(), ExecutionContext.current.frame!.iseq.absolute_path) ? Qtrue : Qfalse;
     });
 
     mod.define_native_method("load", (_self: RValue, args: RValue[]): RValue => {
@@ -187,33 +187,33 @@ export const init = async () => {
     });
 
     mod.define_native_method("raise", (_self: RValue, args: RValue[]): RValue => {
-        let instance;
+        let instance: RValue;
 
-        switch (args[0].klass) {
-            case ClassClass:
-                instance = Object.send(args[0], "new", [args[1] || Qnil]);
-                break;
+        if (args.length === 0) {
+            instance = new RuntimeError("").to_rvalue();
+        } else {
+            switch (args[0].klass) {
+                case ClassClass:
+                    instance = Object.send(args[0], "new", [args[1] || Qnil]);
+                    break;
 
-            case String.klass:
-                instance = Object.send(Object.find_constant("RuntimeError")!, "new", [args[0]]);
-                break;
+                case String.klass:
+                    instance = Object.send(Object.find_constant("RuntimeError")!, "new", [args[0]]);
+                    break;
 
-            default:
-                instance = args[0];
+                default:
+                    instance = args[0];
+            }
         }
 
         const backtrace = ExecutionContext.current.create_backtrace_rvalue();
         const locations: RValue[] = [];
 
-        try {
-            for (const element of backtrace.get_data<RubyArray>().elements) {
-                // @TODO: avoid all this error-prone string processing
-                const [path, line_and_label] = element.get_data<string>().split(":");
-                const [line, label] = line_and_label.split(" in ");
-                locations.push(BacktraceLocation.new(path, parseInt(line), label));
-            }
-        } catch (e) {
-            debugger;
+        for (const element of backtrace.get_data<RubyArray>().elements) {
+            // @TODO: avoid all this error-prone string processing
+            const [path, line_and_label] = element.get_data<string>().split(":");
+            const [line, label] = line_and_label.split(" in ");
+            locations.push(BacktraceLocation.new(path, parseInt(line), label));
         }
 
         const ruby_error = instance.get_data<IRubyError>();

@@ -19,6 +19,10 @@ export default class Send extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
+        if (this.call_data.mid === "classes") {
+            debugger;
+        }
+
         let block = undefined;
 
         if (this.block_iseq) {

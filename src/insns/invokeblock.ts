@@ -2,7 +2,7 @@ import { BlockCallData, CallDataFlag } from "../call_data";
 import { LocalJumpError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Kwargs, Qtrue } from "../runtime";
+import { Kwargs, Qnil } from "../runtime";
 import { Proc } from "../runtime/proc";
 
 export default class InvokeBlock extends Instruction {
@@ -31,7 +31,7 @@ export default class InvokeBlock extends Instruction {
             }
         }
 
-        if (block) {
+        if (block && block !== Qnil) {
             const result = block.get_data<Proc>().call(context, args, kwargs, this.call_data);
             context.push(result);
         } else {

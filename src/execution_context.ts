@@ -202,11 +202,11 @@ export class ExecutionContext {
 
                         // @TODO: remove me
                         // @ts-ignore
-                        for (const elem of this.stack) {
-                            if (elem.rval === undefined) {
-                                debugger;
-                            }
-                        }
+                        // for (const elem of this.stack) {
+                        //     if (elem.rval === undefined) {
+                        //         debugger;
+                        //     }
+                        // }
                     } catch (error) {
                         if (error instanceof ReturnError) {
                             this.frame = previous || frame.parent;
@@ -309,7 +309,7 @@ export class ExecutionContext {
                         // if (!(frame instanceof TopFrame)) {
                             // this shouldn't be necessary, but is because we're not handling
                             // the stack correctly at the moment
-                            this.stack.splice(frame.stack_index);
+                            // this.stack.splice(frame.stack_index);
                         // }
 
                         // restore the previous frame
@@ -479,11 +479,16 @@ export class ExecutionContext {
                 return this.setup_arguments(call_data, CallingConvention.METHOD_LAMBDA, iseq, args, kwargs, block);
             });
 
-            const ensure_entry = iseq.catch_table.find_catch_entry(CatchEnsure);
+            // problem: a successful method frame will have trimmed the stack by the time
+            // we get here, so we'll have to trim it here instead so as not to affect any
+            // code inside the ensure clause that might need to access locals
+            const ensure_entry = this.find_catch_entry(method_frame, CatchEnsure);
 
             if (ensure_entry) {
                 this.run_ensure_frame(ensure_entry.iseq!, method_frame, Qnil);
             }
+
+            this.stack.splice(method_frame.stack_index);
 
             return return_value;
         } catch (e) {
@@ -676,6 +681,11 @@ export class ExecutionContext {
         }
 
         const keyword_option = iseq.argument_options.keyword;
+
+        if (kwargs && kwargs.size > 0 && !keyword_option && !iseq.argument_options.keyword_rest_start) {
+            throw new ArgumentError("no keywords accepted");
+        }
+
         if (keyword_option) {
             // First, set up the keyword bits array.
             const keyword_bits = keyword_option.map((keyword) => !!kwargs && kwargs.has(keyword[0]));
@@ -715,7 +725,7 @@ export class ExecutionContext {
                     if (kwargs && kwargs.has(name)) {
                         this.local_set(i, 0, kwargs.get(name)!);
                     } else {
-                        throw new ArgumentError(`missing keyword: ${Object.send(Runtime.intern(name), "inspect")}`);
+                        throw new ArgumentError(`missing keyword: ${Object.send(Runtime.intern(name), "inspect").get_data<string>()}`);
                     }
                 } else {
                     // optional keyword with expression default value

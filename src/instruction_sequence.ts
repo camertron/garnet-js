@@ -358,6 +358,7 @@ type ArgumentOptions = {
 export class InstructionSequence {
     public name: string;
     public file: string;
+    public absolute_path: string;
     public line: number;
     public type: string;
     public lexical_scope: LexicalScope;
@@ -374,9 +375,10 @@ export class InstructionSequence {
     public storage_index: number;
     public stack: Stack;
 
-    constructor(name: string, file: string, line: number, type: string, lexical_scope: LexicalScope, parent_iseq: InstructionSequence | null = null, options: CompilerOptions) {
+    constructor(name: string, file: string, absolute_path: string, line: number, type: string, lexical_scope: LexicalScope, parent_iseq: InstructionSequence | null = null, options: CompilerOptions) {
         this.name = name;
         this.file = file;
+        this.absolute_path = absolute_path;
         this.line = line;
         this.type = type;
         this.lexical_scope = lexical_scope;
@@ -683,7 +685,7 @@ export class InstructionSequence {
     }
 
     private child_iseq(name: string, line: number, type: string, lexical_scope: LexicalScope): InstructionSequence {
-        return new InstructionSequence(name, this.file, line, type, lexical_scope, this, this.options);
+        return new InstructionSequence(name, this.file, this.absolute_path, line, type, lexical_scope, this, this.options);
     }
 
     method_child_iseq(name: string, line: number, lexical_scope: LexicalScope) {

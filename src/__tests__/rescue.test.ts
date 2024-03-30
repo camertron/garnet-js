@@ -231,6 +231,7 @@ describe("begin / rescue / end", () => {
             ensure_reached = false
 
             begin
+            rescue
             else
                 :no_error
             ensure

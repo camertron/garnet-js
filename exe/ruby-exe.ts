@@ -80,7 +80,8 @@ if (!code) {
 }
 
 try {
-    await Garnet.evaluate(code, code_path);
+    const absolute_code_path = vmfs.real_path(code_path);
+    await Garnet.evaluate(code, code_path, absolute_code_path);
 } catch(e) {
     // Garnet.evaluate should have printed the stack trace, etc, so all we
     // have to do is exit abnormally

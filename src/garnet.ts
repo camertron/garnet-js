@@ -52,19 +52,19 @@ export async function deinit() {
     ExecutionContext.current = null;
 }
 
-export async function unsafe_evaluate(code: string, path?: string, line: number = 1, compiler_options?: CompilerOptions): Promise<RValue> {
+export async function unsafe_evaluate(code: string, path?: string, absolute_path?: string, line: number = 1, compiler_options?: CompilerOptions): Promise<RValue> {
     if (!ExecutionContext.current) {
         throw new Error("The Ruby VM has not been initialized. Please call Garnet.init().");
     }
 
-    const insns = Compiler.compile_string(code, path || "<code>", line, compiler_options);
+    const insns = Compiler.compile_string(code, path || "<code>", absolute_path || "<code>", line, compiler_options);
     return ExecutionContext.current.run_top_frame(insns);
 }
 
 // Like unsafe_evaluate, but catches and prints errors
-export async function evaluate(code: string, path?: string, line: number = 1, compiler_options?: CompilerOptions): Promise<RValue> {
+export async function evaluate(code: string, path?: string, absolute_path?: string, line: number = 1, compiler_options?: CompilerOptions): Promise<RValue> {
     try {
-        return await unsafe_evaluate(code, path, line, compiler_options);
+        return await unsafe_evaluate(code, path, absolute_path, line, compiler_options);
     } catch (e) {
         // If we've gotten here, the error was not handled in Ruby or js, so
         // we print the backtrace and re-throw the error. The re-thrown error
