@@ -1,6 +1,6 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
 import { BreakError, ExecutionContext } from "../execution_context";
-import { Class, Kwargs, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
+import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { hash_combine } from "../util/hash_utils";
 import { Integer } from "./integer";
 import { Object } from "./object";
@@ -51,7 +51,7 @@ export const init = () => {
     Runtime.define_class("Array", ObjectClass, (klass: Class) => {
         klass.include(Object.find_constant("Enumerable")!);
 
-        klass.define_native_method("initialize", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_method("initialize", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             let init_arr: RValue[];
 
             if (args[0]) {
@@ -103,7 +103,7 @@ export const init = () => {
 
         klass.alias_method("to_s", "inspect");
 
-        klass.define_native_method("each", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_method("each", (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): RValue => {
             if (block) {
                 try {
                     const elements = self.get_data<RubyArray>().elements;
@@ -133,7 +133,7 @@ export const init = () => {
             return self;
         });
 
-        klass.define_native_method("select", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_method("select", (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             const elements = self.get_data<RubyArray>().elements;
 
             if (block) {
@@ -162,7 +162,7 @@ export const init = () => {
             }
         });
 
-        klass.define_native_method("reject", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_method("reject", (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             const elements = self.get_data<RubyArray>().elements;
 
             if (block) {
@@ -191,7 +191,7 @@ export const init = () => {
             }
         });
 
-        klass.define_native_method("index", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_method("index", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             const elements = self.get_data<RubyArray>().elements;
 
             if (block) {
@@ -225,7 +225,7 @@ export const init = () => {
             return Qnil;
         });
 
-        klass.define_native_method("all?", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_method("all?", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             const elements = self.get_data<RubyArray>().elements;
 
             if (args.length > 0) {
@@ -251,7 +251,7 @@ export const init = () => {
             return Qtrue;
         });
 
-        klass.define_native_method("delete", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_method("delete", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             const elements = self.get_data<RubyArray>().elements;
             const obj = args[0];
             let found_index: number | null = null;
@@ -276,7 +276,7 @@ export const init = () => {
             return Qnil;
         });
 
-        klass.define_native_method("[]", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_method("[]", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             const elements = self.get_data<RubyArray>().elements;
 
             if (args[0].klass == Object.find_constant("Range")!) {
@@ -393,7 +393,7 @@ export const init = () => {
             }
         });
 
-        klass.define_native_method("unshift", (self: RValue, args: RValue[], _kwargs?: Kwargs, _block?: RValue, call_data?: MethodCallData): RValue => {
+        klass.define_native_method("unshift", (self: RValue, args: RValue[], _kwargs?: Hash, _block?: RValue, call_data?: MethodCallData): RValue => {
             const elements = self.get_data<RubyArray>().elements;
 
             if (call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
@@ -421,7 +421,7 @@ export const init = () => {
             return self;
         });
 
-        klass.define_native_method("push", (self: RValue, args: RValue[], _kwargs?: Kwargs, _block?: RValue, call_data?: MethodCallData): RValue => {
+        klass.define_native_method("push", (self: RValue, args: RValue[], _kwargs?: Hash, _block?: RValue, call_data?: MethodCallData): RValue => {
             const elements = self.get_data<RubyArray>().elements;
 
             // this is wrong but I don't know how to fix it, since I need to know which args are splatted
@@ -548,7 +548,7 @@ export const init = () => {
             }
         }
 
-        klass.define_native_method("to_h", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_method("to_h", (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             const hash = new Hash();
             const elements = self.get_data<RubyArray>().elements;
 

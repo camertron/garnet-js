@@ -1,13 +1,14 @@
 import { ArgumentError, KeyError, NameError } from "../errors";
 import { BreakError, ExecutionContext } from "../execution_context";
-import { RValue, Class, Qtrue, Qfalse, Qnil, Runtime, Kwargs, KwargsHash, ObjectClass } from "../runtime";
+import { RValue, Class, Qtrue, Qfalse, Qnil, Runtime, ObjectClass } from "../runtime";
 import { Object } from "./object";
 import { Proc } from "./proc";
 import { String } from "../runtime/string";
+import { Symbol } from "../runtime/symbol";
 import { Integer } from "./integer";
 import { hash_combine } from "../util/hash_utils";
-import { CallData } from "../call_data";
 import { RubyArray } from "../runtime/array";
+import { hash_string } from "../util/string_utils";
 
 export class Hash {
     static new(default_value?: RValue, default_proc?: RValue): RValue {
@@ -20,16 +21,6 @@ export class Hash {
         const val = new RValue(this.klass, hash);
         val.get_data<Hash>().self = val;
         return val;
-    }
-
-    static from_kwargs(kwargs: Kwargs): RValue {
-        const result = new Hash();
-
-        for (const [k, v] of kwargs) {
-            result.set(Runtime.intern(k), v);
-        }
-
-        return Hash.from_hash(result);
     }
 
     private static klass_: RValue;
@@ -82,11 +73,27 @@ export class Hash {
         return Qnil;
     }
 
+    get_by_symbol(key: string): RValue {
+        const hash_code = hash_string(key);
+
+        if (this.keys.has(hash_code)) {
+            return this.values.get(hash_code)!;
+        }
+
+        return Qnil;
+    }
+
     set(key: RValue, value: RValue): RValue {
         const hash_code = this.get_hash_code(key);
         this.keys.set(hash_code, key);
         this.values.set(hash_code, value);
         return value;
+    }
+
+    set_by_symbol(key: string, value: RValue) {
+        const hash_code = hash_string(key);
+        this.keys.set(hash_code, Runtime.intern(key));
+        this.values.set(hash_code, value);
     }
 
     delete(key: RValue): RValue | undefined {
@@ -97,14 +104,27 @@ export class Hash {
         return value;
     }
 
-    has(key: RValue): RValue {
+    delete_by_symbol(key: string) {
+        const hash_code = hash_string(key);
+        this.keys.delete(hash_code);
+        this.values.delete(hash_code);
+    }
+
+    has(key: RValue): boolean {
         const hash_code = this.get_hash_code(key);
 
-        if (this.keys.has(hash_code)) {
-            return Qtrue;
-        } else {
-            return Qfalse;
-        }
+        return this.keys.has(hash_code);
+    }
+
+    has_symbol(key: string): boolean {
+        const key_entry = this.keys.get(hash_string(key));
+        return key_entry !== undefined && key_entry.klass === Symbol.klass;
+    }
+
+    // only call this if you know all the strings are keys, i.e. if this is
+    // a kwargs hash
+    string_keys(): string[] {
+        return Array.from(this.keys.values()).map(k => k.get_data<string>());
     }
 
     replace(other: Hash) {
@@ -121,6 +141,10 @@ export class Hash {
             const v = this.values.get(key)!;
             cb(k, v);
         }
+    }
+
+    get length(): number {
+        return this.keys.size;
     }
 
     private get_hash_code(obj: RValue): number {
@@ -140,7 +164,7 @@ export const init = () => {
     Runtime.define_class("Hash", ObjectClass, (klass: Class) => {
         klass.include(Object.find_constant("Enumerable")!);
 
-        klass.define_native_singleton_method("new", (_self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_singleton_method("new", (_self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             return Hash.new(args[0], block);
         });
 
@@ -181,7 +205,7 @@ export const init = () => {
         klass.define_native_method("include?", (self: RValue, args: RValue[]): RValue => {
             const key = args[0];
             const hash = self.get_data<Hash>();
-            return hash.has(key);
+            return hash.has(key) ? Qtrue : Qfalse;
         });
 
         klass.alias_method("key?", "include?");
@@ -201,16 +225,16 @@ export const init = () => {
             return String.new(`{${pairs.join(", ")}}`);
         });
 
-        klass.define_native_method("compare_by_identity", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("compare_by_identity", (self: RValue): RValue => {
             self.get_data<Hash>().compare_by_identity = true;
             return self;
         });
 
-        klass.define_native_method("compare_by_identity?", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("compare_by_identity?", (self: RValue): RValue => {
             return self.get_data<Hash>().compare_by_identity ? Qtrue : Qfalse;
         });
 
-        klass.define_native_method("each", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue, call_data?: CallData): RValue => {
+        klass.define_native_method("each", (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             const hash = self.get_data<Hash>();
 
             if (block) {
@@ -227,7 +251,7 @@ export const init = () => {
             }
         });
 
-        klass.define_native_method("each_key", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_method("each_key", (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             const hash = self.get_data<Hash>();
 
             if (block) {
@@ -244,7 +268,7 @@ export const init = () => {
             }
         });
 
-        klass.define_native_method("each_value", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_method("each_value", (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             const hash = self.get_data<Hash>();
 
             if (block) {
@@ -261,14 +285,14 @@ export const init = () => {
             }
         });
 
-        klass.define_native_method("transform_keys", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
-            let replacement_hash: Hash | KwargsHash | null = null;
+        klass.define_native_method("transform_keys", (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): RValue => {
+            let replacement_hash: Hash | null = null;
 
             if (args.length > 0) {
                 Runtime.assert_type(args[0], Hash.klass);
                 replacement_hash = args[0].get_data<Hash>();
             } else if (kwargs) {
-                replacement_hash = new KwargsHash(kwargs);
+                replacement_hash = kwargs;
             }
 
             const hash = self.get_data<Hash>();
@@ -329,7 +353,7 @@ export const init = () => {
             return RubyArray.new(keys);
         });
 
-        klass.define_native_method("fetch", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_method("fetch", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             const hash = self.get_data<Hash>();
             const key = args[0];
             const value = hash.get(key);
@@ -344,7 +368,7 @@ export const init = () => {
             }
         });
 
-        klass.define_native_method("delete", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_method("delete", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             const hash = self.get_data<Hash>();
             const key = args[0];
             const value = hash.delete(key);
@@ -425,8 +449,8 @@ export const init = () => {
             return Qtrue;
         });
 
-        klass.define_native_singleton_method("[]", (_self: RValue, args: RValue[], kwargs?: Kwargs): RValue => {
-            const hash = new Hash();
+        klass.define_native_singleton_method("[]", (_self: RValue, args: RValue[], kwargs?: Hash): RValue => {
+            let hash = new Hash();
 
             if (args.length === 1 && args[0].klass === Hash.klass) {
                 args[0].get_data<Hash>().each((k: RValue, v: RValue): void => {
@@ -451,11 +475,9 @@ export const init = () => {
                     }
                 }
             } else if (args.length === 1 && kwargs) {
-                hash.set(args[0], Hash.from_kwargs(kwargs));
+                hash.set(args[0], Hash.from_hash(kwargs));
             } else if (args.length === 0 && kwargs) {
-                for (const [k, v] of kwargs) {
-                    hash.set(Runtime.intern(k), v);
-                }
+                hash = kwargs;
             } else {
                 if (args.length % 2 != 0) {
                     throw new ArgumentError("odd number of arguments for Hash");

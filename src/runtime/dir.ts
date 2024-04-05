@@ -1,11 +1,12 @@
 import { BreakError, ExecutionContext } from "../execution_context";
 import { Qtrue } from "../runtime";
-import { Class, Kwargs, ObjectClass, Qnil, Runtime, RValue, } from "../runtime";
+import { Class, ObjectClass, Qnil, Runtime, RValue, } from "../runtime";
 import { String } from "../runtime/string";
 import { parse_glob } from "./parse-glob";
 import { Proc } from "./proc";
 import { RubyArray } from "../runtime/array";
 import { Numeric } from "./numeric";
+import { Hash } from "./hash";
 
 export class Dir {
     private static wd: string;
@@ -39,14 +40,14 @@ export const init = () => {
             return Dir.getwd_val();
         });
 
-        klass.define_native_singleton_method("glob", (_self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_singleton_method("glob", (_self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): RValue => {
             const pattern_str = Runtime.coerce_to_string(args[0]).get_data<string>();
-            const base_path = kwargs && kwargs.has("base") ? Runtime.coerce_to_string(kwargs.get("base")!).get_data<string>() : "";
-            const sort = kwargs && kwargs.has("sort") ? kwargs.get("sort")!.is_truthy() : Qtrue;
+            const base_path = kwargs && kwargs.has_symbol("base") ? Runtime.coerce_to_string(kwargs.get_by_symbol("base")!).get_data<string>() : "";
+            const sort = kwargs && kwargs.has_symbol("sort") ? kwargs.get_by_symbol("sort")!.is_truthy() : Qtrue;
             let flags = 0;
 
-            if (kwargs && kwargs.has("flags")) {
-                const f = kwargs.get("flags")!;
+            if (kwargs && kwargs.has_symbol("flags")) {
+                const f = kwargs.get_by_symbol("flags")!;
                 Runtime.assert_type(f, Numeric.klass);
                 flags = f.get_data<number>();
             }

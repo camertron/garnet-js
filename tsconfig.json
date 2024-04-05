@@ -14,7 +14,7 @@
     "declarationDir": "dist",
     "strictPropertyInitialization": false,
     "strict": true,
-    "types": ["node"],
+    "types": ["node", "jest"],
     "esModuleInterop": true,
     "paths": {
     },

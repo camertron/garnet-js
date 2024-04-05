@@ -2,11 +2,12 @@ import { BlockCallData, MethodCallData } from "../call_data";
 import { CallingConvention, ExecutionContext } from "../execution_context";
 import { BlockFrame } from "../frame";
 import { InstructionSequence } from "../instruction_sequence";
-import { RValue, Class, NativeMethod, Kwargs, ObjectClass, Runtime, Callable } from "../runtime";
+import { RValue, Class, NativeMethod, ObjectClass, Runtime, Module } from "../runtime";
 import { Binding } from "./binding";
 import { Object } from "../runtime/object";
 import { Integer } from "./integer";
 import { NameError } from "../errors";
+import { Hash } from "./hash";
 
 export abstract class Proc {
     public binding: Binding;
@@ -36,7 +37,7 @@ export abstract class Proc {
         return this.klass_;
     }
 
-    abstract call(context: ExecutionContext, args: RValue[], kwargs?: Kwargs, call_data?: BlockCallData): RValue;
+    abstract call(context: ExecutionContext, args: RValue[], kwargs?: Hash, call_data?: BlockCallData, owner?: Module): RValue;
     abstract with_binding(new_binding: Binding): Proc;
     abstract get arity(): number;
 }
@@ -53,7 +54,7 @@ export class NativeProc extends Proc {
         this.calling_convention = calling_convention;
     }
 
-    call(_context: ExecutionContext, args: RValue[], kwargs?: Kwargs, _call_data?: BlockCallData): RValue {
+    call(_context: ExecutionContext, args: RValue[], kwargs?: Hash, _call_data?: BlockCallData, _owner?: Module): RValue {
         return this.callable(this.binding.self, args, kwargs);
     }
 
@@ -80,7 +81,7 @@ export class InterpretedProc extends Proc {
         this.calling_convention = calling_convention;
     }
 
-    call(context: ExecutionContext, args: RValue[], kwargs?: Kwargs, call_data?: BlockCallData, owner?: RValue, frame_callback?: (frame: BlockFrame) => void): RValue {
+    call(context: ExecutionContext, args: RValue[], kwargs?: Hash, call_data?: BlockCallData, owner?: Module, frame_callback?: (frame: BlockFrame) => void): RValue {
         call_data ||= BlockCallData.create(args.length);
         return context.run_block_frame(call_data, this.calling_convention, this.iseq, this.binding, args, kwargs, owner, frame_callback);
     }
@@ -102,7 +103,7 @@ export const init = () => {
     if (inited) return;
 
     Runtime.define_class("Proc", ObjectClass, (klass: Class) => {
-        klass.define_native_method("call", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData): RValue => {
+        klass.define_native_method("call", (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData): RValue => {
             const ec = ExecutionContext.current
             return self.get_data<Proc>().call(ec, args, kwargs, call_data || (ec.frame as BlockFrame).call_data);
         });

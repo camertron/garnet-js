@@ -3,47 +3,16 @@ import * as Garnet from "../garnet";
 import { TrueClass } from '../runtime';
 import { RubyArray } from "../runtime/array";
 import { Symbol } from "../runtime/symbol";
+import { evaluate } from '../test_helpers';
+import { LoadError } from '../garnet';
 
 beforeAll(() => {
     return Garnet.init();
 });
 
-const evaluate = async (code: string): Promise<Garnet.RValue> => {
-    try {
-        return await Garnet.unsafe_evaluate(code);
-    } catch (e) {
-        if (e instanceof Garnet.RValue) {
-            throw e.get_data<Error>();
-        }
-
-        throw e;
-    }
-};
-
-// Can't get this to work with ts
-// expect.extend({
-//     toEqualRuby(received: RValue, expected: string) {
-//         const klass = (() => {
-//             if (expected.startsWith(":")) {
-//                 return SymbolClass;
-//             } else {
-//                 return StringClass;
-//             }
-//         })();
-
-//         const received_str = Object.send(received, "inspect").get_data<string>();
-//         const pass = received.klass == klass && received_str === expected;
-
-//         const message = () => {
-//             return `Expected: ${expected} (${klass.get_data<Class>().name})\nReceived: ${received_str} (${received.klass.get_data<Class>().name})`
-//         }
-
-//         return {
-//             pass,
-//             message
-//         };
-//     }
-// });
+afterAll(() => {
+    return Garnet.deinit();
+});
 
 describe("begin / rescue / end", () => {
     test("rescues named exceptions", async () => {
@@ -191,7 +160,7 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        expect(() => evaluate(code)).rejects.toThrow(Garnet.LoadError);
+        expect(() => evaluate(code)).rejects.toThrow(LoadError);
     });
 
     test("rescues StandardError by default if no error class is provided", () => {
@@ -204,7 +173,7 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        expect(() => evaluate(code)).rejects.toThrow(Garnet.LoadError);
+        expect(() => evaluate(code)).rejects.toThrow(LoadError);
     });
 
     test("runs the ensure clause on error", async () => {

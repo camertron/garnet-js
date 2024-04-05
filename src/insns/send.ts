@@ -3,7 +3,7 @@ import { ExecutionContext, ExecutionResult } from "../execution_context";
 import { Qnil, Qtrue, RubyArray } from "../garnet";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { Class, Kwargs, RValue } from "../runtime";
+import { RValue } from "../runtime";
 import { Hash } from "../runtime/hash";
 import { Object } from "../runtime/object"
 import { Proc } from "../runtime/proc";
@@ -19,10 +19,6 @@ export default class Send extends Instruction {
     }
 
     call(context: ExecutionContext): ExecutionResult {
-        if (this.call_data.mid === "classes") {
-            debugger;
-        }
-
         let block = undefined;
 
         if (this.block_iseq) {
@@ -32,25 +28,16 @@ export default class Send extends Instruction {
             if (block !== Qnil) block = Object.send(block, "to_proc");
         }
 
-        let kwargs: Kwargs | undefined = undefined;
-        const has_kw_splat = this.call_data.has_flag(CallDataFlag.KW_SPLAT);
-
-        if (this.call_data.has_flag(CallDataFlag.KWARG) || has_kw_splat) {
-            kwargs = new Map();
-
+        let kwargs: Hash | undefined = undefined;
+        if (this.call_data.has_flag(CallDataFlag.KW_SPLAT)) {
+            kwargs = context.pop()!.get_data<Hash>();
+        } else if (this.call_data.has_flag(CallDataFlag.KWARG)) {
+            kwargs = new Hash();
             const keyword_values = context.popn(this.call_data.kw_arg!.length);
 
             for (let i = 0; i < this.call_data.kw_arg!.length; i ++) {
                 const keyword = this.call_data.kw_arg![i];
-
-                if (keyword === "**" && has_kw_splat) {
-                    const splatted_hash = keyword_values[i].get_data<Hash>();
-                    splatted_hash.each((k: RValue, v: RValue) => {
-                        kwargs!.set(k.get_data<string>(), v);
-                    });
-                } else {
-                    kwargs.set(keyword, keyword_values[i]);
-                }
+                kwargs.set_by_symbol(keyword, keyword_values[i]);
             }
         }
 

@@ -1,6 +1,6 @@
 import { ArgumentError, NotImplementedError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Class, Kwargs, Qnil, RValue, Runtime } from "../runtime"
+import { Class, Qnil, RValue, Runtime } from "../runtime"
 import { Hash } from "./hash";
 import { Integer } from "./integer";
 import { Proc } from "./proc";
@@ -62,7 +62,7 @@ export const init = () => {
     // would force us to add a bunch of null checks everywhere. Maybe a little messy, but it gets the job done.
     /* @ts-ignore */
     Runtime.define_class("Signal", null, (klass: Class) => {
-        klass.define_native_singleton_method("trap", (_self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_singleton_method("trap", (_self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             if (!block) {
                 throw new ArgumentError("tried to create Proc object without a block");
             }

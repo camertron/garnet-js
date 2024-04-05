@@ -1,10 +1,11 @@
 import { ThreadError } from "../errors";
 import { BreakError, ExecutionContext } from "../execution_context";
-import { Class, Kwargs, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
+import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { String } from "../runtime/string";
 import { Proc } from "../runtime/proc";
 import { Object } from "../runtime/object";
 import { Integer } from "../runtime/integer";
+import { Hash } from "../runtime/hash";
 
 let inited = false;
 
@@ -151,7 +152,7 @@ export const init = () => {
             return Mutex.new();
         });
 
-        klass.define_native_method("synchronize", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_method("synchronize", (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             if (!block) {
                 throw new ThreadError("must be called with a block");
             }

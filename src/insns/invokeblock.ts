@@ -2,7 +2,8 @@ import { BlockCallData, CallDataFlag } from "../call_data";
 import { LocalJumpError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Kwargs, Qnil } from "../runtime";
+import { Qnil } from "../runtime";
+import { Hash } from "../runtime/hash";
 import { Proc } from "../runtime/proc";
 
 export default class InvokeBlock extends Instruction {
@@ -18,16 +19,16 @@ export default class InvokeBlock extends Instruction {
         const args = context.popn(this.call_data.argc);
         const block = context.frame_yield()!.block;
 
-        let kwargs: Kwargs | undefined = undefined;
+        let kwargs: Hash | undefined = undefined;
 
         if (this.call_data.has_flag(CallDataFlag.KWARG)) {
-            kwargs = new Map();
+            kwargs = new Hash();
 
             const keyword_values = context.popn(this.call_data.kw_arg!.length);
 
             for (let i = 0; i < this.call_data.kw_arg!.length; i ++) {
                 const keyword = this.call_data.kw_arg![i];
-                kwargs.set(keyword, keyword_values[i]);
+                kwargs.set_by_symbol(keyword, keyword_values[i]);
             }
         }
 

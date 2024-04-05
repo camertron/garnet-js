@@ -10,7 +10,7 @@ import { init as string_init } from "./runtime/string";
 import { Dir } from "./runtime/dir";
 import { vmfs } from "./vmfs";
 import { Proc, init as proc_init } from "./runtime/proc";
-import { init as hash_init } from "./runtime/hash";
+import { Hash as RubyHash, init as hash_init } from "./runtime/hash";
 import { is_node } from "./env";
 import { BlockCallData, CallData, CallDataFlag, MethodCallData } from "./call_data";
 import { init as float_init } from "./runtime/float";
@@ -38,31 +38,19 @@ import { init as encoding_init } from "./runtime/encoding";
 import { init as struct_init } from "./runtime/struct";
 import { init as rational_init } from "./runtime/rational";
 import { init as enumerator_init } from "./runtime/enumerator";
+import { init as method_init } from "./runtime/method";
 import { obj_id_hash } from "./util/object_id";
 import { String } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
 import { Symbol } from "./runtime/symbol";
 import * as tty from "node:tty";
 import { ParameterMetadata } from "./runtime/parameter-meta";
+import { Hash } from "node:crypto";
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
 
-export type NativeMethod = (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData) => RValue;
-export type Kwargs = Map<string, RValue>;
-
-export class KwargsHash {
-    private kwargs: Kwargs;
-
-    constructor(kwargs: Kwargs) {
-        this.kwargs = kwargs;
-    }
-
-    get(key: RValue) {
-        Runtime.assert_type(key, Symbol.klass);
-        return this.kwargs.get(key.get_data<string>());
-    }
-}
+export type NativeMethod = (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData) => RValue;
 
 // used as the type for keys of the symbols weak map
 type SymbolType = {
@@ -384,19 +372,20 @@ export enum Visibility {
 
 export abstract class Callable {
     public visibility: Visibility;
+    public owner?: Module;
 
-abstract call(context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: CallData): RValue;
+    abstract call(context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: CallData): RValue;
 }
 
 export class InterpretedCallable extends Callable {
     public name: string;
     public iseq: InstructionSequence;
     public nesting: RValue[];
-    public owner?: RValue;
+    public owner?: Module;
     public parameters_meta: ParameterMetadata[];
     public lexical_scope: LexicalScope;
 
-    constructor(name: string, iseq: InstructionSequence, visibility: Visibility, nesting: RValue[], parameters_meta: ParameterMetadata[], lexical_scope: LexicalScope, owner?: RValue) {
+    constructor(name: string, iseq: InstructionSequence, visibility: Visibility, nesting: RValue[], parameters_meta: ParameterMetadata[], lexical_scope: LexicalScope, owner?: Module) {
         super();
 
         this.name = name;
@@ -408,7 +397,7 @@ export class InterpretedCallable extends Callable {
         this.owner = owner;
     }
 
-    call(context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData): RValue {
+    call(context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): RValue {
         call_data ||= MethodCallData.create(this.name, args.length);
         return context.run_method_frame(call_data, this.nesting, this.iseq, receiver, args, kwargs, block, this.owner);
     }
@@ -426,15 +415,23 @@ export class NativeCallable extends Callable {
         this.owner = owner;
     }
 
-    call(_context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData): RValue {
+    call(_context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): RValue {
         // Native methods expect to be called with all positional arguments, so we unfurl splats here
         if (call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
             // splatted array is always the last element
             const splat_arr = args[call_data.argc - 1];
 
             if (splat_arr && splat_arr.klass === RubyArray.klass) {
-                args.splice(call_data.argc - 1, 1, ...splat_arr.get_data<RubyArray>().elements);
+                args = [
+                    ...args.slice(0, call_data.argc - 1),
+                    ...splat_arr.get_data<RubyArray>().elements
+                ];
             }
+        }
+
+        if (call_data?.has_flag(CallDataFlag.KW_SPLAT_FWD)) {
+            kwargs = args[args.length - 1].get_data<RubyHash>();
+            args = args.slice(0, args.length - 1);
         }
 
         return this.method(receiver, args, kwargs, block, call_data);
@@ -529,7 +526,7 @@ export class Module {
     }
 
     define_method(name: string, body: InstructionSequence, parameters_meta: ParameterMetadata[], lexical_scope: LexicalScope) {
-        this.methods[name] = new InterpretedCallable(name, body, this.default_visibility, ExecutionContext.current.frame!.nesting, parameters_meta, lexical_scope, this.rval);
+        this.methods[name] = new InterpretedCallable(name, body, this.default_visibility, ExecutionContext.current.frame!.nesting, parameters_meta, lexical_scope, this);
     }
 
     define_native_method(name: string, body: NativeMethod, visibility?: Visibility) {
@@ -969,11 +966,32 @@ export const Qfalse = new RValue(FalseClass, false);
 
 export const VMCoreClass = Runtime.define_class("VMCore", ObjectClass, (klass: Class) => {
     klass.define_native_method("hash_merge_kwd", (self: RValue, args: RValue[]): RValue => {
-        throw new NotImplementedError("hash_merge_kwd is not implemented yet");
+        // @TODO: can we do this without creating a new hash?
+        const new_hash = new RubyHash();
+
+        for (const arg of args) {
+            arg.get_data<RubyHash>().each((k: RValue, v: RValue) => {
+                new_hash.set(k, v);
+            });
+        }
+
+        return RubyHash.from_hash(new_hash);
     });
 
     klass.define_native_method("hash_merge_ptr", (self: RValue, args: RValue[]): RValue => {
-        throw new NotImplementedError("hash_merge_ptr is not implemented yet");
+        // @TODO: can we do this without creating a new hash?
+        const new_hash = new RubyHash();
+        const old_hash = args[0].get_data<RubyHash>();
+
+        old_hash.each((k: RValue, v: RValue) => {
+            new_hash.set(k, v);
+        });
+
+        for (let i = 1; i < args.length; i += 2) {
+            new_hash.set(args[i], args[i + 1]);
+        }
+
+        return RubyHash.from_hash(new_hash);
     });
 
     klass.define_native_method("set_method_alias", (_self: RValue, args: RValue[]): RValue => {
@@ -996,7 +1014,7 @@ export const VMCoreClass = Runtime.define_class("VMCore", ObjectClass, (klass: C
         throw new NotImplementedError("undef_method is not implemented yet");
     });
 
-    klass.define_native_method("lambda", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
+    klass.define_native_method("lambda", (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue): RValue => {
         block!.get_data<Proc>().calling_convention = CallingConvention.METHOD_LAMBDA;
         return block!;
     });
@@ -1096,7 +1114,7 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
 
 (ClassClass.get_data<Class>()).tap( (klass: Class) => {
     // create a new instance of the Class class, i.e. create a new user-defined class
-    klass.define_native_singleton_method("new", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+    klass.define_native_singleton_method("new", (self: RValue, args: RValue[], _kwargs?: RubyHash, block?: RValue): RValue => {
         const superclass = args[0] || ObjectClass;
         const new_class = new Class(null, superclass);
         const new_class_rval = new RValue(ClassClass, new_class);
@@ -1123,7 +1141,7 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
 
     // create a new instance of a class - this is an instance method on the class "Class" and initializes
     // a new instance of a user-defined class
-    klass.define_native_method("new", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
+    klass.define_native_method("new", (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue): RValue => {
         const obj = Object.send(self, "allocate");
         Object.send(obj, "initialize", args, kwargs, block);
         return obj;
@@ -1153,7 +1171,7 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
         return self.object_id != args[0].object_id ? Qtrue : Qfalse;
     });
 
-    klass.define_native_method("instance_exec", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData): RValue => {
+    klass.define_native_method("instance_exec", (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): RValue => {
         const proc = block!.get_data<Proc>();
         const binding = proc.binding.with_self(self);
         let block_call_data: BlockCallData | undefined = undefined;
@@ -1175,7 +1193,7 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
         throw new NoMethodError(`undefined method \`${method_name}' for ${self.klass.get_data<Class>().name}`);
     });
 
-    klass.define_native_method("__send__", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData): RValue => {
+    klass.define_native_method("__send__", (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): RValue => {
         const method_name = Runtime.coerce_to_string(args[0]).get_data<string>();
         let send_call_data;
 
@@ -1254,7 +1272,7 @@ export class NodeIO implements IO {
 }
 
 export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) => {
-    klass.define_native_method("puts", (self: RValue, args: RValue[], _kwargs?: Kwargs, _block?: RValue, call_data?: MethodCallData): RValue => {
+    klass.define_native_method("puts", (self: RValue, args: RValue[], _kwargs?: RubyHash, _block?: RValue, call_data?: MethodCallData): RValue => {
         const io = self.get_data<IO>();
 
         for (const arg of args) {
@@ -1271,7 +1289,7 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
         return Qnil;
     });
 
-    klass.define_native_method("write", (self: RValue, args: RValue[], _kwargs?: Kwargs, _block?: RValue, call_data?: MethodCallData): RValue => {
+    klass.define_native_method("write", (self: RValue, args: RValue[], _kwargs?: RubyHash, _block?: RValue, call_data?: MethodCallData): RValue => {
         const io = self.get_data<IO>();
 
         for (const arg of args) {
@@ -1334,6 +1352,7 @@ export const init = async () => {
     encoding_init();
     array_init();
     struct_init();
+    method_init();
 
     ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"] = await (async () => {
         if (is_node) {

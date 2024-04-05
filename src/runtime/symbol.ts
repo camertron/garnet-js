@@ -7,6 +7,7 @@ import { Proc } from "./proc";
 import { String } from "../runtime/string";
 import { Regexp } from "./regexp";
 import { NameError } from "../errors";
+import { mix_shared_string_methods_into } from "./string-shared";
 
 export class Symbol {
     private static to_proc_table: Map<string, RValue> = new Map();
@@ -47,6 +48,8 @@ export const init = () => {
     if (inited) return;
 
     Runtime.define_class("Symbol", ObjectClass, (klass: Class) => {
+        mix_shared_string_methods_into(klass);
+
         klass.define_native_method("inspect", (self: RValue): RValue => {
             const str = self.get_data<string>();
             const quote = !/^\w+$/.test(str);

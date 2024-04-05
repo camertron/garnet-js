@@ -1,5 +1,5 @@
 import { ParseResult } from "@ruby/prism/src/deserialize";
-import { MethodCallData, BlockCallData, CallDataFlag } from "./call_data";
+import { MethodCallData, BlockCallData, CallDataFlag, CallData } from "./call_data";
 import { CatchBreak, InstructionSequence, Label, CatchTableStack, CatchNext } from "./instruction_sequence";
 import { CompilerOptions } from "./compiler_options";
 import {
@@ -181,6 +181,8 @@ class LexicalScopeStack {
     }
 }
 
+type NodeWithBlock = CallNode | SuperNode;
+
 export class Compiler extends Visitor {
     private compiler_options: CompilerOptions;
     private source: string;
@@ -331,29 +333,96 @@ export class Compiler extends Visitor {
     }
 
     override visitArgumentsNode(node: ArgumentsNode) {
+        if (node.arguments_) {
+            this.visitAll(node.arguments_)
+        }
+    }
+
+    private populateCallDataArgs(node: ArgumentsNode, call_data: CallData) {
+        const kw_arg = [];
         let found_splat = false;
+        let found_kwsplat = false;
 
-        for (const argument of node.arguments_) {
-            this.visit(argument);
+        if (node.arguments_) {
+            for (const argument of node.arguments_) {
+                this.with_used(true, () => this.visit(argument));
 
-            if (argument instanceof SplatNode) {
-                this.iseq.splatarray(!found_splat);
+                if (argument instanceof SplatNode) {
+                    call_data.flag |= CallDataFlag.ARGS_SPLAT;
+                    if (!found_splat) call_data.argc ++;
+                    this.iseq.splatarray(!found_splat);
+                    if (found_splat) this.iseq.concatarray();
+                    found_splat = true;
+                } else if (argument instanceof ForwardingArgumentsNode) {
+                    call_data.argc ++;
+                    call_data.flag |= CallDataFlag.ARGS_SPLAT;
+                    call_data.flag |= CallDataFlag.KW_SPLAT_FWD;
+                    call_data.flag |= CallDataFlag.ARGS_BLOCKARG;
+                } else if (argument instanceof KeywordHashNode) {
+                    // stop coalescing positional args
+                    found_splat = false;
 
-                if (found_splat) {
-                    this.iseq.concatarray();
-                }
+                    for (const element of argument.elements) {
+                        if (element instanceof AssocNode) {
+                            call_data.flag |= CallDataFlag.KWARG;
+                            const assoc_node = element as AssocNode;
 
-                found_splat = true;
-            } else if (argument instanceof KeywordHashNode) {
-                // stop coalescing positional args
-                found_splat = false;
-            } else {
-                if (found_splat) {
-                    this.iseq.newarray(1);
-                    this.iseq.concatarray();
+                            // Any kwargs that are not keyed by symbols must be optional and are
+                            // slurped up into the kwsplat hash.
+                            if (assoc_node.key instanceof SymbolNode && !found_kwsplat) {
+                                kw_arg.push(assoc_node.key.unescaped);
+                            } else {
+                                // If even one of the keys isn't a symbol, _all_ the kwargs are
+                                // passed in the kwsplat hash.
+                                found_kwsplat = true;
+                                kw_arg.length = 0;
+                            }
+                        } else if (element instanceof AssocSplatNode) {
+                            found_kwsplat = true;
+                        }
+                    }
+                } else {
+                    if (found_splat) {
+                        this.iseq.newarray(1);
+                        this.iseq.concatarray();
+                    } else {
+                        call_data.argc ++;
+                    }
                 }
             }
         }
+
+        // If there is any kwsplat, set the KW_SPLAT flag but _not_ the KWARG flag,
+        // since KW_SPLAT means all args have been slurped up into a hash. Only a
+        // single kw hash argument is passed to the method.
+        if (found_kwsplat) {
+            call_data.flag |= CallDataFlag.KW_SPLAT;
+        } else if (kw_arg.length > 0) {
+            call_data.flag |= CallDataFlag.KWARG;
+        }
+
+        call_data.kw_arg = kw_arg;
+    }
+
+    private populateCallDataBlock(node: NodeWithBlock, call_data: CallData) {
+        let block_iseq = null;
+
+        switch (node.block?.constructor.name) {
+            case "BlockNode":
+                call_data.flag |= CallDataFlag.ARGS_BLOCKARG;
+                block_iseq = this.with_used(true, () => this.visitBlockNode(node.block as BlockNode));
+                break;
+            case "BlockArgumentNode":
+                call_data.flag |= CallDataFlag.ARGS_BLOCKARG;
+                this.with_used(true, () => this.visit(node.block!));
+                break;
+        }
+
+        if (call_data.flag == 0 && !block_iseq) {
+            call_data.flag |= CallDataFlag.ARGS_SIMPLE;
+        }
+
+        return block_iseq;
     }
 
     override visitCallNode(node: CallNode) {
@@ -371,80 +440,23 @@ export class Compiler extends Visitor {
             this.iseq.branchnil(safe_label);
         }
 
-        let argc = 0;
-        let flags = 0;
-        let kw_arg: string[] = [];
-        let found_splat = false;
-        let found_kwsplat = false;
+        const call_data = MethodCallData.create(node.name);
 
         if (node.arguments_) {
-            this.with_used(true, () => this.visit(node.arguments_!));
-
-            for (const argument of node.arguments_.arguments_) {
-                if (argument instanceof SplatNode) {
-                    flags |= CallDataFlag.ARGS_SPLAT;
-                    if (!found_splat) {
-                        argc ++;
-                    }
-                    found_splat = true;
-                } else if (argument instanceof ForwardingArgumentsNode) {
-                    argc ++; // is this correct?
-                    flags |= CallDataFlag.ARGS_SPLAT;
-                    flags |= CallDataFlag.ARGS_BLOCKARG;
-                } else if (argument instanceof KeywordHashNode) {
-                    for (const element of argument.elements) {
-                        if (element instanceof AssocNode) {
-                            flags |= CallDataFlag.KWARG;
-                            const assoc_node = element as AssocNode;
-
-                            // any kwargs that are not keyed by symbols must be optional and are
-                            // slurped up into the kwsplat hash
-                            if (assoc_node.key instanceof SymbolNode && !found_kwsplat) {
-                                kw_arg.push(assoc_node.key.unescaped);
-                            } else {
-                                found_kwsplat = true;
-                                kw_arg.length = 0; // clear array
-                                flags |= CallDataFlag.KW_SPLAT;
-                            }
-                        } else if (element instanceof AssocSplatNode) {
-                            flags |= CallDataFlag.KW_SPLAT;
-                            kw_arg.push("**");
-                        }
-                    }
-                } else {
-                    if (!found_splat) {
-                        argc ++;
-                    }
-                }
-            }
+            this.populateCallDataArgs(node.arguments_, call_data);
         }
 
-        let block_iseq = null;
-
-        switch (node.block?.constructor.name) {
-            case "BlockNode":
-                flags |= CallDataFlag.ARGS_BLOCKARG;
-                block_iseq = this.with_used(true, () => this.visitBlockNode(node.block as BlockNode));
-                break;
-            case "BlockArgumentNode":
-                flags |= CallDataFlag.ARGS_BLOCKARG;
-                this.with_used(true, () => this.visit(node.block!));
-                break;
-        }
-
-        if (flags == 0 && !block_iseq) {
-            flags |= CallDataFlag.ARGS_SIMPLE;
-        }
+        const block_iseq = this.populateCallDataBlock(node, call_data);
 
         if (!node.receiver) {
-            flags |= CallDataFlag.FCALL;
+            call_data.flag |= CallDataFlag.FCALL;
         }
 
         if (node.isVariableCall()) {
-            flags |= CallDataFlag.VCALL;
+            call_data.flag |= CallDataFlag.VCALL;
         }
 
-        this.iseq.send(MethodCallData.create(node.name, argc, flags, kw_arg), block_iseq);
+        this.iseq.send(call_data, block_iseq);
 
         if (safe_label) {
             this.iseq.jump(safe_label);
@@ -1515,56 +1527,103 @@ export class Compiler extends Visitor {
     }
 
     override visitKeywordHashNode(node: KeywordHashNode) {
-        // The CallData object maintains information about the kwargs
-        // a method was called with, meaning we don't have to visit the
-        // keys here, just the values. The send instruction will sort
-        // everything out.
+        let all_keys_are_symbols = true;
+
         for (const element of node.elements) {
-            const value = (element as AssocNode | AssocSplatNode).value;
-            if (value) this.visit(value);
+            if (element instanceof AssocNode) {
+                if (!(element.key instanceof SymbolNode)) {
+                    all_keys_are_symbols = false;
+                    break;
+                }
+            } else {
+                all_keys_are_symbols = false;
+                break;
+            }
+        }
+
+        /* Optimization: if all keys are symbols, we can pass the values as extra
+         * positional args and read them in-order in the send instruction. The
+         * order is important since the kwargs identified in visitCallMethod will
+         * need to be matched up 1:1 to these extra positional args.
+         */
+        if (all_keys_are_symbols) {
+            /* The CallData object maintains information about the kwargs
+             * a method was called with, meaning we don't have to visit the
+             * keys here, just the values. The send instruction will sort
+             * everything out.
+             */
+            for (const element of node.elements) {
+                const value = (element as AssocNode).value;
+                if (value) this.visit(value);
+            }
+
+            return
+        }
+
+        /* Optimization: if the only parameter is a kwsplat, visit it to produce a hash
+         * and push it onto the stack. No other logic is necessary.
+         */
+        if (node.elements.length === 1 && node.elements[0] instanceof AssocSplatNode) {
+            const element = node.elements[0] as AssocSplatNode;
+
+            if (element.value) {
+                this.with_used(true, () => this.visit(element.value!));
+            }
+
+            return;
+        }
+
+        let index = 0;
+
+        // Find leading symbol-keyed kwargs
+        for (index = 0; index < node.elements.length; index ++) {
+            const element = node.elements[index];
+
+            if (element instanceof AssocNode) {
+                this.with_used(true, () => {
+                    this.visit(element.key);
+                    this.visit(element.value);
+                });
+            } else {
+                break;
+            }
+        }
+
+        this.iseq.newhash(index * 2);
+
+        while (index < node.elements.length) {
+            this.iseq.putspecialobject(SpecialObjectType.VMCORE);
+            this.iseq.swap();
+
+            if (node.elements[index] instanceof AssocNode) {
+                const old_index = index;
+
+                while (index < node.elements.length && node.elements[index] instanceof AssocNode) {
+                    const element = node.elements[index] as AssocNode;
+
+                    this.with_used(true, () => {
+                        this.visit(element.key);
+                        this.visit(element.value);
+                    });
+
+                    index ++;
+                }
+
+                this.iseq.send(MethodCallData.create("hash_merge_ptr", (index - old_index) * 2 + 1), null);
+            } else if (node.elements[index] instanceof AssocSplatNode) {
+                const element = node.elements[index] as AssocSplatNode;
+
+                if (element.value) {
+                    this.with_used(true, () => this.visit(element.value!));
+                }
+
+                this.iseq.send(MethodCallData.create("hash_merge_kwd", 2), null);
+                index ++;
+            } else {
+                throw new Error(`Unexpected node type '${node.elements[index].constructor.name}'`);
+            }
         }
     }
-
-    // override visitKeywordHashNode(node: KeywordHashNode) {
-    //     let all_keys_are_symbols = true;
-
-    //     for (const element of node.elements) {
-    //         if (element instanceof AssocNode) {
-    //             if (!(element.key instanceof SymbolNode)) {
-    //                 all_keys_are_symbols = false;
-    //                 break;
-    //             }
-    //         }
-    //     }
-
-    //     let count = 0;
-
-    //     if (all_keys_are_symbols) {
-    //         // The CallData object maintains information about the kwargs
-    //         // a method was called with, meaning we don't have to visit the
-    //         // keys here, just the values. The send instruction will sort
-    //         // everything out.
-    //         for (const element of node.elements) {
-    //             const value = (element as AssocNode | AssocSplatNode).value;
-    //             if (value) this.visit(value);
-    //         }
-    //     } else {
-    //         // If even one of the keys is not a symbol, Ruby slurps everything
-    //         // up (even entries that _are_ keyed on symbols) into a kwsplat hash.
-    //         for (const element of node.elements) {
-    //             if (element instanceof AssocNode) {
-    //                 this.with_used(true, () => {
-    //                     this.visit(element.key);
-    //                     this.visit(element.value);
-    //                 });
-
-    //                 count ++;
-    //             }
-    //         }
-    //     }
-
-    //     this.iseq.newhash(count * 2);
-    // }
 
     override visitInstanceVariableOrWriteNode(node: InstanceVariableOrWriteNode) {
         const label = this.iseq.label();
@@ -1852,29 +1911,22 @@ export class Compiler extends Visitor {
     }
 
     override visitSuperNode(node: SuperNode) {
-        let flags = CallDataFlag.FCALL | CallDataFlag.SUPER;
+        const call_data = MethodCallData.create("super");
+        call_data.flag |= CallDataFlag.FCALL | CallDataFlag.SUPER;
 
         if (node.arguments_) {
-            this.with_used(true, () => this.visit(node.arguments_!));
+            this.populateCallDataArgs(node.arguments_, call_data);
         }
 
         if (!node.arguments_ && !node.lparenLoc) {
-            flags |= CallDataFlag.ZSUPER;
+            call_data.flag |= CallDataFlag.ZSUPER;
         }
 
-        let block_iseq = null;
-
-        if (node.block instanceof BlockNode) {
-            block_iseq = this.with_used<InstructionSequence>(true, () => this.visitBlockNode(node.block as BlockNode));
-        } else if (node.block instanceof BlockArgumentNode) {
-            this.with_used(true, () => this.visit(node.block as BlockArgumentNode));
-            flags |= CallDataFlag.ARGS_BLOCKARG;
-        } else {
-            flags |= CallDataFlag.ARGS_SIMPLE;
-        }
+        const block_iseq = this.populateCallDataBlock(node, call_data);
 
         this.iseq.putself();
-        this.iseq.invokesuper(MethodCallData.create("super", node.arguments_?.arguments_.length || 0, flags), block_iseq);
+        this.iseq.invokesuper(call_data, block_iseq);
+
         if (!this.used) this.iseq.pop();
     }
 
@@ -1985,7 +2037,7 @@ export class Compiler extends Visitor {
             this.iseq.defined(DefinedType.GVAR, (value as GlobalVariableReadNode).name, String.new("global-variable"));
         } else if (type === "LocalVariableReadNode") {
             this.iseq.putobject({type: "RValue", value: String.new("local-variable")});
-        } else if (type === "LocalVariableWriteNode") {
+        } else if (type === "LocalVariableWriteNode" || type === "InstanceVariableWriteNode") {
             this.iseq.putobject({type: "RValue", value: String.new("assignment")});
         } else if (type === "NilNode") {
             this.iseq.putobject({type: "NilClass", value: Qnil});
@@ -1996,6 +2048,9 @@ export class Compiler extends Visitor {
         } else if (type === "YieldNode") {
             this.iseq.putnil();
             this.iseq.defined(DefinedType.YIELD, "", String.new("yield"));
+        } else if (type === "InstanceVariableReadNode") {
+            this.iseq.putself();
+            this.iseq.defined(DefinedType.IVAR, (value as InstanceVariableReadNode).name, String.new("instance-variable"));
         } else {
             this.iseq.putobject({type: "RValue", value: String.new("expression")});
         }

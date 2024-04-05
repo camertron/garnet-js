@@ -2,9 +2,10 @@ import { ArgumentError, NameError, NoMethodError, StopIteration } from "../error
 import { PauseError } from "../execution_context";
 import { BlockFrame, Frame } from "../frame";
 import { ExecutionContext } from "../garnet";
-import { Class, InterpretedCallable, Kwargs, NativeCallable, ObjectClass, Qnil, RValue, Runtime } from "../runtime";
+import { Class, InterpretedCallable, NativeCallable, ObjectClass, Qnil, RValue, Runtime } from "../runtime";
 import { Binding } from "./binding";
 import { Enumerable } from "./enumerable";
+import { Hash } from "./hash";
 import { Integer } from "./integer";
 import { Object } from "./object";
 import { InterpretedProc, Proc } from "./proc";
@@ -32,7 +33,7 @@ export abstract class Enumerator {
         return new RValue(this.klass, enumerator);
     }
 
-    static for_method(receiver: RValue, method_name: string, args: RValue[], kwargs?: Kwargs): RValue {
+    static for_method(receiver: RValue, method_name: string, args: RValue[], kwargs?: Hash): RValue {
         return this.new(new MethodRefEnumerator(receiver, method_name, args, kwargs));
     }
 
@@ -51,10 +52,10 @@ class MethodRefEnumerator extends Enumerator {
     private receiver: RValue;
     private method_name: string;
     private args: RValue[];
-    private kwargs: Kwargs | undefined;
+    private kwargs: Hash | undefined;
     private enumerator: Enumerator;
 
-    constructor(receiver: RValue, method_name: string, args: RValue[], kwargs?: Kwargs) {
+    constructor(receiver: RValue, method_name: string, args: RValue[], kwargs?: Hash) {
         super();
 
         this.receiver = receiver;
@@ -289,7 +290,7 @@ export const init = () => {
     Runtime.define_class("Enumerator", ObjectClass, (klass: Class) => {
         klass.include(Enumerable.module);
 
-        klass.define_native_singleton_method("new", (self: RValue, _args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_singleton_method("new", (self: RValue, _args: RValue[], kwargs?: Hash, block?: RValue): RValue => {
             if (!block) {
                 throw new ArgumentError("tried to create Proc object without a block");
             }
@@ -303,7 +304,7 @@ export const init = () => {
             return self.get_data<Enumerator>().next();
         });
 
-        klass.define_native_method("each", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_method("each", (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             if (!block) {
                 return self;
             }
@@ -334,7 +335,7 @@ export const init = () => {
     }
 
     Runtime.define_class_under(Enumerator.klass, "Lazy", Enumerator.klass, (klass: Class) => {
-        klass.define_native_method("select", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        klass.define_native_method("select", (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             check_block_given(block, "select");
             const proc = block!.get_data<Proc>();
             const parent_enum = self.get_data<Enumerator>();

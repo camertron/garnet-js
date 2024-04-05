@@ -1,4 +1,5 @@
-import { Kwargs, RValue } from "./runtime";
+import { RValue } from "./runtime";
+import { Hash } from "./runtime/hash";
 
 export enum CallDataFlag {
     ARGS_SPLAT    = 2 ** 0,  // m(*args)
@@ -13,7 +14,8 @@ export enum CallDataFlag {
     SUPER         = 2 ** 9,  // super
     ZSUPER        = 2 ** 10, // zsuper
     OPT_SEND      = 2 ** 11, // internal flag
-    KW_SPLAT_MUT  = 2 ** 12  // kw splat hash can be modified (to avoid allocating a new one)
+    KW_SPLAT_MUT  = 2 ** 12, // kw splat hash can be modified (to avoid allocating a new one)
+    KW_SPLAT_FWD  = 2 ** 13  // kw splat hash is forwarded at end of positional args
 }
 
 export abstract class CallData {
@@ -45,7 +47,7 @@ export class MethodCallData extends CallData {
         return new MethodCallData(method, argc, flags, kw_arg);
     }
 
-    static from_args(method: string, args: RValue[], kwargs?: Kwargs, block?: RValue) {
+    static from_args(method: string, args: RValue[], kwargs?: Hash, block?: RValue) {
         let flag = CallDataFlag.FCALL;
         if (block) flag |= CallDataFlag.ARGS_BLOCKARG;
         if (kwargs) flag |= CallDataFlag.KWARG;
@@ -54,7 +56,7 @@ export class MethodCallData extends CallData {
             method,
             args.length,
             flag,
-            kwargs ? Array.from(kwargs.keys()) : null
+            kwargs ? Array.from(kwargs.keys.values()).map(elem => elem.get_data<string>()) : null
         );
     }
 }

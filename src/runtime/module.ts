@@ -1,8 +1,8 @@
 import { BlockCallData, CallData, MethodCallData } from "../call_data";
 import { Compiler } from "../compiler";
 import { ArgumentError, NameError } from "../errors";
-import { CallingConvention, ExecutionContext } from "../execution_context";
-import { Module, ModuleClass, RValue, Runtime, Visibility, Qnil, Class, Qtrue, Qfalse, Kwargs, TrueClass, FalseClass, ObjectClass } from "../runtime";
+import { CallingConvention, ExecutionContext, ReturnError } from "../execution_context";
+import { Module, ModuleClass, RValue, Runtime, Visibility, Qnil, Class, Qtrue, Qfalse, TrueClass, FalseClass, ObjectClass, InterpretedCallable } from "../runtime";
 import { Kernel } from "./kernel";
 import { Object } from "./object";
 import { InterpretedProc, Proc } from "./proc";
@@ -10,6 +10,8 @@ import { String } from "../runtime/string";
 import { RubyArray } from "../runtime/array";
 import { Symbol } from "../runtime/symbol";
 import { Integer } from "./integer";
+import { Hash } from "./hash";
+import { Method, UnboundMethod } from "./method";
 
 let inited = false;
 
@@ -18,7 +20,7 @@ export const init = () => {
 
     const mod = Object.find_constant("Module")!.get_data<Module>();
 
-    mod.define_native_singleton_method("new", (_self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+    mod.define_native_singleton_method("new", (_self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
         const mod = new Module(null);
         const mod_rval = new RValue(ModuleClass, mod);
         mod.rval = mod_rval;
@@ -195,7 +197,7 @@ export const init = () => {
         return Kernel.is_a(args[0], self) ? Qtrue : Qfalse;
     });
 
-    mod.define_native_method("module_eval", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+    mod.define_native_method("module_eval", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
         if (block) {
             const proc = block!.get_data<Proc>();
             const binding = proc.binding.with_self(self);
@@ -226,59 +228,61 @@ export const init = () => {
 
     mod.alias_method("class_eval", "module_eval");
 
-    mod.define_native_method("define_method", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue): RValue => {
-        Runtime.assert_type(args[0], Symbol.klass);
-        const method_name = args[0].get_data<string>();
+    mod.define_native_method("define_method", (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): RValue => {
+        const method_name = Runtime.coerce_to_string(args[0]).get_data<string>();
+        let body: Proc | Method | UnboundMethod | undefined = undefined;
 
         if (args.length === 2) {
-            block = args[1];
+            if (args[1].klass === Proc.klass) {
+                body = args[1].get_data<Proc>();
+                body.calling_convention = CallingConvention.METHOD_LAMBDA;
+            } else if (args[1].klass === Method.klass) {
+                body = args[1].get_data<Method>();
+            } else if (args[1].klass === UnboundMethod.klass) {
+                body = args[1].get_data<UnboundMethod>();
+            } else {
+                throw new TypeError(`wrong argument type ${args[1].klass.get_data<Class>().name} (expected Proc/Method/UnboundMethod)`);
+            }
+        } else {
+            body = block?.get_data<Proc>();
         }
 
-        if (!block) {
+        if (!body) {
             throw new ArgumentError("tried to create Proc object without a block");
         }
 
-        /* Making an assumption here that define_method is always called with an InterpretedProc,
-         * which is probably a pretty safe guess. Native code has no need to define methods this way.
-         */
-        const proc = block.get_data<InterpretedProc>();
-        proc.calling_convention = CallingConvention.METHOD_LAMBDA;
-
-        self.get_data<Module>().define_native_method(method_name, (mtd_self: RValue, mtd_args: RValue[], mtd_kwargs?: Kwargs, mtd_block?: RValue, call_data?: MethodCallData): RValue => {
-            const ec = ExecutionContext.current;
-            const my_proc = proc;
-
+        self.get_data<Module>().define_native_method(method_name, (mtd_self: RValue, mtd_args: RValue[], mtd_kwargs?: Hash, mtd_block?: RValue, call_data?: MethodCallData): RValue => {
             /* define_method is deceptively tricky to implement because it has to evaluate a block as
              * if it were a method. This is mostly because of the way `return` behaves. Normally, returning
              * from within a block returns from the enclosing method. However, it would be pretty surprising
              * if `return` behaved that way for methods defined via define_method - there's no telling what
              * parent method frame might be calling our defined method. Returning from it would be madness.
              *
-             * To prevent chaos, we push a method frame whenever the defined method is called. Doing so not
-             * only fixes the `return` issue, it also makes the defined method appear in stack traces.
-             *
-             * There's a gotcha tho. Methods aren't closures, so any locals define_method closes over won't
-             * be available inside the new method frame... unless we perform some trickery. Fortunately,
-             * we have access to the block's binding, which contains a snapshot of the stack as it was when
-             * the block was created. Invoking the block directly will temporarily replace the existing stack
-             * with the snapshotted one, restoring it once the block is finished executing. To replicate this
-             * behavior for define_method, we do the same stack swapping dance before running the method frame.
+             * To prevent chaos, we "fake it" by invoking the block and passing an instance of MethodCallData
+             * instead of BlockCallData.
              */
-            // return ec.with_stack(proc.binding.stack, () => {
-            //     try {
-            //         const method_call_data = new MethodCallData(method_name, call_data!.argc, call_data!.flag, call_data!.kw_arg);
-            //         return ec.run_method_frame(method_call_data!, proc.binding.nesting, proc.iseq, mtd_self, mtd_args, mtd_kwargs, mtd_block, self);
-            //     } catch (e) {
-            //         // debugger;
-            //         throw e;
-            //     }
-            // });
 
-            const binding = proc.binding.with_self(mtd_self);
             const new_call_data = new MethodCallData(method_name, call_data!.argc, call_data!.flag, call_data!.kw_arg);
 
-            return proc.with_binding(binding).call(ExecutionContext.current, mtd_args, mtd_kwargs, new_call_data, self);
+            try {
+                if (body instanceof Proc) {
+                    const binding = body.binding.with_self(mtd_self);
+                    return body.with_binding(binding).call(ExecutionContext.current, mtd_args, mtd_kwargs, new_call_data, self.get_data<Module>());
+                } else {
+                    return body!.call(ExecutionContext.current, mtd_self, mtd_args, mtd_kwargs, mtd_block, new_call_data);
+                }
+            } catch (e) {
+                if (e instanceof ReturnError) {
+                    return e.value;
+                }
+
+                throw e;
+            }
         });
+
+        if (Object.respond_to(self, "method_added")) {
+            Object.send(self, "method_added", [Runtime.intern(method_name)]);
+        }
 
         return args[0];
     });
@@ -291,6 +295,17 @@ export const init = () => {
     mod.define_native_method("undef_method", (self: RValue, args: RValue[]): RValue => {
         self.get_data<Module>().undef_method(Runtime.coerce_to_string(args[0]).get_data<string>());
         return self;
+    });
+
+    mod.define_native_method("instance_method", (self: RValue, args: RValue[]): RValue => {
+        const method_name = Runtime.coerce_to_string(args[0]).get_data<string>();
+        const callable = Object.find_instance_method_under(self, method_name);
+
+        if (callable) {
+            return UnboundMethod.new(method_name, callable);
+        }
+
+        throw new NameError(`undefined method \`${method_name}' for class ${self.get_data<Module>().name}`);
     });
 
     mod.define_native_method("private_constant", (self: RValue, args: RValue[]): RValue => {
@@ -346,7 +361,7 @@ export const init = () => {
         return Object.find_instance_method_under(self, method_name, true, inherit) ? Qtrue : Qfalse;
     });
 
-    mod.define_native_method("class_exec", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: CallData): RValue => {
+    mod.define_native_method("class_exec", (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: CallData): RValue => {
         const proc = block!.get_data<Proc>();
         const binding = proc.binding.with_self(self);
         let block_call_data: BlockCallData | undefined = undefined;

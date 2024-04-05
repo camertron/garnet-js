@@ -1,5 +1,5 @@
 import { BreakError, ExecutionContext } from "../execution_context";
-import { Module, Qnil, RValue, Runtime, Qfalse, Qtrue, Kwargs, Class, ObjectClass } from "../runtime"
+import { Module, Qnil, RValue, Runtime, Qfalse, Qtrue } from "../runtime"
 import { spaceship_compare } from "./comparable";
 import { Integer } from "./integer";
 import { Object } from "./object";
@@ -7,6 +7,7 @@ import { Proc } from "./proc";
 import { RubyArray } from "../runtime/array";
 import { ArgumentError, NameError } from "../errors";
 import { Lazy } from "./enumerator";
+import { Hash } from "./hash";
 
 export class Enumerable {
     private static module_: RValue;
@@ -32,12 +33,12 @@ export const init = () => {
     if (inited) return;
 
     Runtime.define_module("Enumerable", (mod: Module) => {
-        mod.define_native_method("map", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        mod.define_native_method("map", (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             if (block) {
                 const results: RValue[] = [];
                 const proc = block.get_data<Proc>();
 
-                Object.send(self, "each", [], undefined, Proc.from_native_fn(ExecutionContext.current, (_self: RValue, args: RValue[], kwargs?: Kwargs): RValue => {
+                Object.send(self, "each", [], undefined, Proc.from_native_fn(ExecutionContext.current, (_self: RValue, args: RValue[], kwargs?: Hash): RValue => {
                     results.push(proc.call(ExecutionContext.current, args, kwargs));
                     return Qnil;
                 }));
@@ -49,7 +50,7 @@ export const init = () => {
             }
         });
 
-        mod.define_native_method("find", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        mod.define_native_method("find", (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             if (block) {
                 try {
                     const proc = block.get_data<Proc>();
@@ -79,7 +80,7 @@ export const init = () => {
             }
         });
 
-        mod.define_native_method("any?", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        mod.define_native_method("any?", (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             let found = false;
 
             try {
@@ -104,7 +105,7 @@ export const init = () => {
             return found ? Qtrue : Qfalse;
         });
 
-        mod.define_native_method("partition", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        mod.define_native_method("partition", (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             if (block) {
                 const proc = block.get_data<Proc>();
                 const truthy_array: RValue[] = [];
@@ -129,7 +130,7 @@ export const init = () => {
             }
         });
 
-        mod.define_native_method("inject", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        mod.define_native_method("inject", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             let initial_operand: RValue | null = null;
             let symbol: RValue | null = null;
             let proc: Proc | null = null;
@@ -172,7 +173,7 @@ export const init = () => {
 
         // Uses a so-called "Schwartzian transform" that pre-computes the sort key for each item.
         // https://en.wikipedia.org/wiki/Schwartzian_transform
-        mod.define_native_method("sort_by", (self: RValue, args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        mod.define_native_method("sort_by", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             if (block) {
                 const proc = block.get_data<Proc>();
                 const tuples: RValue[][] = [];
@@ -202,7 +203,7 @@ export const init = () => {
             }
         });
 
-        mod.define_native_method("each_with_index", (self: RValue, _args: RValue[], _kwargs?: Kwargs, block?: RValue): RValue => {
+        mod.define_native_method("each_with_index", (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             if (block) {
                 const proc = block.get_data<Proc>();
                 let index = 0;

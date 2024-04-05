@@ -1,12 +1,13 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
 import { FrozenError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Callable, Class, KernelModule, ObjectClass, RValue, Runtime, Qtrue, Qfalse, Module, Kwargs } from "../runtime";
+import { Callable, Class, KernelModule, ObjectClass, RValue, Runtime, Qtrue, Qfalse, Module } from "../runtime";
 import { Symbol } from "./symbol";
 import { String } from "../runtime/string";
+import { Hash } from "./hash";
 
 export class Object {
-    static send(receiver: RValue, call_data_: MethodCallData | string, args: RValue[] = [], kwargs?: Kwargs, block?: RValue): RValue {
+    static send(receiver: RValue, call_data_: MethodCallData | string, args: RValue[] = [], kwargs?: Hash, block?: RValue): RValue {
         let method_name: string;
         let call_data: MethodCallData | undefined;
 
@@ -195,7 +196,7 @@ export const init = () => {
             return Object.send(self.klass.get_data<Class>().get_singleton_class(), method_name.get_data<string>(), args);
         });
 
-        klass.define_native_method("send", (self: RValue, args: RValue[], kwargs?: Kwargs, block?: RValue, call_data?: MethodCallData) => {
+        klass.define_native_method("send", (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData) => {
             const method_name = args[0];
 
             if (method_name.klass === String.klass || method_name.klass === Symbol.klass) {

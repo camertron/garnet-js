@@ -1,8 +1,9 @@
 import { BlockCallData, MethodCallData } from "./call_data";
 import { CallingConvention, ExecutionContext } from "./execution_context";
 import { InstructionSequence } from "./instruction_sequence";
-import { RValue, ObjectClass, Main, Module, Kwargs, RValuePointer, Qtrue } from "./runtime";
+import { RValue, ObjectClass, Main, RValuePointer, Module } from "./runtime";
 import { Binding } from "./runtime/binding";
+import { Hash } from "./runtime/hash";
 
 export interface IFrame {
     iseq: InstructionSequence;
@@ -19,7 +20,7 @@ export interface IFrame {
 }
 
 export interface IFrameWithOwner extends IFrame {
-    owner?: RValue;
+    owner?: Module;
 }
 
 export class Frame implements IFrame {
@@ -82,13 +83,13 @@ export class TopFrame extends Frame {
 export class BlockFrame extends Frame implements IFrameWithOwner {
     public call_data: BlockCallData;
     public args: RValue[];
-    public kwargs?: Kwargs;
+    public kwargs?: Hash;
     public calling_convention: CallingConvention;
     public binding: Binding;
     public original_stack: RValuePointer[];
-    public owner?: RValue;
+    public owner?: Module;
 
-    constructor(call_data: BlockCallData, calling_convention: CallingConvention, iseq: InstructionSequence, binding: Binding, original_stack: RValuePointer[], args: RValue[], kwargs?: Kwargs, owner?: RValue) {
+    constructor(call_data: BlockCallData, calling_convention: CallingConvention, iseq: InstructionSequence, binding: Binding, original_stack: RValuePointer[], args: RValue[], kwargs?: Hash, owner?: Module) {
         super(iseq, binding.parent_frame, binding.stack_index, binding.self, binding.nesting);
 
         this.call_data = call_data;
@@ -137,11 +138,11 @@ export class BlockFrame extends Frame implements IFrameWithOwner {
 export class MethodFrame extends Frame implements IFrameWithOwner {
     public call_data: MethodCallData;
     public args: RValue[];
-    public kwargs?: Kwargs;
+    public kwargs?: Hash;
     public block?: RValue;
-    public owner?: RValue;
+    public owner?: Module;
 
-    constructor(iseq: InstructionSequence, nesting: RValue[], parent: Frame, stack_index: number, self: RValue, call_data: MethodCallData, args: RValue[], kwargs?: Kwargs, block?: RValue, owner?: RValue) {
+    constructor(iseq: InstructionSequence, nesting: RValue[], parent: Frame, stack_index: number, self: RValue, call_data: MethodCallData, args: RValue[], kwargs?: Hash, block?: RValue, owner?: Module) {
         super(iseq, parent, stack_index, self, nesting);
         this.call_data = call_data;
         this.args = args;

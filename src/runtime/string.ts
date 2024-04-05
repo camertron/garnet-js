@@ -13,6 +13,7 @@ import { Hash } from "./hash";
 import { RubyArray } from "../runtime/array";
 import { Numeric } from "./numeric";
 import { Float } from "./float";
+import { mix_shared_string_methods_into } from "./string-shared";
 
 // 7-bit strings are implicitly valid.
 // If both the valid _and_ 7bit bits are set, the string is broken.e
@@ -151,6 +152,8 @@ export const init = () => {
     if (inited) return;
 
     Runtime.define_class("String", ObjectClass, (klass: Class) => {
+        mix_shared_string_methods_into(klass);
+
         klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
             const str = args[0];
 
@@ -466,80 +469,6 @@ export const init = () => {
         });
 
         klass.alias_method("length", "size");
-
-        const slice = (self: RValue, args: RValue[]): string | null => {
-            const data = self.get_data<string>();
-
-            if (args[0].klass == Object.find_constant("Range")!) {
-                const range = args[0].get_data<Range>();
-
-                Runtime.assert_type(range.begin, Integer.klass);
-                Runtime.assert_type(range.end, Integer.klass);
-
-                let start_pos = range.begin.get_data<number>();
-
-                if (start_pos < 0) {
-                    start_pos = data.length + start_pos;
-                }
-
-                let end_pos = range.end.get_data<number>();
-
-                if (end_pos < 0) {
-                    end_pos = data.length + end_pos;
-                }
-
-                if (start_pos > end_pos) {
-                    return null;
-                }
-
-                if (range.exclude_end) {
-                    return data.substring(start_pos, end_pos);
-                } else {
-                    return data.substring(start_pos, end_pos + 1);
-                }
-            } else if (args[0].klass === String.klass) {
-                if (data.indexOf(args[0].get_data<string>()) > -1) {
-                    return args[0].get_data<string>();
-                } else {
-                    return null;
-                }
-            } else if (args[0].klass === Regexp.klass) {
-                throw new NotImplementedError("String#[](Regexp) is not yet implemented");
-            } else {
-                Runtime.assert_type(args[0], Integer.klass);
-                const start = args[0].get_data<number>();
-
-                if (args.length > 1) {
-                    Runtime.assert_type(args[1], Integer.klass);
-                    const len = args[1].get_data<number>();
-                    return data.substring(start, start + len);
-                } else {
-                    if (start < data.length) {
-                        return data.charAt(start);
-                    } else {
-                        return null;
-                    }
-                }
-            }
-        };
-
-        klass.define_native_method("slice!", (self: RValue, args: RValue[]): RValue => {
-            const substring = slice(self, args);
-
-            if (substring) {
-                self.data = substring
-                return self;
-        }
-
-            return Qnil;
-        });
-
-        klass.define_native_method("slice", (self: RValue, args: RValue[]): RValue => {
-            const substring = slice(self, args);
-            return substring ? RubyString.new(substring) : Qnil;
-        });
-
-        klass.alias_method("[]", "slice");
 
         klass.define_native_method("[]=", (self: RValue, args: RValue[]): RValue => {
             const data = self.get_data<string>();
