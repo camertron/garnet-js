@@ -43,7 +43,7 @@ class OnigmoExportsWrapper {
     }
 
     private grow(pages: number) {
-        this.original_exports.memory.grow(1);
+        this.original_exports.memory.grow(pages);
         this.memory = new DataView(this.original_exports.memory.buffer);
     }
 
@@ -108,6 +108,15 @@ export const init = async () => {
     onigmo = { exports: new OnigmoExportsWrapper(onigmo_instance.exports as unknown as OnigmoExports) };
 
     Runtime.define_class("Regexp", ObjectClass, (klass: Class) => {
+        klass.define_native_singleton_method("compile", (_self: RValue, args: RValue[]): RValue => {
+            return Regexp.new(Runtime.coerce_to_string(args[0]).get_data<string>(), "");
+        });
+
+        klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
+            self.data = Regexp.compile(Runtime.coerce_to_string(args[0]).get_data<string>(), "");
+            return Qnil;
+        });
+
         klass.define_native_method("=~", (self: RValue, args: RValue[]): RValue => {
             const str = Runtime.coerce_to_string(args[0]);
             const str_data = str.get_data<string>();
@@ -350,7 +359,7 @@ class UTF16String {
         const pts = []
 
         for (let i = this.start; i < this.end; i += 2) {
-            pts.push(mem[i] + mem[i + 1] << 8);
+            pts.push(mem[i] | mem[i + 1] << 8);
         }
 
         return String.fromCharCode(...pts);
@@ -360,12 +369,10 @@ class UTF16String {
         const bytes: number[] = [];
 
         for (let i = 0; i < str.length; i++) {
-            const charCode = str.charCodeAt(i);
+            const charCode = str.charCodeAt(i)
             bytes.push(charCode & 0x00ff);
             bytes.push((charCode & 0xff00) >> 8);
         }
-
-        bytes.push(0);
 
         const start_addr = onigmo.exports.malloc(bytes.length);
         const mem = new Uint8Array(onigmo.exports.memory.buffer);
@@ -375,8 +382,8 @@ class UTF16String {
 }
 
 class ASCIIString {
-    private start: number;
-    private end: number;
+    public start: number;
+    public end: number;
 
     constructor(start: number, end: number) {
         this.start = start;
@@ -386,6 +393,22 @@ class ASCIIString {
     to_string(): string {
         const pts = onigmo.exports.memory.buffer.slice(this.start, this.end);
         return String.fromCharCode(...new Uint8Array(pts));
+    }
+
+    static create(str: string): ASCIIString {
+        const bytes: number[] = [];
+
+        for (let i = 0; i < str.length; i++) {
+            const charCode = str.charCodeAt(i);
+            bytes.push(charCode);
+        }
+
+        bytes.push(0);
+
+        const start_addr = onigmo.exports.malloc(bytes.length);
+        const mem = new Uint8Array(onigmo.exports.memory.buffer);
+        mem.set(bytes, start_addr);
+        return new ASCIIString(start_addr, start_addr + bytes.length - 1);
     }
 }
 
