@@ -417,10 +417,10 @@ __metadata:
 
 "@camertron/garnet-js@file:./::locator=%40camertron%2Fgarnet-js%40workspace%3A.":
   version: 0.1.0
-  resolution: "@camertron/garnet-js@file:./#./::hash=d67ba4&locator=%40camertron%2Fgarnet-js%40workspace%3A."
+  resolution: "@camertron/garnet-js@file:./#./::hash=c89a99&locator=%40camertron%2Fgarnet-js%40workspace%3A."
   dependencies:
     "@bjorn3/browser_wasi_shim": "npm:^0.2.17"
-  checksum: be70aa6bdb739680f021380c586fca1a0f88b1b1c8cd256806d1bba8b8550530ca78d95366a14ce7c0d221d6743bc49a4f5111fefe208750d35813abcd47407c
+  checksum: ca77ada07d381e30443ff3c1f77566ea91280ac42341af6c7539991df0872d71696a1279ba2e0e49ecf05b5c3000daae20c25531196dec7bda5b8b5bea2a0427
   languageName: node
   linkType: hard
 
@@ -434,7 +434,7 @@ __metadata:
     "@garnet-js/encoding-shift-jis": "link:./packages/encoding-shift-jis"
     "@rollup/plugin-node-resolve": "npm:^14.0.1"
     "@rollup/plugin-typescript": "npm:^8.5.0"
-    "@ruby/prism": "link:../../ruby/prism/javascript"
+    "@ruby/prism": "npm:0.26.0"
     "@types/jest": "npm:^29.5.8"
     "@types/node": "npm:^20.9.1"
     benchmarkify: "npm:^3.0.0"
@@ -1033,11 +1033,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@ruby/prism@link:../../ruby/prism/javascript::locator=%40camertron%2Fgarnet-js%40workspace%3A.":
-  version: 0.0.0-use.local
-  resolution: "@ruby/prism@link:../../ruby/prism/javascript::locator=%40camertron%2Fgarnet-js%40workspace%3A."
+"@ruby/prism@npm:0.26.0":
+  version: 0.26.0
+  resolution: "@ruby/prism@npm:0.26.0"
+  checksum: 9231229d641e094b5e6e563c6777a42b71e0d19f5e4120c5a3cfbf6a5c038e5a57b7b96bc66eacd08bb2fe44faeaa2776277d7f29a78ffbbb515f6f4289248dd
   languageName: node
-  linkType: soft
+  linkType: hard
 
 "@sinclair/typebox@npm:^0.27.8":
   version: 0.27.8

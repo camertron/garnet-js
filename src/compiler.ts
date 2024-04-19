@@ -503,12 +503,14 @@ export class Compiler extends Visitor {
 
     override visitIntegerNode(node: IntegerNode) {
         if (this.used) {
+            // @ts-ignore
             this.iseq.putobject({ type: "Integer", value: node.value });
         }
     }
 
     override visitFloatNode(node: FloatNode) {
         if (this.used) {
+            // @ts-ignore
             this.iseq.putobject({ type: "Float", value: node.value });
         }
     }
