@@ -13,6 +13,7 @@ import { RubyArray } from "./runtime/array";
 import { Proc } from "./runtime/proc";
 import { ParameterMetadata } from "./runtime/parameter-meta";
 import { LexicalScope } from "./compiler";
+import Dup from "./insns/dup";
 
 export type ExecutionResult = JumpResult | LeaveResult | null;
 
@@ -171,9 +172,13 @@ export class ExecutionContext {
         this.frame = frame;
 
         // Finally we can execute the instructions one at a time. If they return
-        // jumps or leaves we will handle those appropriately.
+        // jump or leave we will handle those appropriately.
         while (true) {
             const insn = frame.iseq.compiled_insns[frame.pc];
+            // if (this.globals["$cameron"] === Qtrue && insn.constructor.name === "Dup") {
+            //     debugger;
+            // }
+
 
             switch (insn.constructor) {
                 case Number:
@@ -443,7 +448,12 @@ export class ExecutionContext {
 
     with_stack(stack: RValuePointer[], cb: () => RValue): RValue {
         const old_stack = this.stack;
-        this.stack = stack;
+
+        // Copy the stack here so block-owned locals aren't shared by separate
+        // invocations of the same block.
+        //
+        // @TODO: Maybe only copy the stack if the block has locals of its own?
+        this.stack = [...stack];
 
         try {
             return cb();
@@ -573,6 +583,11 @@ export class ExecutionContext {
             }
         }
 
+        // Pop forwarded kwargs off the positional args array
+        if (!kwargs && call_data.has_flag(CallDataFlag.KW_SPLAT_FWD)) {
+            kwargs = locals.pop()!.get_data<Hash>();
+        }
+
         if (!block && call_data && call_data.has_flag(CallDataFlag.ARGS_BLOCKARG)) {
             if (locals.length > 0 && locals[locals.length - 1].klass === Proc.klass) {
                 block = locals.pop();
@@ -588,7 +603,7 @@ export class ExecutionContext {
         // Apparently blocks and procs destructure one level of their args automatically.
         // Eg. {}.map { |a, b| ... } automatically destructures [a, b] while {}.map { |a| ... } does not,
         // and instead passes a two-element array to the block.
-        if (calling_convention === CallingConvention.BLOCK_PROC && locals[0]?.klass === RubyArray.klass) {
+        if (calling_convention === CallingConvention.BLOCK_PROC && lead_num > locals.length && locals[0]?.klass === RubyArray.klass) {
             const elements = [...locals[0].get_data<RubyArray>().elements];
 
             if (elements.length <= lead_num) {
@@ -802,7 +817,7 @@ export class ExecutionContext {
     }
 
     setn(n: number, value: RValue): void {
-        this.stack[this.stack_len - n - 1].rval = value;
+        this.stack[this.stack_len - (n + 1)].rval = value;
     }
 
     jump(label: Label): JumpResult {

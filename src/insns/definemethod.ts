@@ -29,9 +29,7 @@ export default class DefineMethod extends Instruction {
             this.lexical_scope
         );
 
-        if (Object.respond_to(context.frame!.self, "method_added")) {
-            Object.send(context.frame!.self, "method_added", [Runtime.intern(this.name)]);
-        }
+        Object.send(context.frame!.self.klass, "method_added", [Runtime.intern(this.name)]);
 
         return null;
     }

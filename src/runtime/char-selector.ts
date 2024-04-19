@@ -120,7 +120,7 @@ class PatternParser {
         if (second_char === "-") {
             pattern = this.handle_range_pattern(first_char);
         } else {
-            pattern = this.handle_regular_pattern(first_char);
+            pattern = this.handle_regular_pattern(first_char, second_char);
         }
 
         if (this.negated) {
@@ -147,7 +147,7 @@ class PatternParser {
         return pattern;
     }
 
-    private handle_regular_pattern(first_char: string): IPattern {
+    private handle_regular_pattern(first_char: string, second_char: string): IPattern {
         const start_pos = this.index;
 
         while (!this.eos()) {
@@ -158,7 +158,7 @@ class PatternParser {
             this.next();
         }
 
-        const pattern = new Pattern(first_char + this.pattern_str.slice(start_pos, this.index), this.offset);
+        const pattern = new Pattern(first_char + second_char + this.pattern_str.slice(start_pos, this.index), this.offset);
         this.offset += pattern.length;
 
         return pattern;

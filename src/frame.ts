@@ -123,9 +123,9 @@ export class BlockFrame extends Frame implements IFrameWithOwner {
         }
 
         if (!this.binding.stack[stack_index]) {
-            this.binding.stack[stack_index] = new RValuePointer(value);
+            context.stack[stack_index] = new RValuePointer(value);
         } else {
-            this.binding.stack[stack_index].rval = value;
+            context.stack[stack_index].rval = value;
         }
 
         // The following code sets a local variable outside the context of the block.

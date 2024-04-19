@@ -1,5 +1,4 @@
 import { BlockCallData, MethodCallData } from "./call_data";
-import { Frame } from "./frame";
 import AdjustStack from "./insns/adjuststack";
 import AnyToString from "./insns/any_to_string";
 import BranchIf from "./insns/branchif";
@@ -64,7 +63,7 @@ import ConcatArray from "./insns/concatarray";
 import { ParameterMetadata } from "./runtime/parameter-meta";
 import { LexicalScope } from "./compiler";
 
-class Node {
+export class Node {
     public instruction: Instruction;
     public next_node: Node | null;
 
@@ -72,6 +71,10 @@ class Node {
         this.instruction = instruction;
         this.next_node = next_node;
     }
+}
+
+export class StackPosition {
+    public delta: number;
 }
 
 // When the list of instructions is first being created, it's stored as a
@@ -117,7 +120,13 @@ class InstructionList {
 
     to_array(): Instruction[] {
         const result: Instruction[] = [];
-        this.each(instruction => result.push(instruction));
+
+        this.each(instruction => {
+            if (!(instruction instanceof StackPosition)) {
+                result.push(instruction);
+            }
+        });
+
         return result;
     }
 }
@@ -408,8 +417,8 @@ export class InstructionSequence {
         this.options = options;
     }
 
-    label() {
-        return new Label();
+    label(id?: string) {
+        return new Label(id);
     }
 
     putnil() {
@@ -630,6 +639,8 @@ export class InstructionSequence {
         } else if (value instanceof Label) {
           value.node = node;
           return value;
+        } else if (value instanceof StackPosition) {
+            return node;
         } else {
           this.stack.change_by(-value.pops + value.pushes)
           return value
@@ -660,8 +671,8 @@ export class InstructionSequence {
         this.push(new AnyToString());
     }
 
-    toregexp(options: string, size: number) {
-        this.push(new ToRegexp(options, size));
+    toregexp(flags: number, size: number) {
+        this.push(new ToRegexp(flags, size));
     }
 
     concatstrings(count: number) {
@@ -737,7 +748,7 @@ export class InstructionSequence {
         this.insns.each((insn) => {
             if (insn instanceof Label) {
                 insn.patch(`label_${length}`);
-            } else if (typeof insn === 'number') {
+            } else if (typeof insn === 'number' || insn instanceof StackPosition) {
                 // skip
             } else if (insn instanceof DefineClass) {
                 insn.iseq.compile();

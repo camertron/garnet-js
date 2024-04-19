@@ -1,18 +1,31 @@
-import { NotImplementedError } from "../errors";
+import { NameError, NotImplementedError } from "../errors";
 import { Class, ObjectClass, RValue, Runtime } from "../runtime";
 import { Float } from "../runtime/float";
 import { Kernel } from "../runtime/kernel";
 import { Numeric } from "../runtime/numeric";
 import { Object } from "../runtime/object";
 
-
 // JS:   1711152226.702
 // Ruby: 1711152191.542349
 class Time {
+    private static klass_: RValue;
+
+    static get klass(): RValue {
+        const klass = Object.find_constant("Time");
+
+        if (klass) {
+            this.klass_ = klass;
+        } else {
+            throw new NameError(`missing constant Time`);
+        }
+
+        return this.klass_;
+    }
+
     public date: Date;
 
     static new(date: Date) {
-        return new RValue(Object.find_constant("Time")!, new Time(date));
+        return new RValue(Time.klass, new Time(date));
     }
 
     constructor(date: Date) {

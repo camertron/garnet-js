@@ -229,6 +229,31 @@ export const init = () => {
             }
         });
 
+        mod.define_native_method("each_with_object", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
+            if (block) {
+                const proc = block.get_data<Proc>();
+                const object = args[0];
+
+                try {
+                    Object.send(self, "each", [], undefined, Proc.from_native_fn(ExecutionContext.current, (_self: RValue, block_args: RValue[]): RValue => {
+                        proc.call(ExecutionContext.current, [block_args[0], object]);
+                        return Qnil;
+                    }));
+                } catch (e) {
+                    if (e instanceof BreakError) {
+                        return e.value;
+                    }
+
+                    throw e;
+                }
+
+                return object;
+            } else {
+                // @TODO: return an Enumerator
+                return Qnil;
+            }
+        });
+
         mod.define_native_method("first", (self: RValue, args: RValue[]): RValue => {
             const found: RValue[] = [];
             let count: number;

@@ -2,7 +2,7 @@ import { BlockCallData, CallData, MethodCallData } from "../call_data";
 import { Compiler } from "../compiler";
 import { ArgumentError, NameError } from "../errors";
 import { CallingConvention, ExecutionContext, ReturnError } from "../execution_context";
-import { Module, ModuleClass, RValue, Runtime, Visibility, Qnil, Class, Qtrue, Qfalse, TrueClass, FalseClass, ObjectClass, InterpretedCallable } from "../runtime";
+import { Module, ModuleClass, RValue, Runtime, Visibility, Qnil, Class, Qtrue, Qfalse, TrueClass, FalseClass, ObjectClass, InterpretedCallable, ClassClass } from "../runtime";
 import { Kernel } from "./kernel";
 import { Object } from "./object";
 import { InterpretedProc, Proc } from "./proc";
@@ -280,9 +280,7 @@ export const init = () => {
             }
         });
 
-        if (Object.respond_to(self, "method_added")) {
-            Object.send(self, "method_added", [Runtime.intern(method_name)]);
-        }
+        Object.send(self, "method_added", [Runtime.intern(method_name)]);
 
         return args[0];
     });
@@ -306,6 +304,11 @@ export const init = () => {
         }
 
         throw new NameError(`undefined method \`${method_name}' for class ${self.get_data<Module>().name}`);
+    });
+
+    mod.define_native_method("method_added", (): RValue => {
+        // no-op, should be implemented by derived classes
+        return Qnil;
     });
 
     mod.define_native_method("private_constant", (self: RValue, args: RValue[]): RValue => {
@@ -415,6 +418,28 @@ export const init = () => {
         const temp_name = Runtime.coerce_to_string(args[0] || Qnil).get_data<string>();
         self.get_data<Module>().temporary_name = temp_name;
         return self;
+    });
+
+    mod.define_native_method("<", (self: RValue, args: RValue[]): RValue => {
+        if (!args[0] || (args[0].klass != ModuleClass && args[0].klass != ClassClass)) {
+            throw new TypeError("compared with non class/module");
+        }
+
+        const other = args[0];
+
+        if (self.klass === ClassClass && other.klass === ClassClass) {
+            let current_superclass: RValue | null = self.get_data<Class>().superclass;
+
+            while (current_superclass) {
+                if (other === current_superclass) {
+                    return Qtrue;
+                }
+
+                current_superclass = current_superclass.get_data<Class>().superclass;
+            }
+        }
+
+        return Qfalse;
     });
 
     inited = true;

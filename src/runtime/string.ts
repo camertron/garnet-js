@@ -14,6 +14,7 @@ import { RubyArray } from "../runtime/array";
 import { Numeric } from "./numeric";
 import { Float } from "./float";
 import { mix_shared_string_methods_into } from "./string-shared";
+import { left_pad, sprintf } from "./printf";
 
 // 7-bit strings are implicitly valid.
 // If both the valid _and_ 7bit bits are set, the string is broken.e
@@ -275,7 +276,7 @@ export const init = () => {
                 pattern = args[0].get_data<Regexp>();
             } else {
                 const re_str = Runtime.coerce_to_string(args[0]).get_data<string>();
-                pattern = Regexp.compile(re_str, "");
+                pattern = Regexp.compile(re_str);
             }
 
             if (pattern.search(self.get_data<string>()) === null) {
@@ -283,6 +284,58 @@ export const init = () => {
             }
 
             return Qtrue;
+        });
+
+        // @TODO: scan should yield results to the block
+        klass.define_native_method("scan", (self: RValue, args: RValue[]): RValue => {
+            const data = self.get_data<string>();
+            const pattern = args[0];
+
+            if (pattern.klass === String.klass) {
+                // @TODO: data should be passed through Regexp.quote() for some reason,
+                // but we don't have an impl yet
+                const pattern_str = pattern.get_data<string>();
+                const results: RValue[] = [];
+                let last_pos = -pattern_str.length - 1;
+
+                do {
+                    last_pos = data.indexOf(pattern_str, last_pos + pattern_str.length + 1);
+
+                    if (last_pos > -1) {
+                        const str = data.slice(last_pos, last_pos + pattern_str.length);
+                        results.push(String.new(str));
+                        last_pos += pattern_str.length;
+                    }
+                } while (last_pos > -1);
+
+                return RubyArray.new(results);
+            } else if (pattern.klass === Regexp.klass) {
+                const results: RValue[] = [];
+
+                pattern.get_data<Regexp>().scan(data, (match_data: MatchData): boolean => {
+                    if (match_data.captures.length === 1) {
+                        const capture = match_data.captures[0]
+                        const str = data.slice(capture[0], capture[1]);
+                        results.push(String.new(str));
+                    } else {
+                        const captures = [];
+
+                        for (let i = 1; i < match_data.captures.length; i ++) {
+                            const capture = match_data.captures[i];
+                            const str = data.slice(capture[0], capture[1]);
+                            captures.push(String.new(str));
+                        }
+
+                        results.push(RubyArray.new(captures));
+                    }
+
+                    return true;
+                });
+
+                return RubyArray.new(results);
+            } else {
+                throw new TypeError(`wrong argument type ${pattern.klass.get_data<Class>().name} (expected Regexp)`);
+            }
         });
 
         klass.define_native_method("to_i", (self: RValue): RValue => {
@@ -299,136 +352,9 @@ export const init = () => {
             return Runtime.intern(self.get_data<string>());
         });
 
-        const printf_pattern = (
-            "(?!\\\\)" +                  // string does not start with an escape character
-            "%" +                         // literal percent sign
-            "((?:[ #+-0*]|\\d+\\$)+)?" +  // Flag. Any of space, #, +, -, 0, *, or n$ meaning nth argument.
-            "(-?\\d+)?" +                 // Width. Possibly negative integer.
-            "(\\.\\d)?" +                 // Precision. A dot followed by a non-negative integer.
-            "([bBdiuoxXaAeEfgGcps])"      // Type specifier.
-        );
-
-        const printf_re = new RegExp(printf_pattern, "g");
-
-        const right_pad = (str: string, pad_char: string, length: number): string => {
-            if (str.length >= length) return str;
-            const leading = pad_char.repeat(length - str.length);
-            return `${leading}${str}`;
-        }
-
-        const left_pad = (str: string, pad_char: string, length: number): string => {
-            if (str.length >= length) return str;
-            const trailing = pad_char.repeat(length - str.length);
-            return `${str}${trailing}`;
-        }
-
-        const format_int = (idx: number, self: RValue, args: RValue[], flags: string, orig_width: string, precision: number): string => {
-            if (idx >= args.length) {
-                throw new ArgumentError("too few arguments");
-            }
-
-            let width;
-
-            if (flags.indexOf("*") > -1) {
-                width = Object.send(self, "Integer", [args[idx]]).get_data<number>();
-                idx ++;
-            } else {
-                width = parseInt(orig_width)!;
-            }
-
-            const val = Object.send(self, "Integer", [args[idx]]).get_data<number>();
-            let result = val.toString();
-
-            if (val >= 0) {
-                // the + takes precedence if space is also specified
-                if (flags.indexOf("+") > -1) {
-                    result = `+${result}`;
-                } else if (flags.indexOf(" ") > -1) {
-                    result = ` ${result}`;
-                }
-            }
-
-            if (result.length < precision) {
-                result = right_pad(result, "0", precision);
-            }
-
-            if (result.length >= width) {
-                return result;
-            }
-
-            let pad_char = " ";
-
-            if (flags.indexOf("0") > -1) {
-                pad_char = "0";
-            }
-
-            if (flags.indexOf("-") > -1) {
-                return left_pad(result, pad_char, width);
-            } else {
-                return right_pad(result, pad_char, width);
-            }
-        }
-
         klass.define_native_method("%", (self: RValue, args: RValue[]): RValue => {
-            const pattern = self.get_data<string>();
-            const chunks = [];
-            let last_pos = 0;
-            let idx = 0;
-
             args = Object.send(self, "Array", args).get_data<RubyArray>().elements;
-
-            Array.from(pattern.matchAll(printf_re)).forEach((match) => {
-                const cur_pos = match.index!
-
-                if (cur_pos > last_pos) {
-                    chunks.push(pattern.slice(last_pos, cur_pos));
-                }
-
-                const [_, flags_field, width, precision_field, type] = match;
-                const precision = precision_field && precision_field.length > 0 ? parseInt(precision_field.slice(1)) : 0;
-                const flags = flags_field || "";
-
-                switch (type) {
-                    case "d":
-                    case "i":
-                    case "u":
-                        chunks.push(format_int(idx, self, args, flags, width, precision));
-                        idx ++;
-                        break;
-
-                    case "f":
-                        // @TODO: flesh this out
-                        chunks.push(args[idx].get_data<number>().toString());
-                        idx ++;
-                        break;
-
-                    case "s":
-                        chunks.push(Object.send(args[idx], "to_s").get_data<string>());
-                        idx ++;
-                        break;
-
-                    case "p":
-                        chunks.push(Object.send(args[idx], "inspect").get_data<string>());
-                        idx ++;
-                        break;
-
-                    case "%":
-                        chunks.push("%");
-                        break;
-
-                    default:
-                        throw new NotImplementedError(`format type specifier '${type}' not yet implemented`);
-                }
-
-                last_pos = cur_pos + match.length - 1;
-            });
-
-            if (last_pos < pattern.length - 1) {
-                chunks.push(pattern.slice(last_pos));
-            }
-
-            const result = chunks.join("").replace("%%", "%");
-            return RubyString.new(result);
+            return sprintf(self, args);
         });
 
         klass.define_native_method("==", (self: RValue, args: RValue[]): RValue => {
@@ -469,6 +395,11 @@ export const init = () => {
         });
 
         klass.alias_method("length", "size");
+
+        klass.define_native_method("bytesize", (self: RValue): RValue => {
+            const encoding = RubyString.get_encoding_rval(self).get_data<Encoding>();
+            return Integer.get(encoding.bytesize(self.get_data<string>()));
+        });
 
         klass.define_native_method("[]=", (self: RValue, args: RValue[]): RValue => {
             const data = self.get_data<string>();
@@ -578,15 +509,6 @@ export const init = () => {
             }
         });
 
-        klass.define_native_method("end_with?", (self: RValue, args: RValue[]): RValue => {
-            Runtime.assert_type(args[0] || Qnil, String.klass);
-
-            const data = self.get_data<string>();
-            const search_str = args[0].get_data<string>();
-
-            return data.endsWith(search_str) ? Qtrue : Qfalse;
-        });
-
         klass.define_native_method("=~", (self: RValue, args: RValue[]): RValue => {
             if (args[0].klass === Regexp.klass) {
                 const regexp = args[0].get_data<Regexp>();
@@ -678,6 +600,36 @@ export const init = () => {
                 } else {
                     return RubyString.new(data);
                 }
+            }
+        });
+
+        // Returns a new string copied from self, with trailing characters possibly removed.
+        // Removes "\r\n" if those are the last two characters. Otherwise removes the last
+        // character if it exists.
+        klass.define_native_method("chop", (self: RValue): RValue => {
+            const data = self.get_data<string>();
+            const remove_chars = data.endsWith("\r\n") ? 2 : 1;
+
+            if (remove_chars > data.length) {
+                return RubyString.new("");
+            } else {
+                return RubyString.new(data.slice(0, data.length - remove_chars));
+            }
+        });
+
+        // Like String#chop, but modifies self in place; returns nil if self is empty, self
+        // otherwise.
+        klass.define_native_method("chomp!", (self: RValue): RValue => {
+            const data = self.get_data<string>();
+            const remove_chars = data.endsWith("\r\n") ? 2 : 1;
+
+            if (remove_chars > data.length) {
+                self.data = "";
+                return Qnil;
+            } else {
+                const new_str = data.slice(0, data.length - remove_chars);
+                self.data = new_str;
+                return new_str.length === 0 ? Qnil : self;
             }
         });
 
@@ -780,6 +732,11 @@ export const init = () => {
             }
 
             return String.new(chars.join(""));
+        });
+
+        klass.define_native_method("clear", (self: RValue): RValue => {
+            self.data = "";
+            return self;
         });
     });
 

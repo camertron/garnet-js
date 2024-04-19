@@ -4,19 +4,19 @@ import { Runtime } from "../runtime";
 import { Regexp } from "../runtime/regexp";
 
 export default class ToRegexp extends Instruction {
-    public options: string;
+    public flags: number;
     public size: number;
 
-    constructor(options: string, size: number) {
+    constructor(flags: number, size: number) {
         super();
 
-        this.options = options;
+        this.flags = flags;
         this.size = size;
     }
 
     call(context: ExecutionContext): ExecutionResult {
         const pattern = context.popn(this.size).map((elem) => Runtime.coerce_to_string(elem).get_data<string>()).join("");
-        context.push(Regexp.new(pattern, this.options));
+        context.push(Regexp.new(pattern, this.flags));
         return null;
     }
 

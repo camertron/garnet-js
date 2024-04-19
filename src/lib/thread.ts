@@ -32,6 +32,16 @@ export class Thread {
 
         return this.current_;
     }
+
+    private data_store_: Hash;
+
+    get data_store(): Hash {
+        if (!this.data_store_) {
+            this.data_store_ = new Hash();
+        }
+
+        return this.data_store_;
+    }
 }
 
 export class Mutex {
@@ -144,7 +154,16 @@ export const init = () => {
         klass.define_native_method("join", (_self: RValue, _args: RValue[]) => {
             // do nothing because we don't acually support threads
             return Qnil;
-        })
+        });
+
+        klass.define_native_method("[]", (self: RValue, args: RValue[]): RValue => {
+            return self.get_data<Thread>().data_store.get(args[0]);
+        });
+
+        klass.define_native_method("[]=", (self: RValue, args: RValue[]): RValue => {
+            self.get_data<Thread>().data_store.set(args[0], args[1]);
+            return args[1];
+        });
     });
 
     const MutexClass = Runtime.define_class_under(ThreadClass, "Mutex", ObjectClass, (klass: Class) => {

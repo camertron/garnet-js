@@ -2,7 +2,6 @@ import { MethodCallData, CallDataFlag } from "../call_data";
 import { NoMethodError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import { IFrameWithOwner, MethodFrame } from "../frame";
-import { Qfalse, Qtrue } from "../garnet";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
 import { Hash } from "../runtime/hash";
@@ -40,6 +39,13 @@ export default class InvokeSuper extends Instruction {
 
                 // bare super call, meaning use same call_data as origial callsite to forward args
                 if (this.call_data.has_flag(CallDataFlag.ZSUPER)) {
+                    // Methods can call yield instead of invoking block.call, meaning the block can be
+                    // implicitly passed. Since zsuper forwards all args, we grab the block attached to
+                    // the current frame and pass it explicitly.
+                    if (!block && context.frame instanceof MethodFrame) {
+                        block = context.frame!.block;
+                    }
+
                     const call_data = (context.frame as MethodFrame).call_data;
                     result = method.call(context, self, method_frame.args, method_frame.kwargs, block, call_data);
                 } else {
@@ -57,7 +63,7 @@ export default class InvokeSuper extends Instruction {
                     }
 
                     const args = context.popn(this.call_data.argc);
-                    result = method.call(context, self, args, undefined, block, this.call_data);
+                    result = method.call(context, self, args, kwargs, block, this.call_data);
                 }
 
                 context.push(result);

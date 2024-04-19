@@ -10,53 +10,66 @@ import { RubyArray } from "../runtime/array";
 let onigmo: Onigmo;
 let inited = false;
 
-class OnigmoExportsWrapper {
-    private static WASM_PAGE_SIZE_BYTES = Math.pow(2, 16);
+class ReattachingDataView {
+    private memory: WebAssembly.Memory;
+    private view: DataView;
 
+    constructor(memory: WebAssembly.Memory) {
+        this.memory = memory;
+    }
+
+    getUint32(byte_offset: number, little_endian?: boolean): number {
+        this.reattachIfNecessary();
+        return this.view.getUint32(byte_offset, little_endian);
+    }
+
+    setUint32(byte_offset: number, value: number, little_endian?: boolean): void {
+        this.reattachIfNecessary();
+        this.view.setUint32(byte_offset, value, little_endian);
+    }
+
+    private reattachIfNecessary() {
+        // Ignore because ts doesn't know about the detached property
+        // for some reason
+
+        /* @ts-ignore */
+        if (!this.view || this.view.buffer.detached) {
+            this.view = new DataView(this.memory.buffer);
+        }
+    }
+
+    get buffer(): ArrayBuffer {
+        return this.memory.buffer;
+    }
+}
+
+class OnigmoExportsWrapper {
     private original_exports: OnigmoExports;
 
-    public memory: DataView;
+    public memory: ReattachingDataView;
     public OnigEncodingUTF_16LE: number;
+    public OnigEncodingUTF_16BE: number;
     public OnigSyntaxRuby: number;
     public OnigDefaultCaseFoldFlag: number;
 
     constructor(original_exports: OnigmoExports) {
         this.original_exports = original_exports;
-        this.memory = new DataView(this.original_exports.memory.buffer);
-        this.OnigEncodingUTF_16LE = original_exports.OnigEncodingUTF_16LE;
-        this.OnigSyntaxRuby = original_exports.OnigSyntaxRuby;
+        this.memory = new ReattachingDataView(this.original_exports.memory);
+        this.OnigEncodingUTF_16LE = original_exports.OnigEncodingUTF_16LE.value;
+        this.OnigSyntaxRuby = original_exports.OnigSyntaxRuby.value;
         this.OnigDefaultCaseFoldFlag = original_exports.OnigDefaultCaseFoldFlag;
     }
 
-    private ensure_enough_memory<R extends ReturnType<any>>(cb: () => R) {
-        try {
-            return cb();
-        } catch (e) {
-            if (e instanceof Error && e.name === "RuntimeError") {
-                // hopefully increasing by an entire page is always enough :/
-                this.grow(1);
-                return cb();
-            }
-
-            throw e;
-        }
-    }
-
-    private grow(pages: number) {
-        this.original_exports.memory.grow(pages);
-        this.memory = new DataView(this.original_exports.memory.buffer);
+    onig_new(...params: Parameters<OnigmoExports["onig_new"]>): ReturnType<OnigmoExports["onig_new"]> {
+        return this.original_exports.onig_new(...params);
     }
 
     onig_new_deluxe(...params: Parameters<OnigmoExports["onig_new_deluxe"]>): ReturnType<OnigmoExports["onig_new_deluxe"]> {
-        return this.ensure_enough_memory(() => {
-            return this.original_exports.onig_new_deluxe(...params);
-        });
+        return this.original_exports.onig_new_deluxe(...params);
     }
 
     onig_search(...params: Parameters<OnigmoExports["onig_search"]>): ReturnType<OnigmoExports["onig_search"]> {
-        return this.ensure_enough_memory(() => {
-            return this.original_exports.onig_search(...params);
-        });
+        return this.original_exports.onig_search(...params);
     }
 
     onig_free(...params: Parameters<OnigmoExports["onig_free"]>): ReturnType<OnigmoExports["onig_free"]> {
@@ -64,9 +77,7 @@ class OnigmoExportsWrapper {
     }
 
     onig_region_new(...params: Parameters<OnigmoExports["onig_region_new"]>): ReturnType<OnigmoExports["onig_region_new"]> {
-        return this.ensure_enough_memory(() => {
-            return this.original_exports.onig_region_new(...params);
-        });
+        return this.original_exports.onig_region_new(...params);
     }
 
     onig_region_free(...params: Parameters<OnigmoExports["onig_region_free"]>): ReturnType<OnigmoExports["onig_region_free"]> {
@@ -74,26 +85,11 @@ class OnigmoExportsWrapper {
     }
 
     onig_error_code_to_str(...params: Parameters<OnigmoExports["onig_error_code_to_str"]>): ReturnType<OnigmoExports["onig_error_code_to_str"]> {
-        return this.ensure_enough_memory(() => {
-            return this.original_exports.onig_error_code_to_str(...params);
-        });
+        return this.original_exports.onig_error_code_to_str(...params);
     }
 
     malloc(...params: Parameters<OnigmoExports["malloc"]>): ReturnType<OnigmoExports["malloc"]> {
-        // Wrap the first malloc in ensure_enough_memory() in case it throws a RuntimeError.
-        const addr = this.ensure_enough_memory(() => this.original_exports.malloc(...params));
-        const size = params[0];
-
-        // Even when there isn't enough WASM memory, malloc still appears to succeed by returning an
-        // address. Although that address points to a valid memory location, malloc appears not to
-        // check that the requisite number of bytes are available after it, meaning we can index
-        // past the end of the buffer. This check is here to make sure enough bytes were allocated.
-        if ((addr + size) > this.memory.byteLength) {
-            this.grow(Math.ceil(size / OnigmoExportsWrapper.WASM_PAGE_SIZE_BYTES));
-            return this.original_exports.malloc(...params);
-        }
-
-        return addr;
+        return this.original_exports.malloc(...params);
     }
 
     free(...params: Parameters<OnigmoExports["free"]>): ReturnType<OnigmoExports["free"]> {
@@ -109,11 +105,13 @@ export const init = async () => {
 
     Runtime.define_class("Regexp", ObjectClass, (klass: Class) => {
         klass.define_native_singleton_method("compile", (_self: RValue, args: RValue[]): RValue => {
-            return Regexp.new(Runtime.coerce_to_string(args[0]).get_data<string>(), "");
+            // @TODO: handle flags/options
+            return Regexp.new(Runtime.coerce_to_string(args[0]).get_data<string>(), ONIG_OPTION_NONE);
         });
 
         klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
-            self.data = Regexp.compile(Runtime.coerce_to_string(args[0]).get_data<string>(), "");
+            // @TODO: handle flags/options
+            self.data = Regexp.compile(Runtime.coerce_to_string(args[0]).get_data<string>(), ONIG_OPTION_NONE);
             return Qnil;
         });
 
@@ -336,22 +334,9 @@ class UTF16String {
     public start: Address;
     public end: Address;
 
-    constructor(start: Address, end?: Address) {
+    constructor(start: Address, end: Address) {
         this.start = start;
-
-        if (end) {
-            this.end = end;
-        } else {
-            const mem = new Uint8Array(onigmo.exports.memory.buffer);
-            let end = start;
-
-            // increment until null byte (0) encountered
-            while (mem[end]) {
-                end ++;
-            }
-
-            this.end = end;
-        }
+        this.end = end;
     }
 
     to_string(): string {
@@ -365,19 +350,25 @@ class UTF16String {
         return String.fromCharCode(...pts);
     }
 
-    static create(str: string): UTF16String {
+    static create(str: string, little_endian: boolean = true): UTF16String {
         const bytes: number[] = [];
 
         for (let i = 0; i < str.length; i++) {
             const charCode = str.charCodeAt(i)
-            bytes.push(charCode & 0x00ff);
-            bytes.push((charCode & 0xff00) >> 8);
+
+            if (little_endian) {
+                bytes.push(charCode & 0x00ff);
+                bytes.push((charCode & 0xff00) >> 8);
+            } else {
+                bytes.push((charCode & 0xff00) >> 8);
+                bytes.push(charCode & 0x00ff);
+            }
         }
 
         const start_addr = onigmo.exports.malloc(bytes.length);
         const mem = new Uint8Array(onigmo.exports.memory.buffer);
         mem.set(bytes, start_addr);
-        return new UTF16String(start_addr, start_addr + bytes.length - 1);
+        return new UTF16String(start_addr, start_addr + bytes.length);
     }
 }
 
@@ -403,12 +394,10 @@ class ASCIIString {
             bytes.push(charCode);
         }
 
-        bytes.push(0);
-
         const start_addr = onigmo.exports.malloc(bytes.length);
         const mem = new Uint8Array(onigmo.exports.memory.buffer);
         mem.set(bytes, start_addr);
-        return new ASCIIString(start_addr, start_addr + bytes.length - 1);
+        return new ASCIIString(start_addr, start_addr + bytes.length);
     }
 }
 
@@ -425,6 +414,7 @@ export interface Onigmo {
 }
 
 interface OnigmoExports {
+    onig_new(regexp_ptr: Address, pattern: Address, pattern_end: Address, options: number, encoding: Address, syntax: Address, error_info: Address): ErrorCode;
     onig_new_deluxe(regexp_ptr: Address, pattern: Address, pattern_end: Address, compile_info: Address, error_info: Address): ErrorCode;
     onig_search(regexp: Address, str: Address, str_end: Address, str_start: Address, range: Address, region: Address, options: number): ErrorCode | Position;
     onig_free(regexp: Address): void;
@@ -434,8 +424,9 @@ interface OnigmoExports {
 
     onig_error_code_to_str(out_str: Address, error_code: ErrorCode, error_info: Address): number;
 
-    OnigEncodingUTF_16LE: Address;
-    OnigSyntaxRuby: Address;
+    OnigEncodingUTF_16LE: WebAssembly.Global;
+    OnigEncodingUTF_16BE: WebAssembly.Global;
+    OnigSyntaxRuby: WebAssembly.Global;
     OnigDefaultCaseFoldFlag: number;
 
     memory: WebAssembly.Memory;
@@ -542,24 +533,23 @@ export class Regexp {
         return this.klass_;
     }
 
-    static new(pattern: string, options: string): RValue {
-        return new RValue(this.klass, this.compile(pattern, options));
+    static new(pattern: string, flags: number): RValue {
+        return new RValue(this.klass, this.compile(pattern, flags));
     }
 
-    static make_compile_info(): CompileInfoFields {
+    private static make_compile_info(flags: number): CompileInfoFields {
         return {
             num_of_elements: 5,
             pattern_enc: onigmo.exports.OnigEncodingUTF_16LE,
             target_enc: onigmo.exports.OnigEncodingUTF_16LE,
             syntax: onigmo.exports.OnigSyntaxRuby,
-            option: ONIG_OPTION_NONE,
+            option: flags,
             case_fold_flag: onigmo.exports.OnigDefaultCaseFoldFlag
         };
     }
 
-    static compile(pat: string, options: string): Regexp {
-        const compile_info = CompileInfo.create(Regexp.make_compile_info());
-
+    static compile(pat: string, flags: number = ONIG_OPTION_NONE): Regexp {
+        const compile_info = CompileInfo.create(Regexp.make_compile_info(flags));
         const regexp_ptr = RegexpPtr.create();
         const errorinfo = ErrorInfo.create({enc: 0, par: 0, par_end: 0});
         const pattern = UTF16String.create(pat);
@@ -578,6 +568,7 @@ export class Regexp {
             return new Regexp(pat, regexp);
         } else {
             const err_msg = Regexp.error_code_to_string(error_code, errorinfo);
+            console.log(err_msg);
 
             onigmo.exports.free(compile_info.address);
             onigmo.exports.free(regexp_ptr.address);
@@ -587,7 +578,7 @@ export class Regexp {
         }
     }
 
-    static error_code_to_string(error_code: ErrorCode, errorinfo?: ErrorInfo): string {
+    private static error_code_to_string(error_code: ErrorCode, errorinfo?: ErrorInfo): string {
         const err_msg_ptr = onigmo.exports.malloc(ONIG_MAX_ERROR_MESSAGE_LEN);
         const err_msg_len = onigmo.exports.onig_error_code_to_str(err_msg_ptr, error_code, errorinfo?.address || 0);
         const err_msg = new ASCIIString(err_msg_ptr, err_msg_ptr + err_msg_len);
@@ -599,6 +590,14 @@ export class Regexp {
         const ec = ExecutionContext.current;
         ec.frame_svar()!.svars["$~"] = match_data.to_rval();
         ec.frame_svar()!.svars["$&"] = RubyString.new(match_data.match(0));
+    }
+
+    static build_flags(ignore_case: boolean = false, multi_line: boolean = false, extend: boolean = false): number {
+        let flags = ONIG_OPTION_NONE;
+        if (ignore_case) flags ||= ONIG_OPTION_IGNORECASE;
+        if (multi_line) flags ||= ONIG_OPTION_MULTILINE;
+        if (extend) flags ||= ONIG_OPTION_EXTEND;
+        return flags;
     }
 
     public pattern: string;

@@ -1,4 +1,4 @@
-import { Module, Qnil, Runtime, RValue} from "../runtime";
+import { Module, Qfalse, Qnil, Qtrue, Runtime, RValue} from "../runtime";
 import { Object } from "../runtime/object";
 import { String } from "../runtime/string";
 import { Range } from "../runtime/range";
@@ -91,4 +91,13 @@ export const mix_shared_string_methods_into = (mod: Module) => {
     });
 
     mod.alias_method("[]", "slice");
+
+    mod.define_native_method("end_with?", (self: RValue, args: RValue[]): RValue => {
+        Runtime.assert_type(args[0] || Qnil, String.klass);
+
+        const data = self.get_data<string>();
+        const search_str = args[0].get_data<string>();
+
+        return data.endsWith(search_str) ? Qtrue : Qfalse;
+    });
 }

@@ -34,8 +34,8 @@ export default class ExpandArray extends Instruction {
             }
         })();
 
-        const splat_flag = (this.flags & ExpandArrayFlag.SPLAT_FLAG) > 0;
-        const postarg_flag = (this.flags & ExpandArrayFlag.POSTARG_FLAG) > 0;
+        const splat_flag = this.has_splat_flag;
+        const postarg_flag = this.has_postarg_flag;
         const obj_data = object.get_data<RubyArray>().elements;
 
         if (this.size == 0 && !splat_flag) {
@@ -86,12 +86,20 @@ export default class ExpandArray extends Instruction {
         return null;
     }
 
+    private get has_splat_flag(): boolean {
+        return (this.flags & ExpandArrayFlag.SPLAT_FLAG) > 0;
+    }
+
+    private get has_postarg_flag(): boolean {
+        return (this.flags & ExpandArrayFlag.POSTARG_FLAG) > 0;
+    }
+
     length(): number {
         return 3;
     }
 
     pushes(): number {
-        return this.size;
+        return this.size + (this.has_splat_flag ? 1 : 0);
     }
 
     pops(): number {

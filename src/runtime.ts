@@ -32,6 +32,7 @@ import { init as range_init } from "./runtime/range";
 import { init as binding_init } from "./runtime/binding";
 import { init as signal_init } from "./runtime/signal";
 import { init as time_init } from "./lib/time";
+import { init as date_init } from "./lib/date";
 import { init as thread_init } from './lib/thread';
 import { init as regexp_init} from "./runtime/regexp";
 import { init as encoding_init } from "./runtime/encoding";
@@ -363,6 +364,7 @@ export class Runtime {
 Runtime.register_native_extension("rbconfig", rb_config_init);
 Runtime.register_native_extension("stringio", stringio_init);
 Runtime.register_native_extension("socket", socket_init);
+Runtime.register_native_extension("date", date_init);
 
 export enum Visibility {
     public,
@@ -1165,6 +1167,10 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
 
     klass.define_native_method("equal?", (self: RValue, args: RValue[]): RValue => {
         return self.object_id == args[0].object_id ? Qtrue : Qfalse;
+    });
+
+    klass.define_native_method("!", (self: RValue): RValue => {
+        return self.is_truthy() ? Qfalse : Qtrue;
     });
 
     klass.define_native_method("!=", (self: RValue, args: RValue[]): RValue => {

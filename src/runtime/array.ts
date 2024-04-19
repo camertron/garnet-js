@@ -51,6 +51,10 @@ export const init = () => {
     Runtime.define_class("Array", ObjectClass, (klass: Class) => {
         klass.include(Object.find_constant("Enumerable")!);
 
+        klass.define_native_singleton_method("[]", (_self: RValue, args: RValue[]): RValue => {
+            return RubyArray.new(args);
+        });
+
         klass.define_native_method("initialize", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             let init_arr: RValue[];
 

@@ -285,8 +285,26 @@ export const init = () => {
             }
         });
 
+        const get_replacement_key = (k: RValue, replacement_hash?: Hash, replacement_block?: Proc): RValue => {
+            let replacement_k = undefined;
+
+            if (replacement_hash) {
+                replacement_k = replacement_hash.get(k);
+            }
+
+            if (!replacement_k && replacement_block) {
+                replacement_k = replacement_block.call(ExecutionContext.current, [k]);
+            }
+
+            if (!replacement_k?.is_truthy()) {
+                replacement_k = k;
+            }
+
+            return replacement_k;
+        }
+
         klass.define_native_method("transform_keys", (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): RValue => {
-            let replacement_hash: Hash | null = null;
+            let replacement_hash: Hash | undefined = undefined;
 
             if (args.length > 0) {
                 Runtime.assert_type(args[0], Hash.klass);
@@ -300,23 +318,13 @@ export const init = () => {
             const proc = block?.get_data<Proc>();
 
             try {
-                hash.each((k: RValue, v: RValue) => {
-                    let replacement_k = undefined;
+                const keys = Array.from(hash.keys.values());
 
-                    if (replacement_hash) {
-                        replacement_k = replacement_hash.get(k);
-                    }
-
-                    if (!replacement_k && proc) {
-                        replacement_k = proc.call(ExecutionContext.current, [k]);
-                    }
-
-                    if (!replacement_k) {
-                        replacement_k = k;
-                    }
-
+                for (const k of keys) {
+                    const replacement_k = get_replacement_key(k, replacement_hash, proc);
+                    const v = hash.get(k)!;
                     result_hash.set(replacement_k, v);
-                });
+                }
             } catch (e) {
                 if (e instanceof BreakError) {
                     return e.value;
@@ -326,6 +334,95 @@ export const init = () => {
             }
 
             return Hash.from_hash(result_hash);
+        });
+
+        klass.define_native_method("transform_keys!", (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): RValue => {
+            let replacement_hash: Hash | undefined = undefined;
+
+            if (args.length > 0) {
+                Runtime.assert_type(args[0], Hash.klass);
+                replacement_hash = args[0].get_data<Hash>();
+            } else if (kwargs) {
+                replacement_hash = kwargs;
+            }
+
+            const hash = self.get_data<Hash>();
+            const proc = block?.get_data<Proc>();
+
+            try {
+                const keys = Array.from(hash.keys.values());
+
+                for (const k of keys) {
+                    const replacement_k = get_replacement_key(k, replacement_hash, proc);
+                    const v = hash.delete(k)!;
+                    hash.set(replacement_k, v);
+                }
+            } catch (e) {
+                if (e instanceof BreakError) {
+                    return e.value;
+                }
+
+                throw e;
+            }
+
+            return self;
+        });
+
+        klass.define_native_method("transform_values", (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): RValue => {
+            if (block) {
+                const hash = self.get_data<Hash>();
+                const proc = block.get_data<Proc>();
+                const result_hash = new Hash();
+
+                hash.each((k: RValue, v: RValue) => {
+                    let new_value;
+
+                    try {
+                        new_value = proc.call(ExecutionContext.current, [v]);
+                    } catch (e) {
+                        if (e instanceof BreakError) {
+                            new_value = e.value;
+                        } else {
+                            throw e;
+                        }
+                    }
+
+                    result_hash.set(k, new_value);
+                });
+
+                return Hash.from_hash(result_hash);
+            } else {
+                // @TODO: return an enumerator
+                return Qnil;
+            }
+        });
+
+        klass.define_native_method("transform_values!", (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): RValue => {
+            if (block) {
+                const hash = self.get_data<Hash>();
+                const proc = block.get_data<Proc>();
+
+                hash.each((k: RValue, v: RValue) => {
+                    let new_value;
+
+                    try {
+                        new_value = proc.call(ExecutionContext.current, [v]);
+                    } catch (e) {
+                        if (e instanceof BreakError) {
+                            new_value = e.value;
+                        } else {
+                            throw e;
+                        }
+                    }
+
+                    hash.set(k, new_value);
+                });
+
+                return self;
+            } else {
+                // @TODO: return an enumerator
+                return Qnil;
+            }
         });
 
         klass.define_native_method("dup", (self: RValue): RValue => {
@@ -403,6 +500,77 @@ export const init = () => {
 
             return Integer.get(hash);
         });
+
+        klass.define_native_method("merge", (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): RValue => {
+            if (args.length === 0) {
+                return self;
+            }
+
+            const data = self.get_data<Hash>();
+            const proc = block ? block.get_data<Proc>() : null;
+            const result = new Hash();
+
+            data.each((k: RValue, v: RValue) => {
+                result.set(k, v);
+            });
+
+            for (const arg of args) {
+                Runtime.assert_type(arg, Hash.klass);
+                const other = arg.get_data<Hash>();
+
+                other.each((k: RValue, v: RValue) => {
+                    if (proc && data.has(k)) {
+                        try {
+                            v = proc.call(ExecutionContext.current, [k, data.get(k), v]);
+                        } catch (e) {
+                            if (e instanceof BreakError) {
+                                v = e.value;
+                            } else {
+                                throw e;
+                            }
+                        }
+                    }
+
+                    result.set(k, v);
+                });
+            }
+
+            return Hash.from_hash(result);
+        });
+
+        klass.define_native_method("merge!", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
+            if (args.length === 0) {
+                return self;
+            }
+
+            const data = self.get_data<Hash>();
+            const proc = block ? block.get_data<Proc>() : null;
+
+            for (const arg of args) {
+                Runtime.assert_type(arg, Hash.klass);
+                const other = arg.get_data<Hash>();
+
+                other.each((k: RValue, v: RValue) => {
+                    if (proc && data.has(k)) {
+                        try {
+                            v = proc.call(ExecutionContext.current, [k, data.get(k), v]);
+                        } catch (e) {
+                            if (e instanceof BreakError) {
+                                v = e.value;
+                            } else {
+                                throw e;
+                            }
+                        }
+                    }
+
+                    data.set(k, v);
+                });
+            }
+
+            return self;
+        });
+
+        klass.alias_method("update", "merge!");
 
         klass.define_native_method("==", (self: RValue, args: RValue[]): RValue => {
             const hash = self.get_data<Hash>();

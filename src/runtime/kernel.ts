@@ -1,7 +1,7 @@
 import { is_node } from "../env";
 import { ArgumentError, IRubyError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
 import { BreakError, ExecutionContext, ThrowError } from "../execution_context";
-import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, Visibility, Callable, ObjectClass, InterpretedCallable, NativeCallable } from "../runtime";
+import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, Visibility, Callable, ObjectClass, InterpretedCallable, NativeCallable, STDERR, IO } from "../runtime";
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
@@ -18,6 +18,7 @@ import { Float } from "./float";
 import { Enumerator } from "./enumerator";
 import { Binding } from "./binding";
 import { Method } from "./method";
+import { sprintf } from "./printf";
 
 export class Kernel {
     public static exit_handlers: RValue[] = [];
@@ -231,6 +232,14 @@ export const init = async () => {
     });
 
     mod.define_native_method("lambda", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
+        if (!block) {
+            throw new ArgumentError("tried to create a Proc object without a block");
+        }
+
+        return block;
+    });
+
+    mod.define_native_method("proc", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
         if (!block) {
             throw new ArgumentError("tried to create a Proc object without a block");
         }
@@ -582,5 +591,18 @@ export const init = async () => {
 
     mod.define_native_method("binding", (self: RValue): RValue => {
         return Binding.from_binding(ExecutionContext.current.get_binding());
+    });
+
+    mod.define_native_method("sprintf", (self: RValue, args: RValue[]): RValue => {
+        return sprintf(args[0], args.slice(1));
+    });
+
+    mod.define_native_method("warn", (self: RValue, args: RValue[]): RValue => {
+        for (const arg of args) {
+            const str = Runtime.coerce_to_string(arg).get_data<string>();
+            STDERR.get_data<IO>().write(str.endsWith("\n") ? str : `${str}\n`);
+        }
+
+        return Qnil;
     });
 };

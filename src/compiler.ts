@@ -1,7 +1,8 @@
 import { ParseResult } from "@ruby/prism/src/deserialize";
 import { MethodCallData, BlockCallData, CallDataFlag, CallData } from "./call_data";
-import { CatchBreak, InstructionSequence, Label, CatchTableStack, CatchNext } from "./instruction_sequence";
+import { CatchBreak, InstructionSequence, Label, CatchTableStack, CatchNext, StackPosition } from "./instruction_sequence";
 import { CompilerOptions } from "./compiler_options";
+import { Node as InsnNode } from "./instruction_sequence"
 import {
     AliasMethodNode,
     AndNode,
@@ -40,8 +41,10 @@ import {
     GlobalVariableWriteNode,
     HashNode,
     IfNode,
+    ImplicitNode,
     IndexOperatorWriteNode,
     IndexOrWriteNode,
+    IndexTargetNode,
     InstanceVariableOperatorWriteNode,
     InstanceVariableOrWriteNode,
     InstanceVariableReadNode,
@@ -111,8 +114,7 @@ import { SyntaxError } from "./errors";
 import { ThrowType } from "./insns/throw";
 import { String } from "./runtime/string";
 import { ParameterMetadata, ParametersMetadataBuilder } from "./runtime/parameter-meta";
-import GetLocal from "./insns/getlocal";
-import SetLocal from "./insns/setlocal";
+import Instruction from "./instruction";
 
 export type ParseLocal = {
     name: string
@@ -591,38 +593,176 @@ export class Compiler extends Visitor {
         this.iseq.setlocal(lookup.index, lookup.depth);
     }
 
+    override visitIndexTargetNode(node: IndexTargetNode): void {
+        this.visit(node.receiver);
+        if (node.arguments_) this.visit(node.arguments_)
+    }
+
+    private find_stack_position(label_node: InsnNode): number {
+        let current = label_node.next_node;
+        let count = 0;
+
+        while (current) {
+            if (current.instruction instanceof Instruction) {
+                count += current.instruction.pushes();
+                count -= current.instruction.pops();
+            }
+
+            current = current.next_node;
+        }
+
+        return count;
+    }
+
+    private measure_stack_change(cb: () => void): number {
+        let start_insn = this.iseq.insns.tail_node;
+
+        cb();
+
+        // start_insn may be null if we've started at the very beginning
+        // of the file
+        let current = start_insn || this.iseq.insns.head_node;
+        let total = 0;
+
+        while (current) {
+            if (current.instruction instanceof Instruction) {
+                total += current.instruction.pushes();
+                total -= current.instruction.pops();
+            }
+
+            if (current === this.iseq.insns.tail_node) {
+                break;
+            }
+
+            current = current.next_node;
+        }
+
+        return total;
+    }
+
     override visitMultiWriteNode(node: MultiWriteNode) {
-        this.with_used(true, () => this.visit(node.value));
-        if (this.used) this.iseq.dup();
+        const stack_positions: InsnNode[] = [];
 
-        if (node.lefts.length > 0) {
-            this.iseq.expandarray(node.lefts.length, node.rest ? ExpandArrayFlag.SPLAT_FLAG : 0);
-            this.with_used(true, () => this.visitAll(node.lefts));
-        }
-
-        let flags = 0;
-
-        if (node.rest) {
-            flags |= ExpandArrayFlag.SPLAT_FLAG;
-        }
-
-        if (node.rights.length > 0) {
-            flags |= ExpandArrayFlag.POSTARG_FLAG;
-        }
-
-        if (node.rights.length > 0) {
-            this.iseq.expandarray(node.rights.length, flags);
+        for (const left of node.lefts) {
+            const pos = new StackPosition();
+            const pos_node = this.iseq.push(pos) as InsnNode;
+            stack_positions.push(pos_node);
+            pos.delta = this.with_used<number>(true, () => {
+                return this.measure_stack_change(() => this.visit(left))
+            });
         }
 
         if (node.rest) {
-            const splat_expr = (node.rest as SplatNode).expression;
+            const pos = new StackPosition();
+            const pos_node = this.iseq.push(pos) as InsnNode;
+            stack_positions.push(pos_node);
+            const rest = node.rest as SplatNode;
 
-            if (splat_expr) {
-                this.with_used(true, () => this.visit(splat_expr));
+            if (rest.expression && rest.expression instanceof IndexTargetNode) {
+                pos.delta = this.with_used<number>(true, (): number => {
+                    return this.measure_stack_change(() => this.visit(rest.expression!))
+                });
             }
         }
 
-        this.with_used(true, () => this.visitAll(node.rights));
+        for (const right of node.rights) {
+            const pos = new StackPosition();
+            const pos_node = this.iseq.push(pos) as InsnNode;
+            stack_positions.push(pos_node);
+            pos.delta = this.with_used<number>(true, (): number => {
+                return this.measure_stack_change(() => this.visit(right));
+            });
+        }
+
+        // Visit all the value nodes. This is actually an ArrayNode that will result in
+        // a newarray instruction.
+        this.with_used(true, () => this.visit(node.value as ArrayNode));
+
+        this.iseq.dup();
+
+        let flags = 0;
+        if (node.rest) flags |= ExpandArrayFlag.SPLAT_FLAG;
+
+        this.iseq.expandarray(node.lefts.length, flags);
+
+        for (const left of node.lefts) {
+            const pos_node = stack_positions.shift()!
+            const pos = pos_node.instruction as unknown as StackPosition;
+
+            if (left instanceof IndexTargetNode) {
+                const stack_pos = this.find_stack_position(pos_node);
+
+                for (let i = 0; i < pos.delta; i ++) {
+                    this.iseq.topn(stack_pos - 1);
+                }
+
+                this.iseq.topn(2);
+                this.iseq.send(MethodCallData.create("[]=", 2), null);
+                this.iseq.pop();
+                this.iseq.pop();
+            } else {
+                this.visit(left);
+            }
+        }
+
+        if (node.rest) {
+            const rest = node.rest as SplatNode;
+
+            if (node.rights.length > 0) {
+                const flags = ExpandArrayFlag.SPLAT_FLAG | ExpandArrayFlag.POSTARG_FLAG;
+                this.iseq.expandarray(1, flags);
+            }
+
+            const pos_node = stack_positions.shift()!
+            const pos = pos_node.instruction as unknown as StackPosition;
+
+            if (rest.expression instanceof IndexTargetNode) {
+                const stack_pos = this.find_stack_position(pos_node);
+
+                for (let i = 0; i < pos.delta; i ++) {
+                    this.iseq.topn(stack_pos - 1);
+                }
+
+                this.iseq.topn(2);
+                this.iseq.send(MethodCallData.create("[]=", 2), null);
+                this.iseq.pop();
+                this.iseq.pop();
+            } else if (rest.expression) {
+                this.visit(rest.expression);
+            }
+        }
+
+        for (const right of node.rights) {
+            const pos_node = stack_positions.shift()!
+            const pos = pos_node.instruction as unknown as StackPosition;
+
+            if (right instanceof IndexTargetNode) {
+                const stack_pos = this.find_stack_position(pos_node);
+
+                for (let i = 0; i < pos.delta; i ++) {
+                    this.iseq.topn(stack_pos - 1);
+                }
+
+                this.iseq.topn(2);
+                this.iseq.send(MethodCallData.create("[]=", 2), null);
+                this.iseq.pop();
+                this.iseq.pop();
+            } else {
+                this.visit(right);
+            }
+        }
+
+        // wtf?
+        if (node.rights.length > 0) {
+            const count =
+                node.rights.length +
+                node.lefts.length +
+                (node.rest ? 1 : 0) +
+                (node.value as ArrayNode).elements?.length || 0;
+
+            this.iseq.setn(count);
+            this.iseq.adjuststack(count);
+        }
     }
 
     override visitArrayNode(node: ArrayNode) {
@@ -1526,6 +1666,10 @@ export class Compiler extends Visitor {
         this.iseq.push(done_label);
     }
 
+    override visitImplicitNode(node: ImplicitNode): void {
+        this.visit(node.value);
+    }
+
     override visitKeywordHashNode(node: KeywordHashNode) {
         let all_keys_are_symbols = true;
 
@@ -1716,8 +1860,9 @@ export class Compiler extends Visitor {
 
     override visitRegularExpressionNode(node: RegularExpressionNode) {
         if (this.used) {
-            // @TODO: handle options
-            this.iseq.putobject({type: "RValue", value: Regexp.new(node.unescaped, "")})
+            // @TODO: handle all options
+            const flags = Regexp.build_flags(node.isIgnoreCase(), node.isMultiLine(), node.isExtended());
+            this.iseq.putobject({type: "RValue", value: Regexp.new(node.unescaped, flags)});
         }
     }
 
@@ -1727,8 +1872,10 @@ export class Compiler extends Visitor {
         this.iseq.objtostring(MethodCallData.create("to_s", 0, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE));
         this.iseq.anytostring();
 
+        const flags = Regexp.build_flags(node.isIgnoreCase(), node.isMultiLine(), node.isExtended());
+
         // @TODO: handle options
-        this.iseq.toregexp("", node.parts.length);
+        this.iseq.toregexp(flags, node.parts.length);
         if (!this.used) this.iseq.pop();
     }
 
@@ -1844,6 +1991,8 @@ export class Compiler extends Visitor {
         const already_set = this.iseq.label();
         const done = this.iseq.label();
 
+        this.iseq.putnil();
+
         if (node.receiver) {
             this.with_used(true, () => this.visit(node.receiver!));
         } else {
@@ -1869,7 +2018,7 @@ export class Compiler extends Visitor {
         this.iseq.dup();
         this.iseq.branchif(already_set);
 
-        // remove duped instruction, since we won't be returning it
+        // remove duped value, since we won't be returning it
         this.iseq.pop();
 
         this.with_used(true, () => this.visit(node.value));
@@ -1880,7 +2029,7 @@ export class Compiler extends Visitor {
         // +1 for assigned value, the last argument
         // this.iseq.opt_aset(MethodCallData.create("[]=", arg_size + 1, CallDataFlag.FCALL, null));
         this.iseq.send(MethodCallData.create("[]=", arg_size + 1, CallDataFlag.FCALL, null), null);
-        // this.iseq.pop();
+        this.iseq.pop();
         this.iseq.jump(done);
 
         this.iseq.push(already_set);

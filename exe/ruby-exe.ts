@@ -66,8 +66,14 @@ Garnet.ObjectClass.get_data<Garnet.Class>().constants["ARGV"] = RubyArray.new(
     })
 );
 
-if (!code) {
+let absolute_code_path;
+
+if (code) {
+    code_path = "-e";
+    absolute_code_path = "-e"
+} else {
     code_path = argv[argv.length - 1];
+    absolute_code_path = vmfs.real_path(code_path);
     ExecutionContext.current.globals["$0"] = String.new(code_path);
 
     if (fs.existsSync(code_path)) {
@@ -80,7 +86,6 @@ if (!code) {
 }
 
 try {
-    const absolute_code_path = vmfs.real_path(code_path);
     await Garnet.evaluate(code, code_path, absolute_code_path);
 } catch(e) {
     // Garnet.evaluate should have printed the stack trace, etc, so all we
