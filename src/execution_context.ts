@@ -175,10 +175,6 @@ export class ExecutionContext {
         // jump or leave we will handle those appropriately.
         while (true) {
             const insn = frame.iseq.compiled_insns[frame.pc];
-            // if (this.globals["$cameron"] === Qtrue && insn.constructor.name === "Dup") {
-            //     debugger;
-            // }
-
 
             switch (insn.constructor) {
                 case Number:
