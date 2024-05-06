@@ -11,7 +11,7 @@ export default class GetInstanceVariable extends Instruction {
         this.cache = cache;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         context.push(
             context.frame!.self.iv_get(this.name)
         );

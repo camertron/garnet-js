@@ -13,9 +13,9 @@ export default class ObjToString extends Instruction {
         this.calldata = calldata;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const receiver = context.pop()!;
-        const result = Object.send(receiver, this.calldata);
+        const result = await Object.send(receiver, this.calldata);
         context.push(result);
         return null;
     }

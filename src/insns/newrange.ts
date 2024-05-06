@@ -11,9 +11,9 @@ export default class NewRange extends Instruction {
         this.exclude_end = exclude_end;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const [left, right] = context.popn(2);
-        context.push(Range.new(left, right, this.exclude_end));
+        context.push(await Range.new(left, right, this.exclude_end));
         return null;
     }
 

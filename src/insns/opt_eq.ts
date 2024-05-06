@@ -15,7 +15,7 @@ export default class OptEq extends Instruction {
         this.call_data = call_data;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const argc = this.call_data.argc + 1;
         const [receiver, ...args] = context.popn(argc);
 
@@ -24,16 +24,16 @@ export default class OptEq extends Instruction {
         const receiver_class = receiver.klass;
         const arg0_class = args[0].klass;
 
-        if ((receiver_class == Integer.klass && arg0_class == Integer.klass) ||
-            (receiver_class == String.klass && arg0_class == String.klass) ||
-            (receiver_class == Symbol.klass && arg0_class == Symbol.klass)) {
+        if ((receiver_class === await Integer.klass() && arg0_class === await Integer.klass()) ||
+            (receiver_class === await String.klass() && arg0_class === await String.klass()) ||
+            (receiver_class === await Symbol.klass() && arg0_class === await Symbol.klass())) {
             if (receiver.get_data<number | string>() == args[0].get_data<number | string>()) {
                 context.push(Qtrue);
             } else {
                 context.push(Qfalse);
             }
         } else {
-            const result = Object.send(receiver, this.call_data, args);
+            const result = await Object.send(receiver, this.call_data, args);
             context.push(result);
         }
 

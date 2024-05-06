@@ -3,7 +3,7 @@ import Instruction from "../instruction";
 import { Qnil } from "../runtime";
 
 export default class PutNil extends Instruction {
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         context.push(Qnil);
         return null;
     }

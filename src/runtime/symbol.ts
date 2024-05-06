@@ -12,14 +12,14 @@ import { mix_shared_string_methods_into } from "./string-shared";
 export class Symbol {
     private static to_proc_table: Map<string, RValue> = new Map();
 
-    static to_proc(symbol: RValue): RValue {
+    static async to_proc(symbol: RValue): Promise<RValue> {
         const sym = symbol.get_data<string>();
 
         if (!this.to_proc_table.has(sym)) {
             this.to_proc_table.set(
                 sym,
-                Proc.from_native_fn(ExecutionContext.current, (_self: RValue, args: RValue[]): RValue => {
-                    return Object.send(args[0], sym);
+                await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, args: RValue[]): Promise<RValue> => {
+                    return await Object.send(args[0], sym);
                 })
             );
         }
@@ -29,8 +29,8 @@ export class Symbol {
 
     private static klass_: RValue;
 
-    static get klass(): RValue {
-        const klass = Object.find_constant("Symbol");
+    static async klass(): Promise<RValue> {
+        const klass = await Object.find_constant("Symbol");
 
         if (klass) {
             this.klass_ = klass;
@@ -47,58 +47,58 @@ let inited = false;
 export const init = () => {
     if (inited) return;
 
-    Runtime.define_class("Symbol", ObjectClass, (klass: Class) => {
-        mix_shared_string_methods_into(klass);
+    Runtime.define_class("Symbol", ObjectClass, async (klass: Class) => {
+        await mix_shared_string_methods_into(klass);
 
-        klass.define_native_method("inspect", (self: RValue): RValue => {
+        klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const str = self.get_data<string>();
             const quote = !/^\w+$/.test(str);
             const escaped_str = str.replace(/\"/g, "\\\"");
 
-            return String.new(quote ? `:"${escaped_str}"` : `:${escaped_str}`);
+            return await String.new(quote ? `:"${escaped_str}"` : `:${escaped_str}`);
         });
 
-        klass.define_native_method("hash", (self: RValue): RValue => {
-            return Integer.new(hash_string(self.get_data<string>()));
+        klass.define_native_method("hash", async (self: RValue): Promise<RValue> => {
+            return await Integer.new(hash_string(self.get_data<string>()));
         });
 
-        klass.define_native_method("==", (self: RValue, args: RValue[]): RValue => {
-            if (args[0].klass != Symbol.klass) return Qfalse;
+        klass.define_native_method("==", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            if (args[0].klass !== await Symbol.klass()) return Qfalse;
             return args[0].get_data<string>() === self.get_data<string>() ? Qtrue : Qfalse;
         });
 
-        klass.define_native_method("===", (self: RValue, args: RValue[]): RValue => {
-            if (args[0].klass != Symbol.klass) return Qfalse;
+        klass.define_native_method("===", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            if (args[0].klass !== await Symbol.klass()) return Qfalse;
             return args[0].get_data<string>() === self.get_data<string>() ? Qtrue : Qfalse;
         });
 
-        klass.define_native_method("to_s", (self: RValue): RValue => {
-            return String.new(self.get_data<string>());
+        klass.define_native_method("to_s", async (self: RValue): Promise<RValue> => {
+            return await String.new(self.get_data<string>());
         });
 
-        klass.alias_method("name", "to_s");
+        await klass.alias_method("name", "to_s");
 
         klass.define_native_method("to_sym", (self: RValue): RValue => {
             return self;
         });
 
-        klass.define_native_method("to_proc", (self: RValue): RValue => {
-            return Symbol.to_proc(self);
+        klass.define_native_method("to_proc", async (self: RValue): Promise<RValue> => {
+            return await Symbol.to_proc(self);
         });
 
-        klass.define_native_method("=~", (self: RValue, args: RValue[]): RValue => {
-            if (args[0].klass === Regexp.klass) {
+        klass.define_native_method("=~", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            if (args[0].klass === await Regexp.klass()) {
                 const regexp = args[0].get_data<Regexp>();
                 const result = regexp.search(self.get_data<string>());
 
                 if (result) {
-                    Regexp.set_svars(result);
+                    await Regexp.set_svars(result);
                     return Integer.get(result.begin(0));
                 } else {
                     return Qnil;
                 }
             } else {
-                return Object.send(args[0], "=~", [self]);
+                return await Object.send(args[0], "=~", [self]);
             }
         });
     });

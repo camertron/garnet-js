@@ -13,7 +13,7 @@ export default class GetGlobal extends Instruction {
         this.name = name;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         if (frame_locals.indexOf(this.name) > -1) {
             const frame_local = context.frame_svar()!.svars[this.name] || Qnil;
             context.push(frame_local);

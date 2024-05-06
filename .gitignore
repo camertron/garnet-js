@@ -6,3 +6,6 @@ dist/
 
 src/**/*.js
 src/**/*.d.ts
+
+log/
+tmp/

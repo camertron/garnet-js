@@ -40,6 +40,8 @@ import { init as struct_init } from "./runtime/struct";
 import { init as rational_init } from "./runtime/rational";
 import { init as enumerator_init } from "./runtime/enumerator";
 import { init as method_init } from "./runtime/method";
+import { init as fiber_init } from "./runtime/fiber";
+import { init as net_http_init } from "./lib/net/http";
 import { obj_id_hash } from "./util/object_id";
 import { String } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
@@ -51,7 +53,7 @@ import { Hash } from "node:crypto";
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
 
-export type NativeMethod = (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData) => RValue;
+export type NativeMethod = (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData) => RValue | Promise<RValue>;
 
 // used as the type for keys of the symbols weak map
 type SymbolType = {
@@ -123,8 +125,6 @@ export class Runtime {
     }
 
     static define_class_under(parent: RValue, name: string, superclass: RValue, cb?: ClassDefinitionCallback): RValue {
-
-
         const parent_mod = parent.get_data<Module>();
 
         if (!parent_mod.constants[name]) {
@@ -152,52 +152,53 @@ export class Runtime {
     // this function creates regular 'ol mortal symbols just as one might do in Ruby code. To
     // the runtime, it essentially exists as a convenient way to memoize strings so we don't
     // have to incur the overhead of making a bunch of new RValues all over the place.
-    static intern(value: string): RValue {
+    static async intern(value: string): Promise<RValue> {
         const key = {name: value};
         let symbol = this.symbols.get(key);
 
         if (!symbol) {
-            symbol = new RValue(Symbol.klass, value);
+            symbol = new RValue(await Symbol.klass(), value);
             this.symbols.set(key, symbol);
         }
 
         return symbol;
     }
 
-    static each_unique_ancestor(mod: RValue, include_self: boolean = true, cb: (ancestor: RValue) => boolean) {
-        this.each_unique_ancestor_helper(mod, new Set(), include_self, cb);
+    static async each_unique_ancestor(mod: RValue, include_self: boolean = true, cb: (ancestor: RValue) => Promise<boolean>) {
+        await this.each_unique_ancestor_helper(mod, new Set(), include_self, cb);
     }
 
     // Return false from cb() to exit early. Returning false from cb() will cause
     // each_ancestor to return false as well; otherwise it will return true.
     // Pass false for include_self to skip checking mod and prepended modules, i.e. if you're trying to
     // find a method somewhere above mod on the ancestry chain
-    private static each_unique_ancestor_helper(mod: RValue, seen: Set<RValue>, include_self: boolean, cb: (ancestor: RValue) => boolean): boolean {
+    private static async each_unique_ancestor_helper(mod: RValue, seen: Set<RValue>, include_self: boolean, cb: (ancestor: RValue) => Promise<boolean>): Promise<boolean> {
         if (seen.has(mod)) return true;
 
         seen.add(mod);
 
         if (include_self) {
+            if (!mod) debugger
             for (const prepend of mod.get_data<Module>().prepends) {
-                if (!cb(prepend)) {
+                if (!(await cb(prepend))) {
                     return false;
                 }
 
-                if (!this.each_unique_ancestor_helper(prepend, seen, true, cb)) {
+                if (!(await this.each_unique_ancestor_helper(prepend, seen, true, cb))) {
                     return false;
                 }
             }
 
-            if (!cb(mod)) {
+            if (!(await cb(mod))) {
                 return false;
             }
 
             for (const include of mod.get_data<Module>().includes) {
-                if (!cb(include)) {
+                if (!(await cb(include))) {
                     return false;
                 }
 
-                if (!this.each_unique_ancestor_helper(include, seen, true, cb)) {
+                if (!(await this.each_unique_ancestor_helper(include, seen, true, cb))) {
                     return false;
                 }
             }
@@ -207,11 +208,11 @@ export class Runtime {
             const superclass = mod.get_data<Class>().superclass;
 
             if (superclass) {
-                if (!cb(superclass)) {
+                if (!(await cb(superclass))) {
                     return false;
                 }
 
-                if (!this.each_unique_ancestor_helper(superclass, seen, true, cb)) {
+                if (!(await this.each_unique_ancestor_helper(superclass, seen, true, cb))) {
                     return false;
                 }
             }
@@ -234,17 +235,17 @@ export class Runtime {
         }
     }
 
-    static coerce_to_string(obj: RValue): RValue {
+    static async coerce_to_string(obj: RValue): Promise<RValue> {
         switch (obj.klass) {
-            case String.klass:
-            case Symbol.klass:
+            case await String.klass():
+            case await Symbol.klass():
                 return obj;
             default:
-                if (Object.respond_to(obj, "to_str")) {
-                    const str = Object.send(obj, "to_str");
+                if (await Object.respond_to(obj, "to_str")) {
+                    const str = await Object.send(obj, "to_str");
 
                     // make sure classes that inherit from String also work here
-                    if (Kernel.is_a(str, String.klass)) {
+                    if (await Kernel.is_a(str, await String.klass())) {
                         return str;
                     } else {
                         const obj_class_name = obj.klass.get_data<Class>().full_name;
@@ -258,7 +259,7 @@ export class Runtime {
         }
     }
 
-    static require(require_path: string): boolean {
+    static async require(require_path: string): Promise<boolean> {
         require_path = vmfs.normalize_path(require_path);
 
         const ec = ExecutionContext.current;
@@ -273,8 +274,8 @@ export class Runtime {
                 }
             }
 
-            this.load(require_path, absolute_path);
-            loaded_features.push(String.new(absolute_path!));
+            await this.load(require_path, absolute_path);
+            loaded_features.push(await String.new(absolute_path!));
             return true;
         }
 
@@ -285,8 +286,8 @@ export class Runtime {
                 }
             }
 
-            this.load_native_extension(require_path);
-            loaded_features.push(String.new(require_path));
+            await this.load_native_extension(require_path);
+            loaded_features.push(await String.new(require_path));
 
             return true;
         }
@@ -294,7 +295,7 @@ export class Runtime {
         throw new LoadError(`cannot load such file -- ${require_path}`);
     }
 
-    static require_relative(path: string, requiring_path: string) {
+    static async require_relative(path: string, requiring_path: string) {
         let require_path = path;
 
         if (vmfs.is_relative(path)) {
@@ -302,27 +303,28 @@ export class Runtime {
             require_path = `${require_path}.rb`
         }
 
-        return this.require(require_path);
+        return await this.require(require_path);
     }
 
-    static load(require_path: string, absolute_path: string | null): boolean {
+    static async load(require_path: string, absolute_path: string | null): Promise<boolean> {
         if (!absolute_path) {
             throw new LoadError(`cannot load such file -- ${require_path}`);
         }
 
-        return this.load_absolute_path(require_path, absolute_path);
+        return await this.load_absolute_path(require_path, absolute_path);
     }
 
-    static load_absolute_path(require_path: string, absolute_path: string) {
+    static async load_absolute_path(require_path: string, absolute_path: string) {
         const ec = ExecutionContext.current;
 
         if (this.native_extensions[absolute_path]) {
             return this.load_native_extension(absolute_path);
         }
 
-        const code = vmfs.read(absolute_path);
+        // Garnet does not support loading code in other encodings
+        const code = new TextDecoder('utf8').decode(vmfs.read(absolute_path));
         const insns = Compiler.compile_string(code.toString(), require_path, absolute_path);
-        ec.run_top_frame(insns, ec.stack_len);
+        await ec.run_top_frame(insns, ec.stack_len);
 
         return true;
     }
@@ -344,18 +346,18 @@ export class Runtime {
         return null;
     };
 
-    static register_native_extension(require_path: string, init_fn: () => void) {
+    static register_native_extension(require_path: string, init_fn: () => Promise<void> | void) {
         this.native_extensions[require_path] = { init_fn, inited: false };
     }
 
-    static load_native_extension(require_path: string): boolean {
+    static async load_native_extension(require_path: string): Promise<boolean> {
         const ext = this.native_extensions[require_path];
 
         if (ext.inited) {
             return false;
         } else {
             ext.inited = true;
-            this.native_extensions[require_path].init_fn();
+            await this.native_extensions[require_path].init_fn();
             return true;
         }
     }
@@ -365,6 +367,7 @@ Runtime.register_native_extension("rbconfig", rb_config_init);
 Runtime.register_native_extension("stringio", stringio_init);
 Runtime.register_native_extension("socket", socket_init);
 Runtime.register_native_extension("date", date_init);
+Runtime.register_native_extension("net/http", net_http_init);
 
 export enum Visibility {
     public,
@@ -376,7 +379,7 @@ export abstract class Callable {
     public visibility: Visibility;
     public owner?: Module;
 
-    abstract call(context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: CallData): RValue;
+    abstract call(context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: CallData): Promise<RValue>;
 }
 
 export class InterpretedCallable extends Callable {
@@ -399,9 +402,9 @@ export class InterpretedCallable extends Callable {
         this.owner = owner;
     }
 
-    call(context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): RValue {
+    async call(context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): Promise<RValue> {
         call_data ||= MethodCallData.create(this.name, args.length);
-        return context.run_method_frame(call_data, this.nesting, this.iseq, receiver, args, kwargs, block, this.owner);
+        return await context.run_method_frame(call_data, this.nesting, this.iseq, receiver, args, kwargs, block, this.owner);
     }
 }
 
@@ -417,13 +420,13 @@ export class NativeCallable extends Callable {
         this.owner = owner;
     }
 
-    call(_context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): RValue {
+    async call(_context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): Promise<RValue> {
         // Native methods expect to be called with all positional arguments, so we unfurl splats here
         if (call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
             // splatted array is always the last element
             const splat_arr = args[call_data.argc - 1];
 
-            if (splat_arr && splat_arr.klass === RubyArray.klass) {
+            if (splat_arr && splat_arr.klass === await RubyArray.klass()) {
                 args = [
                     ...args.slice(0, call_data.argc - 1),
                     ...splat_arr.get_data<RubyArray>().elements
@@ -436,7 +439,7 @@ export class NativeCallable extends Callable {
             args = args.slice(0, args.length - 1);
         }
 
-        return this.method(receiver, args, kwargs, block, call_data);
+        return await this.method(receiver, args, kwargs, block, call_data);
     }
 }
 
@@ -543,8 +546,8 @@ export class Module {
         (this.get_singleton_class().get_data<Module>()).define_native_method(name, body);
     }
 
-    alias_method(new_name: string, existing_name: string) {
-        const method = Object.find_instance_method_under(this.rval, existing_name, true);
+    async alias_method(new_name: string, existing_name: string) {
+        const method = await Object.find_instance_method_under(this.rval, existing_name, true);
 
         if (method) {
             this.methods[new_name] = method;
@@ -581,11 +584,11 @@ export class Module {
     // Constant lookup searches for constants that are defined in `Module.nesting`,
     // `Module.nesting.first.ancestors`, and `Object.ancestors` if `Module.nesting.first`
     // is nil or a module.
-    find_constant(name: string): RValue | null {
-        let constant = this.find_constant_in_self(name);
+    async find_constant(name: string): Promise<RValue | null> {
+        let constant = await this.find_constant_in_self(name);
         if (constant) return constant;
 
-        constant = this.find_constant_in_module_nesting(name);
+        constant = await this.find_constant_in_module_nesting(name);
         if (constant) return constant;
 
         if (!this.nesting_parent || this.nesting_parent.klass === ModuleClass) {
@@ -601,18 +604,18 @@ export class Module {
         }
     }
 
-    private find_constant_in_self(name: string): RValue | null {
+    private async find_constant_in_self(name: string): Promise<RValue | null> {
         let constant = this.constants[name];
         if (constant) return constant;
 
-        this.maybe_autoload_constant(name, this);
+        await this.maybe_autoload_constant(name, this);
         constant = this.constants[name];
         if (constant) return constant;
 
         return null;
     }
 
-    private find_constant_in_module_nesting(name: string): RValue | null {
+    private async find_constant_in_module_nesting(name: string): Promise<RValue | null> {
         const ec = ExecutionContext.current;
         if (!ec || !ec.frame) return null;
 
@@ -622,18 +625,18 @@ export class Module {
             let constant: RValue | null = current_mod.constants[name];
             if (constant) return constant;
 
-            constant = this.maybe_autoload_constant(name, current_mod);
+            constant = await this.maybe_autoload_constant(name, current_mod);
             if (constant) return constant;
         }
 
         return null;
     }
 
-    private maybe_autoload_constant(name: string, mod: Module) : RValue | null {
+    private async maybe_autoload_constant(name: string, mod: Module) : Promise<RValue | null> {
         if (mod.autoloads.has(name)) {
             const file = mod.autoloads.get(name)!;
             mod.autoloads.delete(name);
-            Runtime.require(file);
+            await Runtime.require(file);
             const constant = mod.constants[name];
 
             if (constant) {
@@ -650,11 +653,11 @@ export class Module {
         return null;
     }
 
-    private find_constant_in_ancestors(name: string): RValue | null {
+    private async find_constant_in_ancestors(name: string): Promise<RValue | null> {
         let constant: RValue | null = null;
         let parent_mod: Module | null = null;
 
-        Runtime.each_unique_ancestor(this.rval, false, (ancestor: RValue): boolean => {
+        await Runtime.each_unique_ancestor(this.rval, false, async (ancestor: RValue): Promise<boolean> => {
             if (ancestor.get_data<Module>().name === name) {
                 constant = ancestor;
                 return false;
@@ -664,7 +667,7 @@ export class Module {
             constant = parent_mod.constants[name];
             if (constant) return false;
 
-            constant = this.maybe_autoload_constant(name, parent_mod);
+            constant = await this.maybe_autoload_constant(name, parent_mod);
             if (constant) return false;
 
             return true;
@@ -699,8 +702,12 @@ export class Module {
         return this.singleton_class;
     }
 
-    tap(cb: (mod: Module) => void) {
-        cb(this);
+    has_singleton_class(): boolean {
+        return Boolean(this.singleton_class)
+    }
+
+    async tap(cb: (mod: Module) => Promise<void>) {
+        await cb(this);
     }
 
     inspect(): string {
@@ -743,9 +750,9 @@ export class Module {
         return this.anonymous_name_str_;
     }
 
-    get full_name_rval(): RValue {
+    async full_name_rval(): Promise<RValue> {
         if (!this.full_name_rval_) {
-            this.full_name_rval_ = String.new(this.full_name);
+            this.full_name_rval_ = await String.new(this.full_name);
             this.full_name_rval_.freeze();
         }
 
@@ -918,8 +925,8 @@ export class Class extends Module {
         return this.singleton_class;
     }
 
-    tap(cb: (klass: Class) => void) {
-        cb(this);
+    async tap(cb: (klass: Class) => Promise<void>) {
+        await cb(this);
     }
 }
 
@@ -967,40 +974,40 @@ export const Qtrue = new RValue(TrueClass, true);
 export const Qfalse = new RValue(FalseClass, false);
 
 export const VMCoreClass = Runtime.define_class("VMCore", ObjectClass, (klass: Class) => {
-    klass.define_native_method("hash_merge_kwd", (self: RValue, args: RValue[]): RValue => {
+    klass.define_native_method("hash_merge_kwd", async (self: RValue, args: RValue[]): Promise<RValue> => {
         // @TODO: can we do this without creating a new hash?
         const new_hash = new RubyHash();
 
         for (const arg of args) {
-            arg.get_data<RubyHash>().each((k: RValue, v: RValue) => {
-                new_hash.set(k, v);
+            await arg.get_data<RubyHash>().each(async (k: RValue, v: RValue) => {
+                await new_hash.set(k, v);
             });
         }
 
-        return RubyHash.from_hash(new_hash);
+        return await RubyHash.from_hash(new_hash);
     });
 
-    klass.define_native_method("hash_merge_ptr", (self: RValue, args: RValue[]): RValue => {
+    klass.define_native_method("hash_merge_ptr", async (self: RValue, args: RValue[]): Promise<RValue> => {
         // @TODO: can we do this without creating a new hash?
         const new_hash = new RubyHash();
         const old_hash = args[0].get_data<RubyHash>();
 
-        old_hash.each((k: RValue, v: RValue) => {
-            new_hash.set(k, v);
+        await old_hash.each(async (k: RValue, v: RValue) => {
+            await new_hash.set(k, v);
         });
 
         for (let i = 1; i < args.length; i += 2) {
-            new_hash.set(args[i], args[i + 1]);
+            await new_hash.set(args[i], args[i + 1]);
         }
 
-        return RubyHash.from_hash(new_hash);
+        return await RubyHash.from_hash(new_hash);
     });
 
-    klass.define_native_method("set_method_alias", (_self: RValue, args: RValue[]): RValue => {
+    klass.define_native_method("set_method_alias", async (_self: RValue, args: RValue[]): Promise<RValue> => {
         const klass = args[0].get_data<Class>();
         const new_name = args[1].get_data<string>();
         const old_name = args[2].get_data<string>();
-        klass.alias_method(new_name, old_name);
+        await klass.alias_method(new_name, old_name);
         return Qnil;
     });
 
@@ -1024,17 +1031,17 @@ export const VMCoreClass = Runtime.define_class("VMCore", ObjectClass, (klass: C
 
 export const VMCore = new RValue(VMCoreClass);
 
-NilClass.get_data<Class>().tap( (klass: Class) => {
-    klass.define_native_method("inspect", (_self: RValue): RValue => {
-        return String.new("nil");
+await NilClass.get_data<Class>().tap(async (klass: Class) => {
+    klass.define_native_method("inspect", async (_self: RValue): Promise<RValue> => {
+        return await String.new("nil");
     });
 
-    klass.define_native_method("to_i", (_self: RValue): RValue => {
-        return Integer.get(0);
+    klass.define_native_method("to_i", async (_self: RValue): Promise<RValue> => {
+        return await Integer.get(0);
     });
 
-    klass.define_native_method("to_s", (_self: RValue): RValue => {
-        return String.new("");
+    klass.define_native_method("to_s", async (_self: RValue): Promise<RValue> => {
+        return await String.new("");
     });
 
     klass.define_native_method("any?", (_self: RValue): RValue => {
@@ -1054,13 +1061,13 @@ NilClass.get_data<Class>().tap( (klass: Class) => {
     });
 });
 
-TrueClass.get_data<Class>().tap( (klass: Class) => {
-    klass.define_native_method("inspect", (_self: RValue): RValue => {
-        return String.new("true");
+await TrueClass.get_data<Class>().tap(async (klass: Class) => {
+    klass.define_native_method("inspect", async (_self: RValue): Promise<RValue> => {
+        return await String.new("true");
     });
 
-    klass.define_native_method("to_s", (_self: RValue): RValue => {
-        return String.new("true");
+    klass.define_native_method("to_s", async (_self: RValue): Promise<RValue> => {
+        return await String.new("true");
     });
 
     klass.define_native_method("^", (_self: RValue, args: RValue[]): RValue => {
@@ -1071,9 +1078,9 @@ TrueClass.get_data<Class>().tap( (klass: Class) => {
         return Qfalse;
     });
 
-    klass.define_native_method("hash", (self: RValue): RValue => {
+    klass.define_native_method("hash", async (self: RValue): Promise<RValue> => {
         if (!self.iv_exists("@__hash")) {
-            self.iv_set("@__hash", Integer.get(obj_id_hash(self.object_id)));
+            self.iv_set("@__hash", await Integer.get(obj_id_hash(self.object_id)));
         }
 
         return self.iv_get("@__hash");
@@ -1084,13 +1091,13 @@ TrueClass.get_data<Class>().tap( (klass: Class) => {
     });
 });
 
-FalseClass.get_data<Class>().tap( (klass: Class) => {
-    klass.define_native_method("inspect", (_self: RValue): RValue => {
-        return String.new("false");
+await FalseClass.get_data<Class>().tap(async (klass: Class) => {
+    klass.define_native_method("inspect", async (_self: RValue): Promise<RValue> => {
+        return await String.new("false");
     });
 
-    klass.define_native_method("to_s", (_self: RValue): RValue => {
-        return String.new("false");
+    klass.define_native_method("to_s", async (_self: RValue): Promise<RValue> => {
+        return await String.new("false");
     });
 
     klass.define_native_method("^", (_self: RValue, args: RValue[]): RValue => {
@@ -1101,9 +1108,9 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
         return Qtrue;
     });
 
-    klass.define_native_method("hash", (self: RValue): RValue => {
+    klass.define_native_method("hash", async (self: RValue): Promise<RValue> => {
         if (!self.iv_exists("@__hash")) {
-            self.iv_set("@__hash", Integer.get(obj_id_hash(self.object_id)));
+            self.iv_set("@__hash", await Integer.get(obj_id_hash(self.object_id)));
         }
 
         return self.iv_get("@__hash");
@@ -1114,9 +1121,9 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
     });
 });
 
-(ClassClass.get_data<Class>()).tap( (klass: Class) => {
+await (ClassClass.get_data<Class>()).tap(async (klass: Class) => {
     // create a new instance of the Class class, i.e. create a new user-defined class
-    klass.define_native_singleton_method("new", (self: RValue, args: RValue[], _kwargs?: RubyHash, block?: RValue): RValue => {
+    klass.define_native_singleton_method("new", async (self: RValue, args: RValue[], _kwargs?: RubyHash, block?: RValue): Promise<RValue> => {
         const superclass = args[0] || ObjectClass;
         const new_class = new Class(null, superclass);
         const new_class_rval = new RValue(ClassClass, new_class);
@@ -1125,7 +1132,7 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
         if (block) {
             const proc = block!.get_data<Proc>();
             const binding = proc.binding.with_self(new_class_rval);
-            proc.with_binding(binding).call(ExecutionContext.current, [new_class_rval]);
+            await proc.with_binding(binding).call(ExecutionContext.current, [new_class_rval]);
         }
 
         return new_class_rval;
@@ -1143,20 +1150,20 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
 
     // create a new instance of a class - this is an instance method on the class "Class" and initializes
     // a new instance of a user-defined class
-    klass.define_native_method("new", (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue): RValue => {
-        const obj = Object.send(self, "allocate");
-        Object.send(obj, "initialize", args, kwargs, block);
+    klass.define_native_method("new", async (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue): Promise<RValue> => {
+        const obj = await Object.send(self, "allocate");
+        await Object.send(obj, "initialize", args, kwargs, block);
         return obj;
     });
 
-    klass.define_native_method("inspect", (self: RValue): RValue => {
-        return String.new(self.get_data<Class>().full_name);
+    klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
+        return await String.new(self.get_data<Class>().full_name);
     });
 
-    klass.alias_method("to_s", "inspect");
+    await klass.alias_method("to_s", "inspect");
 });
 
-(BasicObjectClass.get_data<Class>()).tap( (klass: Class) => {
+await (BasicObjectClass.get_data<Class>()).tap(async (klass: Class) => {
     klass.define_native_method("initialize", (_self: RValue): RValue => {
         return Qnil;
     });
@@ -1177,7 +1184,7 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
         return self.object_id != args[0].object_id ? Qtrue : Qfalse;
     });
 
-    klass.define_native_method("instance_exec", (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): RValue => {
+    klass.define_native_method("instance_exec", async (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
         const proc = block!.get_data<Proc>();
         const binding = proc.binding.with_self(self);
         let block_call_data: BlockCallData | undefined = undefined;
@@ -1186,7 +1193,7 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
             block_call_data = BlockCallData.create(call_data.argc, call_data.flag, call_data.kw_arg);
         }
 
-        return proc.with_binding(binding).call(ExecutionContext.current, args, kwargs, block_call_data);
+        return await proc.with_binding(binding).call(ExecutionContext.current, args, kwargs, undefined, block_call_data);
     });
 
     klass.define_native_method("method_missing", (self: RValue, args: RValue[]): RValue => {
@@ -1199,8 +1206,8 @@ FalseClass.get_data<Class>().tap( (klass: Class) => {
         throw new NoMethodError(`undefined method \`${method_name}' for ${self.klass.get_data<Class>().name}`);
     });
 
-    klass.define_native_method("__send__", (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): RValue => {
-        const method_name = Runtime.coerce_to_string(args[0]).get_data<string>();
+    klass.define_native_method("__send__", async (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
+        const method_name = (await Runtime.coerce_to_string(args[0])).get_data<string>();
         let send_call_data;
 
         if (call_data) {
@@ -1277,42 +1284,42 @@ export class NodeIO implements IO {
     }
 }
 
-export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) => {
-    klass.define_native_method("puts", (self: RValue, args: RValue[], _kwargs?: RubyHash, _block?: RValue, call_data?: MethodCallData): RValue => {
+export const IOClass = Runtime.define_class("IO", ObjectClass, async (klass: Class) => {
+    klass.define_native_method("puts", async (self: RValue, args: RValue[], _kwargs?: RubyHash, _block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
         const io = self.get_data<IO>();
 
         for (const arg of args) {
             // this shouldn't be necessary anymore?
-            if (arg.klass === RubyArray.klass && call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
+            if (arg.klass === await RubyArray.klass() && call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
                 for (const elem of arg.get_data<RubyArray>().elements) {
-                    io.puts(Object.send(elem, "to_s").get_data<string>());
+                    io.puts((await Object.send(elem, "to_s")).get_data<string>());
                 }
             } else {
-                io.puts(Object.send(arg, "to_s").get_data<string>());
+                io.puts((await Object.send(arg, "to_s")).get_data<string>());
             }
         }
 
         return Qnil;
     });
 
-    klass.define_native_method("write", (self: RValue, args: RValue[], _kwargs?: RubyHash, _block?: RValue, call_data?: MethodCallData): RValue => {
+    klass.define_native_method("write", async (self: RValue, args: RValue[], _kwargs?: RubyHash, _block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
         const io = self.get_data<IO>();
 
         for (const arg of args) {
             // this shouldn't be necessary anymore?
-            if (arg.klass === RubyArray.klass && call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
+            if (arg.klass === await RubyArray.klass() && call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
                 for (const elem of arg.get_data<RubyArray>().elements) {
-                    io.write(Object.send(elem, "to_s").get_data<string>());
+                    io.write((await Object.send(elem, "to_s")).get_data<string>());
                 }
             } else {
-                io.write(Object.send(arg, "to_s").get_data<string>());
+                io.write((await Object.send(arg, "to_s")).get_data<string>());
             }
         }
 
         return Qnil;
     });
 
-    klass.alias_method("print", "write");
+    await klass.alias_method("print", "write");
 
     klass.define_native_method("flush", (self: RValue): RValue => {
         // @TODO: what needs to be done here?
@@ -1323,23 +1330,23 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, (klass: Class) =>
         return self.get_data<IO>().is_tty() ? Qtrue : Qfalse;
     });
 
-    klass.alias_method("tty?", "isatty");
+    await klass.alias_method("tty?", "isatty");
 });
 
 export const STDOUT = ObjectClass.get_data<Class>().constants["STDOUT"] = is_node ? NodeIO.new(process.stdout) : BrowserIO.new(console.log);
 export const STDERR = ObjectClass.get_data<Class>().constants["STDERR"] = is_node ? NodeIO.new(process.stderr) : BrowserIO.new(console.error);
 
 export const init = async () => {
-    module_init();
+    await module_init();
     string_init();
     comparable_init();
     numeric_init();
-    rational_init();
-    integer_init();
-    float_init();
+    await rational_init();
+    await integer_init();
+    await float_init();
     symbol_init();
     enumerable_init();
-    enumerator_init();
+    await enumerator_init();
     hash_init();
     proc_init();
     error_init();
@@ -1348,17 +1355,18 @@ export const init = async () => {
     file_init();
     dir_init();
     await kernel_init();
-    object_init();
+    await object_init();
     range_init();
     binding_init();
-    signal_init();
+    await signal_init();
     time_init();
     thread_init();
     await regexp_init();
-    encoding_init();
+    await encoding_init();
     array_init();
     struct_init();
-    method_init();
+    await method_init();
+    await fiber_init();
 
     ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"] = await (async () => {
         if (is_node) {
@@ -1402,16 +1410,16 @@ export const init = async () => {
         }
     })();
 
-    ObjectClass.get_data<Class>().constants["RUBY_VERSION"] = String.new("3.2.2");
-    ObjectClass.get_data<Class>().constants["RUBY_ENGINE"] = String.new("Garnet.js");
+    ObjectClass.get_data<Class>().constants["RUBY_VERSION"] = await String.new("3.2.2");
+    ObjectClass.get_data<Class>().constants["RUBY_ENGINE"] = await String.new("Garnet.js");
 
-    ObjectClass.get_data<Class>().constants["RUBY_DESCRIPTION"] = String.new(
+    ObjectClass.get_data<Class>().constants["RUBY_DESCRIPTION"] = await String.new(
         `Garnet.js ${ObjectClass.get_data<Class>().constants["RUBY_VERSION"].get_data<string>()} [${ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"].get_data<string>()}]`
     );
 
     if (is_node) {
-        Dir.setwd(process.env.PWD!);
+        await Dir.setwd(process.env.PWD!);
     } else {
-        Dir.setwd(vmfs.root_path());
+        await Dir.setwd(vmfs.root_path());
     }
 }

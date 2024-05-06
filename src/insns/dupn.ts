@@ -10,7 +10,7 @@ export default class DupN extends Instruction {
         this.size = size;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const values = context.popn(this.size);
         context.push(...values, ...values);
         return null;

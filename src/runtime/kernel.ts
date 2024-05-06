@@ -23,7 +23,7 @@ import { sprintf } from "./printf";
 export class Kernel {
     public static exit_handlers: RValue[] = [];
 
-    static is_a(obj: RValue, mod: RValue): boolean {
+    static async is_a(obj: RValue, mod: RValue): Promise<boolean> {
         let found = false;
         let root;
 
@@ -33,7 +33,7 @@ export class Kernel {
             root = obj.klass
         }
 
-        Runtime.each_unique_ancestor(root, true, (ancestor) => {
+        await Runtime.each_unique_ancestor(root, true, async (ancestor) => {
             if (mod == ancestor) {
                 found = true;
                 return false;
@@ -58,30 +58,30 @@ export const init = async () => {
         // kexec = (await import("@gongt/kexec")).default;
     }
 
-    mod.define_native_method("puts", (_self: RValue, args: RValue[]): RValue => {
-        return Object.send(ExecutionContext.current.globals["$stdout"], "puts", args);
+    mod.define_native_method("puts", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+        return await Object.send(ExecutionContext.current.globals["$stdout"], "puts", args);
     });
 
-    mod.define_native_singleton_method("puts", (_self: RValue, args: RValue[]): RValue => {
-        return Object.send(ExecutionContext.current.globals["$stdout"], "puts", args);
+    mod.define_native_singleton_method("puts", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+        return await Object.send(ExecutionContext.current.globals["$stdout"], "puts", args);
     });
 
-    mod.define_native_method("require", (_self: RValue, args: RValue[]): RValue => {
+    mod.define_native_method("require", async (_self: RValue, args: RValue[]): Promise<RValue> => {
         const path = args[0];
-        Runtime.assert_type(path, String.klass);
-        return Runtime.require(path.get_data<string>()) ? Qtrue : Qfalse;
+        Runtime.assert_type(path, await String.klass());
+        return await Runtime.require(path.get_data<string>()) ? Qtrue : Qfalse;
     });
 
-    mod.define_native_method("require_relative", (_self: RValue, args: RValue[]): RValue => {
+    mod.define_native_method("require_relative", async (_self: RValue, args: RValue[]): Promise<RValue> => {
         const path = args[0];
-        Runtime.assert_type(path, String.klass);
-        return Runtime.require_relative(path.get_data<string>(), ExecutionContext.current.frame!.iseq.absolute_path) ? Qtrue : Qfalse;
+        Runtime.assert_type(path, await String.klass());
+        return await Runtime.require_relative(path.get_data<string>(), ExecutionContext.current.frame!.iseq.absolute_path) ? Qtrue : Qfalse;
     });
 
-    mod.define_native_method("load", (_self: RValue, args: RValue[]): RValue => {
+    mod.define_native_method("load", async (_self: RValue, args: RValue[]): Promise<RValue> => {
         const path = args[0];
-        Runtime.assert_type(path, String.klass);
-        return Runtime.load(path.get_data<string>(), path.get_data<string>()) ? Qtrue : Qfalse;
+        Runtime.assert_type(path, await String.klass());
+        return await Runtime.load(path.get_data<string>(), path.get_data<string>()) ? Qtrue : Qfalse;
     });
 
     mod.define_native_method("===", (self: RValue, args: RValue[]): RValue => {
@@ -102,36 +102,36 @@ export const init = async () => {
         return Qnil;
     });
 
-    mod.define_native_method("is_a?", (self: RValue, args: RValue[]): RValue => {
+    mod.define_native_method("is_a?", async (self: RValue, args: RValue[]): Promise<RValue> => {
         const target = args[0];
 
         if (target.klass == ClassClass || target.klass == ModuleClass) {
-            return Kernel.is_a(self, target) ? Qtrue : Qfalse;
+            return await Kernel.is_a(self, target) ? Qtrue : Qfalse;
         } else {
             throw new TypeError("class or module required");
         }
     });
 
-    mod.alias_method("kind_of?", "is_a?");
+    await mod.alias_method("kind_of?", "is_a?");
 
     mod.define_native_method("instance_of?", (self: RValue, args: RValue[]): RValue => {
         Runtime.assert_type(args[0], ClassClass);
         return self.klass === args[0] ? Qtrue : Qfalse;
     });
 
-    mod.define_native_method("raise", (_self: RValue, args: RValue[]): RValue => {
+    mod.define_native_method("raise", async (_self: RValue, args: RValue[]): Promise<RValue> => {
         let instance: RValue;
 
         if (args.length === 0) {
-            instance = new RuntimeError("").to_rvalue();
+            instance = await new RuntimeError("").to_rvalue();
         } else {
             switch (args[0].klass) {
                 case ClassClass:
-                    instance = Object.send(args[0], "new", [args[1] || Qnil]);
+                    instance = await Object.send(args[0], "new", [args[1] || Qnil]);
                     break;
 
-                case String.klass:
-                    instance = Object.send(Object.find_constant("RuntimeError")!, "new", [args[0]]);
+                case await String.klass():
+                    instance = await Object.send((await Object.find_constant("RuntimeError"))!, "new", [args[0]]);
                     break;
 
                 default:
@@ -139,14 +139,14 @@ export const init = async () => {
             }
         }
 
-        const backtrace = ExecutionContext.current.create_backtrace_rvalue();
+        const backtrace = await ExecutionContext.current.create_backtrace_rvalue();
         const locations: RValue[] = [];
 
         for (const element of backtrace.get_data<RubyArray>().elements) {
             // @TODO: avoid all this error-prone string processing
             const [path, line_and_label] = element.get_data<string>().split(":");
             const [line, label] = line_and_label.split(" in ");
-            locations.push(BacktraceLocation.new(path, parseInt(line), label));
+            locations.push(await BacktraceLocation.new(path, parseInt(line), label));
         }
 
         const ruby_error = instance.get_data<IRubyError>();
@@ -154,13 +154,13 @@ export const init = async () => {
         ruby_error.backtrace = backtrace.get_data<string[]>();
         ruby_error.backtrace_rval = backtrace;
         ruby_error.backtrace_locations = locations;
-        ruby_error.backtrace_locations_rval = RubyArray.new(locations);
+        ruby_error.backtrace_locations_rval = await RubyArray.new(locations);
 
         throw instance;
     });
 
-    mod.define_native_method("respond_to?", (self: RValue, args: RValue[]): RValue => {
-        if (Object.find_method_under(self, args[0].get_data<string>())) {
+    mod.define_native_method("respond_to?", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        if (await Object.find_method_under(self, args[0].get_data<string>())) {
             return Qtrue;
         } else {
             return Qfalse;
@@ -176,28 +176,28 @@ export const init = async () => {
         throw new ArgumentError("at_exit called without a block");
     });
 
-    mod.define_native_method("`", (self: RValue, args: RValue[]): RValue => {
+    mod.define_native_method("`", async (self: RValue, args: RValue[]): Promise<RValue> => {
         if (!is_node) {
             throw new RuntimeError("backticks are only supported in nodejs");
         }
 
         const result = (child_process as typeof import("child_process")).spawnSync(args[0].get_data<string>());
-        return String.new(result.stdout.toString('utf-8')); // hopefully utf-8 is ok
+        return await String.new(result.stdout.toString('utf-8')); // hopefully utf-8 is ok
     });
 
     mod.define_native_method("class", (self: RValue): RValue => {
         return self.klass;
     });
 
-    mod.define_native_method("Integer", (self: RValue, args: RValue[]): RValue => {
+    mod.define_native_method("Integer", async (self: RValue, args: RValue[]): Promise<RValue> => {
         switch (args[0].klass) {
-            case Integer.klass:
+            case await Integer.klass():
                 return args[0];
 
-            case Float.klass:
+            case await Float.klass():
                 return Integer.get(Math.floor(args[0].get_data<number>()));
 
-            case String.klass:
+            case await String.klass():
                 const str = args[0].get_data<string>();
 
                 if (str.match(/^\d+$/)) {
@@ -207,28 +207,29 @@ export const init = async () => {
                 break;
         }
 
-        const arg_str = Object.send(args[0], "inspect").get_data<string>();
+        const arg_str = (await Object.send(args[0], "inspect")).get_data<string>();
         throw new ArgumentError(`invalid value for Integer(): ${arg_str}`);
     });
 
-    mod.define_native_method("Array", (self: RValue, args: RValue[]): RValue => {
-        if (args[0].klass == RubyArray.klass) {
+    mod.define_native_method("Array", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        if (args[0].klass === await RubyArray.klass()) {
             return args[0];
-        } else if (Object.send(args[0], "respond_to?", [Runtime.intern("to_ary")]).is_truthy()) {
-            return Object.send(args[0], "to_ary");
-        } else if (Object.send(args[0], "respond_to?", [Runtime.intern("to_a")]).is_truthy()) {
-            return Object.send(args[0], "to_a");
+        } else if ((await Object.send(args[0], "respond_to?", [await Runtime.intern("to_ary")])).is_truthy()) {
+            return await Object.send(args[0], "to_ary");
+        } else if ((await Object.send(args[0], "respond_to?", [await Runtime.intern("to_a")])).is_truthy()) {
+            return await Object.send(args[0], "to_a");
         } else {
             return RubyArray.new([args[0]]);
         }
     });
 
-    mod.define_native_method("Rational", (self: RValue, args: RValue[]): RValue => {
-        return Object.send(Object.find_constant("Rational")!, "new", args);
+    mod.define_native_method("Rational", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        return await Object.send((await Object.find_constant("Rational"))!, "new", args);
     });
 
-    mod.define_native_method("instance_variable_get", (self: RValue, args: RValue[]): RValue => {
-        return self.iv_get(Object.send(args[0], "to_s").get_data<string>());
+    mod.define_native_method("instance_variable_get", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const key = (await Object.send(args[0], "to_s")).get_data<string>()
+        return self.iv_get(key);
     });
 
     mod.define_native_method("lambda", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
@@ -247,41 +248,41 @@ export const init = async () => {
         return block;
     });
 
-    mod.define_native_method("object_id", (self: RValue): RValue => {
-        return Integer.get(self.object_id);
+    mod.define_native_method("object_id", async (self: RValue): Promise<RValue> => {
+        return await Integer.get(self.object_id);
     });
 
-    mod.alias_method("__id__", "object_id");
+    await mod.alias_method("__id__", "object_id");
 
-    mod.define_native_method("instance_variable_set", (self: RValue, args: RValue[]): RValue => {
+    mod.define_native_method("instance_variable_set", async (self: RValue, args: RValue[]): Promise<RValue> => {
         const first_arg = args[0] || Qnil;
 
-        if (first_arg.klass === String.klass || first_arg.klass === Symbol.klass) {
+        if (first_arg.klass === await String.klass() || first_arg.klass === await Symbol.klass()) {
             const ivar_name = first_arg.get_data<string>();
             self.iv_set(ivar_name, args[1]);
             return args[1];
         } else {
-            throw new TypeError(`${Object.send(args[1], "inspect").get_data<string>()} is not a symbol nor a string`)
+            throw new TypeError(`${(await Object.send(args[1], "inspect")).get_data<string>()} is not a symbol nor a string`)
         }
     });
 
-    mod.define_native_method("instance_variable_get", (self: RValue, args: RValue[]): RValue => {
+    mod.define_native_method("instance_variable_get", async (self: RValue, args: RValue[]): Promise<RValue> => {
         const first_arg = args[0] || Qnil;
 
-        if (first_arg.klass === String.klass || first_arg.klass === Symbol.klass) {
+        if (first_arg.klass === await String.klass() || first_arg.klass === await Symbol.klass()) {
             const ivar_name = first_arg.get_data<string>();
             return self.iv_get(ivar_name);
         } else {
-            throw new TypeError(`${Object.send(args[1], "inspect").get_data<string>()} is not a symbol nor a string`)
+            throw new TypeError(`${(await Object.send(args[1], "inspect")).get_data<string>()} is not a symbol nor a string`)
         }
     });
 
-    mod.define_native_method("exit", (self: RValue, args: RValue[]): RValue => {
+    mod.define_native_method("exit", async (self: RValue, args: RValue[]): Promise<RValue> => {
         let status = 0;
         let message = null;
 
         if (args.length > 0) {
-            Runtime.assert_type(args[0], Integer.klass);
+            Runtime.assert_type(args[0], await Integer.klass());
             status = args[0].get_data<number>();
         }
 
@@ -298,18 +299,18 @@ export const init = async () => {
         throw new SystemExit(1, msg);
     });
 
-    mod.define_native_method("exec", (self: RValue, args: RValue[]): RValue => {
+    mod.define_native_method("exec", async (self: RValue, args: RValue[]): Promise<RValue> => {
         if (!is_node) {
             throw new RuntimeError("Kernel#exec is only supported in nodejs");
         }
 
         const first_arg = args[0] || Qnil;
 
-        if (first_arg.klass === String.klass) {
+        if (first_arg.klass === await String.klass()) {
             if (args[1]) {
-                if (args[1].klass === RubyArray.klass) {
+                if (args[1].klass === await RubyArray.klass()) {
                     const elems = args[1].get_data<RubyArray>().elements;
-                    elems.forEach((elem) => Runtime.assert_type(elem, String.klass));
+                    elems.forEach(async (elem) => Runtime.assert_type(elem, await String.klass()));
                     const elem_strings = elems.map((elem) => elem.get_data<string>());
                     // kexec(first_arg.get_data<string>(), elem_strings);
                     return Qnil;
@@ -320,11 +321,11 @@ export const init = async () => {
                 // kexec(first_arg.get_data<string>());
                 return Qnil;
             }
-        } else if (first_arg.klass === Hash.klass) {
+        } else if (first_arg.klass === await Hash.klass()) {
             throw new NotImplementedError("passing a hash as the first argument to Kernel#exec is not yet supported");
-        } else if (first_arg.klass === RubyArray.klass) {
+        } else if (first_arg.klass === await RubyArray.klass()) {
             const elems = args[0].get_data<RubyArray>().elements;
-            elems.forEach((elem) => Runtime.assert_type(elem, String.klass));
+            elems.forEach(async (elem) => Runtime.assert_type(elem, await String.klass()));
             const elem_strings = elems.map((elem) => elem.get_data<string>());
             // kexec(elem_strings.join(" "));
             return Qnil;
@@ -333,8 +334,8 @@ export const init = async () => {
         }
     });
 
-    mod.define_native_method("__dir__", (self: RValue, args: RValue[]): RValue => {
-        return String.new(vmfs.dirname(ExecutionContext.current.frame!.iseq.file));
+    mod.define_native_method("__dir__", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        return await String.new(vmfs.dirname(ExecutionContext.current.frame!.iseq.file));
     });
 
     mod.define_native_method("nil?", (self: RValue): RValue => {
@@ -351,9 +352,9 @@ export const init = async () => {
 
     const CONSTANT_RE = /^[A-Z]\w*$/; // @TODO: is this right?
 
-    mod.define_native_method("autoload", (self: RValue, args: RValue[]): RValue => {
-        const constant = Runtime.coerce_to_string(args[0]).get_data<string>();
-        const file = Runtime.coerce_to_string(args[1]).get_data<string>();
+    mod.define_native_method("autoload", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const constant = (await Runtime.coerce_to_string(args[0])).get_data<string>();
+        const file = (await Runtime.coerce_to_string(args[1])).get_data<string>();
 
         if (!CONSTANT_RE.test(constant)) {
             throw new NameError(`autoload must be constant name: ${constant}`);
@@ -363,11 +364,11 @@ export const init = async () => {
         return Qnil;
     });
 
-    mod.define_native_method("extend", (self: RValue, args: RValue[]): RValue => {
+    mod.define_native_method("extend", async (self: RValue, args: RValue[]): Promise<RValue> => {
         for (const module of args) {
             Runtime.assert_type(module, ModuleClass);
             self.get_data<Module>().extend(module);
-            Object.send(module, "extended", [self]);
+            await Object.send(module, "extended", [self]);
         }
 
         return self;
@@ -378,10 +379,10 @@ export const init = async () => {
         return Qnil;
     });
 
-    mod.define_native_method("tap", (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
+    mod.define_native_method("tap", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
         if (block) {
             try {
-                block.get_data<Proc>().call(ExecutionContext.current, [self]);
+                await block.get_data<Proc>().call(ExecutionContext.current, [self]);
                 return self;
             } catch (e) {
                 if (e instanceof BreakError) {
@@ -409,29 +410,29 @@ export const init = async () => {
         return self;
     });
 
-    mod.define_native_method("hash", (self: RValue): RValue => {
-        return Integer.get(obj_id_hash(self.object_id));
+    mod.define_native_method("hash", async (self: RValue): Promise<RValue> => {
+        return await Integer.get(obj_id_hash(self.object_id));
     });
 
-    mod.define_native_method("caller", (_self: RValue): RValue => {
-        return ExecutionContext.current.create_backtrace_rvalue();
+    mod.define_native_method("caller", async (_self: RValue): Promise<RValue> => {
+        return await ExecutionContext.current.create_backtrace_rvalue();
     });
 
-    mod.define_native_method("caller_locations", (_self: RValue, args: RValue[]): RValue => {
+    mod.define_native_method("caller_locations", async (_self: RValue, args: RValue[]): Promise<RValue> => {
         let start = 0;
         let length = -1;
 
         if (args.length === 1) {
-            if (args[0].klass === Object.find_constant("Range")!) {
+            if (args[0].klass === (await Object.find_constant("Range"))!) {
                 const range = args[0].get_data<Range>();
-                Runtime.assert_type(range.begin, Integer.klass);
-                Runtime.assert_type(range.end, Integer.klass);
+                Runtime.assert_type(range.begin, await Integer.klass());
+                Runtime.assert_type(range.end, await Integer.klass());
                 start = range.begin.get_data<number>();
                 length = range.end.get_data<number>() - start;
             }
         } else if (args.length === 2) {
-            Runtime.assert_type(args[0], Integer.klass);
-            Runtime.assert_type(args[1], Integer.klass);
+            Runtime.assert_type(args[0], await Integer.klass());
+            Runtime.assert_type(args[1], await Integer.klass());
             start = args[0].get_data<number>();
             length = args[1].get_data<number>();
         }
@@ -443,7 +444,7 @@ export const init = async () => {
             // @TODO: avoid splitting a string here, maybe we can store backtraces as tuples?
             const [path, line_and_label] = element.split(":");
             const [line, label] = line_and_label.split(" in ");
-            locations.push(BacktraceLocation.new(path, parseInt(line), label));
+            locations.push(await BacktraceLocation.new(path, parseInt(line), label));
         }
 
         return RubyArray.new(locations);
@@ -453,7 +454,7 @@ export const init = async () => {
         throw new ThrowError(args[0], args[1] || Qnil);
     });
 
-    mod.define_native_method("catch", (_self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
+    mod.define_native_method("catch", async (_self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
         const tag = args[0] || Object.new();
 
         if (!block) {
@@ -463,10 +464,10 @@ export const init = async () => {
         const proc = block.get_data<Proc>();
 
         try {
-            return proc.call(ExecutionContext.current, [tag]);
+            return await proc.call(ExecutionContext.current, [tag]);
         } catch (e) {
             if (e instanceof ThrowError) {
-                if (Object.send(e.tag, "==", [tag]).is_truthy()) {
+                if ((await Object.send(e.tag, "==", [tag])).is_truthy()) {
                     return e.value;
                 }
             }
@@ -475,25 +476,28 @@ export const init = async () => {
         }
     });
 
-    mod.define_native_method("instance_variable_defined?", (self: RValue, args: RValue[]): RValue => {
-        if (args[0].klass !== String.klass && args[0].klass !== Symbol.klass) {
-            throw new TypeError(`${Object.send(args[0], "inspect").get_data<string>()} is not a symbol nor a string`);
+    mod.define_native_method("instance_variable_defined?", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        if (args[0].klass !== await String.klass() && args[0].klass !== await Symbol.klass()) {
+            const inspect_str = (await Object.send(args[0], "inspect")).get_data<string>()
+            throw new TypeError(`${inspect_str} is not a symbol nor a string`);
         }
 
         return self.iv_exists(args[0].get_data<string>()) ? Qtrue : Qfalse;
     });
 
-    mod.define_native_method("public_send", (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData): RValue => {
-        const method_name = Runtime.coerce_to_string(args[0]).get_data<string>();
-        const method = Object.find_method_under(self, method_name);
+    mod.define_native_method("public_send", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
+        const method_name = (await Runtime.coerce_to_string(args[0])).get_data<string>();
+        const method = await Object.find_method_under(self, method_name);
 
         if (!method) {
-            throw new NoMethodError(`undefined \`${method_name}' called for ${Object.send(self, "inspect").get_data<string>()}`);
+            const inspect_str = (await Object.send(self, "inspect")).get_data<string>()
+            throw new NoMethodError(`undefined \`${method_name}' called for ${inspect_str}`);
         }
 
         if (method.visibility !== Visibility.public) {
+            const inspect_str = (await Object.send(self, "inspect")).get_data<string>();
             const visibility_str = method.visibility === Visibility.private ? "private" : "protected";
-            throw new NoMethodError(`${visibility_str} \`${method_name}' called for ${Object.send(self, "inspect").get_data<string>()}`);
+            throw new NoMethodError(`${visibility_str} \`${method_name}' called for ${inspect_str}`);
         }
 
         let forwarded_call_data = call_data;
@@ -521,10 +525,10 @@ export const init = async () => {
              * isn't a problem for interpreted methods because they perform much
              * smarter arg unwrapping via ExecutionContext.setup_arguments.
              */
-            forwarded_args = [RubyArray.new(forwarded_args)];
+            forwarded_args = [await RubyArray.new(forwarded_args)];
         }
 
-        return method.call(
+        return await method.call(
             ExecutionContext.current,
             self,
             forwarded_args,
@@ -538,8 +542,8 @@ export const init = async () => {
         Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, n);
     }
 
-    mod.define_native_method("sleep", (_self: RValue, args: RValue[]): RValue => {
-        if (args[0].klass !== Integer.klass && args[0].klass !== Float.klass) {
+    mod.define_native_method("sleep", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+        if (args[0].klass !== await Integer.klass() && args[0].klass !== await Float.klass()) {
             throw new ArgumentError(`can't convert ${args[0].klass.get_data<Class>().name} into time interval`);
         }
 
@@ -549,18 +553,18 @@ export const init = async () => {
         return args[0];
     });
 
-    mod.define_native_method("to_enum", (self: RValue, args: RValue[], kwargs?: Hash): RValue => {
+    mod.define_native_method("to_enum", async (self: RValue, args: RValue[], kwargs?: Hash): Promise<RValue> => {
         const method_name = args[0].get_data<string>();
-        return Enumerator.for_method(self, method_name, args.slice(1), kwargs);
+        return await Enumerator.for_method(self, method_name, args.slice(1), kwargs);
     });
 
-    mod.define_native_method("loop", (_self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
+    mod.define_native_method("loop", async (_self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
         if (block) {
             const proc = block.get_data<Proc>();
 
             try {
                 while (true) {
-                    proc.call(ExecutionContext.current, []);
+                    await proc.call(ExecutionContext.current, []);
                 }
             } catch (e) {
                 if (e instanceof BreakError) {
@@ -570,7 +574,7 @@ export const init = async () => {
                 throw e;
             }
         } else {
-            return Enumerator.for_native_generator(function* () {
+            return await Enumerator.for_native_generator(async function* () {
                 while (true) {
                     yield Qnil;
                 }
@@ -578,9 +582,9 @@ export const init = async () => {
         }
     });
 
-    mod.define_native_method("method", (self: RValue, args: RValue[]): RValue => {
-        const method_name = Runtime.coerce_to_string(args[0]).get_data<string>();
-        const callable = Object.find_method_under(self, method_name);
+    mod.define_native_method("method", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const method_name = (await Runtime.coerce_to_string(args[0])).get_data<string>();
+        const callable = await Object.find_method_under(self, method_name);
 
         if (callable) {
             return Method.new(method_name, callable);
@@ -589,17 +593,17 @@ export const init = async () => {
         throw new NameError(`undefined method \`${method_name}' for class ${self.klass.get_data<Class>().name}`);
     });
 
-    mod.define_native_method("binding", (self: RValue): RValue => {
-        return Binding.from_binding(ExecutionContext.current.get_binding());
+    mod.define_native_method("binding", async (self: RValue): Promise<RValue> => {
+        return await Binding.from_binding(ExecutionContext.current.get_binding());
     });
 
-    mod.define_native_method("sprintf", (self: RValue, args: RValue[]): RValue => {
-        return sprintf(args[0], args.slice(1));
+    mod.define_native_method("sprintf", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        return await sprintf(args[0], args.slice(1));
     });
 
-    mod.define_native_method("warn", (self: RValue, args: RValue[]): RValue => {
+    mod.define_native_method("warn", async (self: RValue, args: RValue[]): Promise<RValue> => {
         for (const arg of args) {
-            const str = Runtime.coerce_to_string(arg).get_data<string>();
+            const str = (await Runtime.coerce_to_string(arg)).get_data<string>();
             STDERR.get_data<IO>().write(str.endsWith("\n") ? str : `${str}\n`);
         }
 

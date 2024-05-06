@@ -9,8 +9,8 @@ export default class PutObject extends Instruction {
         this.object = object;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
-        context.push(Instruction.to_ruby(this.object));
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
+        context.push(await Instruction.to_ruby(this.object));
         return null;
     }
 

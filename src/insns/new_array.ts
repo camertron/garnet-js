@@ -11,9 +11,9 @@ export default class NewArray extends Instruction {
         this.size = size;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const elements = context.popn(this.size);
-        context.push(RubyArray.new(elements));
+        context.push(await RubyArray.new(elements));
         return null;
     }
 

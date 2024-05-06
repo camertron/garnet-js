@@ -24,24 +24,24 @@ export default class DefineClass extends Instruction {
         this.flags = flags;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const superclass = context.pop()!;
         const object = context.pop()!;
 
         if (this.name == "singletonclass") {
-            context.push(context.run_class_frame(this.iseq, object.get_data<Class>().get_singleton_class()));
+            context.push(await context.run_class_frame(this.iseq, object.get_data<Class>().get_singleton_class()));
         } else {
             // const constant = object.get_data<Class>().find_constant(this.name, false);
             const constant = object.get_data<Class>().constants[this.name];
 
             if (constant) {
-                context.push(context.run_class_frame(this.iseq, constant));
+                context.push(await context.run_class_frame(this.iseq, constant));
             } else if ((this.flags & DefineClassFlags.TYPE_MODULE) > 0) {
                 const module = Runtime.define_module_under(object, this.name);
-                context.push(context.run_class_frame(this.iseq, module));
+                context.push(await context.run_class_frame(this.iseq, module));
             } else {
                 const klass = Runtime.define_class_under(object, this.name, superclass);
-                context.push(context.run_class_frame(this.iseq, klass))
+                context.push(await context.run_class_frame(this.iseq, klass))
             }
         }
 

@@ -11,10 +11,10 @@ export default class ConcatStrings extends Instruction {
         this.count = count;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const strings = context.popn(this.count);
         const joined = strings.map((str) => str.get_data<string>()).join("");
-        context.push(String.new(joined));
+        context.push(await String.new(joined));
         return null;
     }
 

@@ -103,7 +103,7 @@ import {
 } from "@ruby/prism/src/nodes";
 import { Visitor } from "@ruby/prism/src/visitor";
 import { Lookup } from "./local_table";
-import { ObjectClass, Qnil, Qtrue } from "./runtime";
+import { Module, ObjectClass, Qnil, Qtrue, RValue } from "./runtime";
 import { DefineClassFlags } from "./insns/defineclass";
 import { SpecialObjectType } from "./insns/putspecialobject";
 import { ExpandArrayFlag } from "./insns/expandarray";
@@ -1864,7 +1864,9 @@ export class Compiler extends Visitor {
         if (this.used) {
             // @TODO: handle all options
             const flags = Regexp.build_flags(node.isIgnoreCase(), node.isMultiLine(), node.isExtended());
-            this.iseq.putobject({type: "RValue", value: Regexp.new(node.unescaped, flags)});
+            const regexp_class = ObjectClass.get_data<Module>().constants["Regexp"];
+            const regexp = new RValue(regexp_class, Regexp.compile(node.unescaped, flags));
+            this.iseq.putobject({type: "RValue", value: regexp});
         }
     }
 
@@ -2164,9 +2166,9 @@ export class Compiler extends Visitor {
 
         if (type === "CallNode") {
             this.iseq.putself();
-            this.iseq.defined(DefinedType.FUNC, (value as CallNode).name, String.new("method"));
+            this.iseq.defined(DefinedType.FUNC, (value as CallNode).name, this.iseq.make_string("method"));
         } else if (type === "ClassVariableReadNode") {
-            this.iseq.defined(DefinedType.CVAR, (value as ClassVariableReadNode).name, String.new("class variable"));
+            this.iseq.defined(DefinedType.CVAR, (value as ClassVariableReadNode).name, this.iseq.make_string("class variable"));
         } else if (type === "ConstantPathNode") {
             const val = value as ConstantPathNode;
 
@@ -2176,34 +2178,34 @@ export class Compiler extends Visitor {
                 this.with_used(true, () => this.visit(val.parent!));
             }
 
-            this.iseq.defined(DefinedType.CONST_FROM, (val.child as ConstantReadNode).name, String.new("constant"));
+            this.iseq.defined(DefinedType.CONST_FROM, (val.child as ConstantReadNode).name, this.iseq.make_string("constant"));
         } else if (type === "ConstantReadNode") {
-            this.iseq.defined(DefinedType.CONST, (value as ConstantReadNode).name, String.new("constant"));
+            this.iseq.defined(DefinedType.CONST, (value as ConstantReadNode).name, this.iseq.make_string("constant"));
         } else if (type === "FalseNode") {
-            this.iseq.putobject({type: "RValue", value: String.new("true")});
+            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("true")});
         } else if (type === "ForwardingSuperNode") {
             this.iseq.putself();
-            this.iseq.defined(DefinedType.ZSUPER, "", String.new("super"));
+            this.iseq.defined(DefinedType.ZSUPER, "", this.iseq.make_string("super"));
         } else if (type === "GlobalVariableReadNode") {
-            this.iseq.defined(DefinedType.GVAR, (value as GlobalVariableReadNode).name, String.new("global-variable"));
+            this.iseq.defined(DefinedType.GVAR, (value as GlobalVariableReadNode).name, this.iseq.make_string("global-variable"));
         } else if (type === "LocalVariableReadNode") {
-            this.iseq.putobject({type: "RValue", value: String.new("local-variable")});
+            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("local-variable")});
         } else if (type === "LocalVariableWriteNode" || type === "InstanceVariableWriteNode") {
-            this.iseq.putobject({type: "RValue", value: String.new("assignment")});
+            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("assignment")});
         } else if (type === "NilNode") {
             this.iseq.putobject({type: "NilClass", value: Qnil});
         } else if (type === "SelfNode") {
-            this.iseq.putobject({type: "RValue", value: String.new("self")});
+            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("self")});
         } else if (type === "TrueNode") {
-            this.iseq.putobject({type: "RValue", value: String.new("true")});
+            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("true")});
         } else if (type === "YieldNode") {
             this.iseq.putnil();
-            this.iseq.defined(DefinedType.YIELD, "", String.new("yield"));
+            this.iseq.defined(DefinedType.YIELD, "", this.iseq.make_string("yield"));
         } else if (type === "InstanceVariableReadNode") {
             this.iseq.putself();
-            this.iseq.defined(DefinedType.IVAR, (value as InstanceVariableReadNode).name, String.new("instance-variable"));
+            this.iseq.defined(DefinedType.IVAR, (value as InstanceVariableReadNode).name, this.iseq.make_string("instance-variable"));
         } else {
-            this.iseq.putobject({type: "RValue", value: String.new("expression")});
+            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("expression")});
         }
     }
 

@@ -15,8 +15,8 @@ export class Integer {
 
     private static klass_: RValue;
 
-    static get klass(): RValue {
-        const klass = Object.find_constant("Integer");
+    static async klass(): Promise<RValue> {
+        const klass = await Object.find_constant("Integer");
 
         if (klass) {
             this.klass_ = klass;
@@ -27,15 +27,15 @@ export class Integer {
         return this.klass_;
     }
 
-    static new(value: number): RValue {
+    static async new(value: number): Promise<RValue> {
         if (isNaN(value)) {
             throw new ArgumentError("value is NaN");
         }
 
-        return new RValue(this.klass, value);
+        return new RValue(await this.klass(), value);
     }
 
-    static get(value: number): RValue {
+    static async get(value: number): Promise<RValue> {
         if (value === 0) {
             return Integer.INT2FIX0;
         } else if (value === 1) {
@@ -43,144 +43,144 @@ export class Integer {
         } else if (value === -1) {
             return Integer.INT2FIXN1;
         } else {
-            return Integer.new(value);
+            return await Integer.new(value);
         }
     }
 }
 
 let inited = false;
 
-export const init = () => {
+export const init = async () => {
     if (inited) return
 
-    Runtime.define_class("Integer", Numeric.klass, (klass: Class) => {
-        klass.define_native_method("inspect", (self: RValue): RValue => {
-            return String.new(self.get_data<number>().toString());
+    Runtime.define_class("Integer", await Numeric.klass(), (klass: Class) => {
+        klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
+            return await String.new(self.get_data<number>().toString());
         });
 
-        klass.define_native_method("to_s", (self: RValue): RValue => {
-            return String.new(self.get_data<number>().toString());
+        klass.define_native_method("to_s", async (self: RValue): Promise<RValue> => {
+            return await String.new(self.get_data<number>().toString());
         });
 
-        klass.define_native_method("hash", (self: RValue): RValue => {
-            return Integer.get(obj_id_hash(self.get_data<number>()));
+        klass.define_native_method("hash", async (self: RValue): Promise<RValue> => {
+            return await Integer.get(obj_id_hash(self.get_data<number>()));
         });
 
         // Normally multiplication of two ints/floats is handled by the opt_mult instruction. This
         // definition is here for the sake of completeness.
-        klass.define_native_method("*", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("*", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const multiplier = args[0];
-            Runtime.assert_type(multiplier, Numeric.klass);
+            Runtime.assert_type(multiplier, await Numeric.klass());
 
             const self_num = self.get_data<number>();
 
             switch (multiplier.klass) {
-                case Float.klass:
+                case await Float.klass():
                     return Float.new(self_num * multiplier.get_data<number>());
-                case Rational.klass:
+                case await Rational.klass():
                     const rational = multiplier.get_data<Rational>();
                     return Rational.new(
                         rational.s * self_num * rational.n,
                         rational.d,
                     )
-                case Integer.klass:
+                case await Integer.klass():
                     return Integer.get(Math.floor(self_num * multiplier.get_data<number>()));
                 default:
                     throw new ArgumentError("Unreachable");
             }
         });
 
-        klass.define_native_method("/", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("/", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const divisor = args[0];
-            Runtime.assert_type(divisor, Numeric.klass);
+            Runtime.assert_type(divisor, await Numeric.klass());
 
             const result = self.get_data<number>() / divisor.get_data<number>();
 
-            if (divisor.klass === Float.klass) {
-                return Float.new(result);
+            if (divisor.klass === await Float.klass()) {
+                return await Float.new(result);
             } else {
-                return Integer.get(Math.floor(result));
+                return await Integer.get(Math.floor(result));
             }
         });
 
-        klass.define_native_method("+", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("+", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const term = args[0];
-            Runtime.assert_type(term, Numeric.klass);
+            Runtime.assert_type(term, await Numeric.klass());
 
             const self_num = self.get_data<number>();
 
             switch (term.klass) {
-                case Float.klass:
+                case await Float.klass():
                     return Float.new(self.get_data<number>() + term.get_data<number>());
-                case Rational.klass:
+                case await Rational.klass():
                     const rational = term.get_data<Rational>();
                     return Rational.new(
                         (self_num * rational.d) + rational.n,
                         rational.d
                     );
-                case Integer.klass:
+                case await Integer.klass():
                     return Integer.get(Math.floor(self.get_data<number>() + term.get_data<number>()));
                 default:
                     throw new ArgumentError("Unreachable");
             }
         });
 
-        klass.define_native_method("-", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("-", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const term = args[0];
-            Runtime.assert_type(term, Numeric.klass);
+            Runtime.assert_type(term, await Numeric.klass());
 
             const self_num = self.get_data<number>();
 
             switch (term.klass) {
-                case Float.klass:
+                case await Float.klass():
                     return Float.new(self.get_data<number>() - term.get_data<number>());
-                case Rational.klass:
+                case await Rational.klass():
                     const rational = term.get_data<Rational>();
                     return Rational.new(
                         (self_num * rational.d) - rational.n,
                         rational.d
                     );
-                case Integer.klass:
+                case await Integer.klass():
                     return Integer.get(Math.floor(self.get_data<number>() - term.get_data<number>()));
                 default:
                     throw new ArgumentError("Unreachable");
             }
         });
 
-        klass.define_native_method("%", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("%", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const divisor = args[0];
-            Runtime.assert_type(divisor, Numeric.klass);
+            Runtime.assert_type(divisor, await Numeric.klass());
 
             const result = self.get_data<number>() % divisor.get_data<number>();
 
-            if (divisor.klass === Float.klass) {
+            if (divisor.klass === await Float.klass()) {
                 return Float.new(result);
             } else {
                 return Integer.get(result);
             }
         });
 
-        klass.define_native_method("**", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("**", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const term = args[0];
-            Runtime.assert_type(term, Numeric.klass);
+            Runtime.assert_type(term, await Numeric.klass());
 
             const result = Math.pow(self.get_data<number>(), term.get_data<number>());
 
-            if (term.klass === Float.klass) {
+            if (term.klass === await Float.klass()) {
                 return Float.new(result);
             } else {
                 return Integer.get(Math.floor(result));
             }
         });
 
-        klass.define_native_method("-@", (self: RValue): RValue => {
-            return Integer.get(-self.get_data<number>());
+        klass.define_native_method("-@", async (self: RValue): Promise<RValue> => {
+            return await Integer.get(-self.get_data<number>());
         });
 
-        klass.define_native_method("<=>", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("<=>", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const other = args[0];
 
-            if (other.klass === Integer.klass || other.klass === Float.klass) {
+            if (other.klass === await Integer.klass() || other.klass === await Float.klass()) {
                 const other_num = other.get_data<number>();
                 const num = self.get_data<number>();
 
@@ -218,30 +218,30 @@ export const init = () => {
             return self.get_data<number>() === 0 ? Qtrue : Qfalse;
         });
 
-        klass.define_native_method("size", (self: RValue): RValue => {
+        klass.define_native_method("size", async (self: RValue): Promise<RValue> => {
             // all numbers in js are 64-bit floats
-            return Integer.get(8);
+            return await Integer.get(8);
         });
 
-        klass.define_native_method("chr", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("chr", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const data = self.get_data<number>();
             const encoding = (args[0] || Encoding.us_ascii).get_data<Encoding>();
 
             if (encoding.codepoint_valid(data)) {
-                return String.new(encoding.codepoint_to_utf16(data));
+                return await String.new(encoding.codepoint_to_utf16(data));
             } else {
                 throw new RangeError(`${data} out of char range`);
             }
         });
 
-        klass.define_native_method("abs", (self: RValue): RValue => {
-            return Integer.get(Math.abs(self.get_data<number>()));
+        klass.define_native_method("abs", async (self: RValue): Promise<RValue> => {
+            return await Integer.get(Math.abs(self.get_data<number>()));
         });
     });
 
-    Integer.INT2FIX0 = Integer.new(0);
-    Integer.INT2FIX1 = Integer.new(1);
-    Integer.INT2FIXN1 = Integer.new(-1);
+    Integer.INT2FIX0 = await Integer.new(0);
+    Integer.INT2FIX1 = await Integer.new(1);
+    Integer.INT2FIXN1 = await Integer.new(-1);
 
     inited = true;
 };

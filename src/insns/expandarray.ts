@@ -20,19 +20,17 @@ export default class ExpandArray extends Instruction {
         this.flags = flags;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         let object = context.pop()!;
 
-        object = (() => {
-            if (object.klass == RubyArray.klass) {
-                // dup
-                return RubyArray.new([...object.get_data<RubyArray>().elements]);
-            } else if (Object.send(object, "respond_to?", [Runtime.intern("to_ary"), Qtrue]).is_truthy()) {
-                return Object.send(object, "to_ary");
-            } else {
-                return RubyArray.new([object]);
-            }
-        })();
+        if (object.klass == await RubyArray.klass()) {
+            // dup
+            object = await RubyArray.new([...object.get_data<RubyArray>().elements]);
+        } else if ((await Object.send(object, "respond_to?", [await Runtime.intern("to_ary"), Qtrue])).is_truthy()) {
+            object = await Object.send(object, "to_ary");
+        } else {
+            object = await RubyArray.new([object]);
+        }
 
         const splat_flag = this.has_splat_flag;
         const postarg_flag = this.has_postarg_flag;

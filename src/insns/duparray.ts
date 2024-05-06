@@ -4,19 +4,30 @@ import Instruction, { ValueType } from "../instruction";
 import { RValue } from "../runtime";
 
 export default class DupArray extends Instruction {
-    public values: RValue[];
+    public orig_values: any[];
+    private values_: RValue[];
 
     constructor(values: any[]) {
         super();
 
-        this.values = values.map( (val: ValueType) => {
-            return Instruction.to_ruby(val);
-        });
+        this.orig_values = values;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
-        context.push(RubyArray.new([...this.values]));
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
+        context.push(await RubyArray.new([...await this.values()]));
         return null;
+    }
+
+    private async values(): Promise<RValue[]> {
+        if (!this.values_) {
+            this.values_ = await Promise.all(
+                this.orig_values.map((val: ValueType) => {
+                    return Instruction.to_ruby(val);
+                })
+            )
+        }
+
+        return this.values_;
     }
 
     length(): number {

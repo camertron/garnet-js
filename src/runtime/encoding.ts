@@ -9,19 +9,19 @@ export abstract class Encoding {
 
     public name: string;
 
-    static get encoding_class(): Class {
-        return this.encoding_class_rval.get_data<Class>();
+    static async encoding_class(): Promise<Class> {
+        return (await this.encoding_class_rval()).get_data<Class>();
     }
 
-    static get encoding_class_rval(): RValue {
-        return Object.find_constant("Encoding")!;
+    static async encoding_class_rval(): Promise<RValue> {
+        return (await Object.find_constant("Encoding"))!;
     }
 
-    static get default(): RValue {
+    static async default(): Promise<RValue> {
         if (isLittlEndian()) {
-            this.default_ = this.encoding_class.constants["UTF_16LE"];
+            this.default_ = (await this.encoding_class()).constants["UTF_16LE"];
         } else {
-            this.default_ = this.encoding_class.constants["UTF_16BE"];
+            this.default_ = (await this.encoding_class()).constants["UTF_16BE"];
         }
 
         return this.default_;
@@ -40,19 +40,19 @@ export abstract class Encoding {
     }
 
     // accepts an Encoding instance or an encoded string and returns an Encoding
-    static extract(obj: RValue): RValue | undefined {
-        if (obj.klass === this.encoding_class_rval) {
+    static async extract(obj: RValue): Promise<RValue | undefined> {
+        if (obj.klass === await this.encoding_class_rval()) {
             return obj;
-        } else if (obj.klass === RubyString.klass) {
-            return RubyString.get_encoding_rval(obj);
+        } else if (obj.klass === await RubyString.klass()) {
+            return await RubyString.get_encoding_rval(obj);
         }
     }
 
     // accepts an Encoding instance or a string like "UTF-8" and returns an Encoding
-    static coerce(obj: RValue): RValue | undefined {
-        if (obj.klass === this.encoding_class_rval) {
+    static async coerce(obj: RValue): Promise<RValue | undefined> {
+        if (obj.klass === await this.encoding_class_rval()) {
             return obj;
-        } else if (obj.klass === RubyString.klass) {
+        } else if (obj.klass === await RubyString.klass()) {
             return this.get(obj.get_data<string>());
         } else {
             return undefined;
@@ -63,12 +63,12 @@ export abstract class Encoding {
         return codepoint >= 0 && codepoint < 128;
     }
 
-    static supported_conversion(obj1: RValue, obj2: RValue): RValue | null {
-        const compat_encoding = this.are_compatible(obj1, obj2);
+    static async supported_conversion(obj1: RValue, obj2: RValue): Promise<RValue | null> {
+        const compat_encoding = await this.are_compatible(obj1, obj2);
         if (compat_encoding) return compat_encoding;
 
-        const e1 = this.extract(obj1);
-        const e2 = this.extract(obj2);
+        const e1 = await this.extract(obj1);
+        const e2 = await this.extract(obj2);
 
         if (!e1 || !e2) return null;
 
@@ -79,24 +79,24 @@ export abstract class Encoding {
         return null;
     }
 
-    static are_compatible(obj1: RValue, obj2: RValue): RValue | null {
-        let enc1 = Encoding.extract(obj1);
-        let enc2 = Encoding.extract(obj2);
+    static async are_compatible(obj1: RValue, obj2: RValue): Promise<RValue | null> {
+        let enc1 = await Encoding.extract(obj1);
+        let enc2 = await Encoding.extract(obj2);
 
         if (enc1 == null || enc2 == null) return null;
         if (enc1 == enc2) return enc1;
 
-        if (obj2.klass === RubyString.klass && (obj2.get_data<string>().length == 0)) return enc1;
-        if (obj1.klass === RubyString.klass && (obj1.get_data<string>().length == 0)) {
-            return enc1.get_data<Encoding>().ascii_compatible && obj2.klass === RubyString.klass && (RubyString.ascii_only(obj2)) ? enc1 : enc2;
+        if (obj2.klass === await RubyString.klass() && (obj2.get_data<string>().length == 0)) return enc1;
+        if (obj1.klass === await RubyString.klass() && (obj1.get_data<string>().length == 0)) {
+            return enc1.get_data<Encoding>().ascii_compatible && obj2.klass === await RubyString.klass() && (await RubyString.ascii_only(obj2)) ? enc1 : enc2;
         }
 
         if (!enc1.get_data<Encoding>().ascii_compatible || !enc2.get_data<Encoding>().ascii_compatible) return null;
 
-        if (obj2.klass !== RubyString.klass && enc2 === Encoding.us_ascii) return enc1;
-        if (obj1.klass !== RubyString.klass && enc1 === Encoding.us_ascii) return enc2;
+        if (obj2.klass !== await RubyString.klass() && enc2 === Encoding.us_ascii) return enc1;
+        if (obj1.klass !== await RubyString.klass() && enc1 === Encoding.us_ascii) return enc2;
 
-        if (obj1.klass !== RubyString.klass) {
+        if (obj1.klass !== await RubyString.klass()) {
             const obj_tmp = obj1; // swap1 obj1 & obj2
             obj1 = obj2;
             obj2 = obj_tmp;
@@ -106,10 +106,10 @@ export abstract class Encoding {
             enc2 = enc_tmp;
         }
 
-        if (obj1.klass === RubyString.klass) {
+        if (obj1.klass === await RubyString.klass()) {
             const cr1 = RubyString.scan_for_code_range(obj1);
 
-            if (obj2.klass === RubyString.klass) {
+            if (obj2.klass === await RubyString.klass()) {
                 const cr2 = RubyString.scan_for_code_range(obj2);
                 return this.are_compatible_(enc1, cr1, enc2, cr2);
             }
@@ -137,9 +137,9 @@ export abstract class Encoding {
         return enc.get_data<Encoding>().min_length == 1;
     }
 
-    static enc_cr_str_buf_cat(str: RValue, str2: RValue): number {
-        const str_enc = RubyString.get_encoding_rval(str);
-        const str2_enc = RubyString.get_encoding_rval(str2);
+    static async enc_cr_str_buf_cat(str: RValue, str2: RValue): Promise<number> {
+        const str_enc = await RubyString.get_encoding_rval(str);
+        const str2_enc = await RubyString.get_encoding_rval(str2);
         let str2_cr = RubyString.get_code_range(str2);
         let res_enc: RValue;
         let str_cr, res_cr;
@@ -369,8 +369,8 @@ export class UTF32Encoding extends UnicodeEncoding {
 const encoding_map: Map<string, RValue> = new Map();
 const encoding_conversions: Set<string> = new Set();
 
-export const register_encoding = (const_name: string, other_names: string[], encoding: Encoding) => {
-    const encoding_class = Object.find_constant("Encoding")!;
+export const register_encoding = async (const_name: string, other_names: string[], encoding: Encoding) => {
+    const encoding_class = (await Object.find_constant("Encoding"))!;
     const encoding_rval = new RValue(encoding_class, encoding);
     encoding_class.get_data<Class>().constants[const_name] = encoding_rval;
     encoding_map.set(const_name, encoding_rval);
@@ -386,19 +386,19 @@ export const register_encoding = (const_name: string, other_names: string[], enc
 
 let inited = false;
 
-export const init = () => {
+export const init = async () => {
     if (inited) return false;
 
     const EncodingClass = Runtime.define_class("Encoding", ObjectClass, (klass: Class) => {
         // making new Encoding instances cannot be done from Ruby land
         klass.get_singleton_class().get_data<Class>().undef_method("new");
 
-        klass.define_native_method("inspect", (self: RValue): RValue => {
-            return RubyString.new(`#<Encoding:${self.get_data<Encoding>().name}>`);
+        klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
+            return await RubyString.new(`#<Encoding:${self.get_data<Encoding>().name}>`);
         });
 
-        klass.define_native_method("compatible?", (self: RValue, args: RValue[]): RValue => {
-            return Encoding.are_compatible(self, args[0]) ? Qtrue : Qfalse;
+        klass.define_native_method("compatible?", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            return await Encoding.are_compatible(self, args[0]) ? Qtrue : Qfalse;
         });
 
         klass.define_native_method("ascii_compatible?", (self: RValue): RValue => {
@@ -411,15 +411,15 @@ export const init = () => {
         });
     });
 
-    register_encoding("US_ASCII", ["US-ASCII"], new USASCIIEncoding());
-    register_encoding("BINARY", [], new BinaryEncoding());
-    register_encoding("UTF_8", ["UTF-8"], new UTF8Encoding());
-    register_encoding("UTF_16LE", ["UTF-16LE"], new UTF16LEEncoding());
-    register_encoding("UTF_16BE", ["UTF-16BE"], new UTF16BEEncoding());
-    register_encoding("UTF_32", ["UTF-32"], new UTF32Encoding());
+    await register_encoding("US_ASCII", ["US-ASCII"], new USASCIIEncoding());
+    await register_encoding("BINARY", [], new BinaryEncoding());
+    await register_encoding("UTF_8", ["UTF-8"], new UTF8Encoding());
+    await register_encoding("UTF_16LE", ["UTF-16LE"], new UTF16LEEncoding());
+    await register_encoding("UTF_16BE", ["UTF-16BE"], new UTF16BEEncoding());
+    await register_encoding("UTF_32", ["UTF-32"], new UTF32Encoding());
 
-    Runtime.define_class_under(EncodingClass, "CompatibilityError", Object.find_constant("EncodingError")!);
-    Runtime.define_class_under(EncodingClass, "ConverterNotFoundError", Object.find_constant("EncodingError")!);
+    Runtime.define_class_under(EncodingClass, "CompatibilityError", (await Object.find_constant("EncodingError"))!);
+    Runtime.define_class_under(EncodingClass, "ConverterNotFoundError", (await Object.find_constant("EncodingError"))!);
 
     inited = true;
 };

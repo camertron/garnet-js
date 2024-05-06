@@ -11,10 +11,10 @@ export default class OptSendWithoutBlock extends Instruction {
         this.call_data = call_data;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const argc = this.call_data.argc + 1;
         const [receiver, ...args] = context.popn(argc);
-        const result = Object.send(receiver, this.call_data, args);
+        const result = await Object.send(receiver, this.call_data, args);
         context.push(result);
         return null;
     }

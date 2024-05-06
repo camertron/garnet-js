@@ -25,7 +25,7 @@ export async function init() {
 
         await initRuntime();
 
-        ExecutionContext.current = new ExecutionContext();
+        ExecutionContext.current = await ExecutionContext.create();
         const prism_instance = await WASM.load_module("prism");
 
         Compiler.parse = (source) => {
@@ -45,7 +45,7 @@ export async function deinit() {
     for (const exit_handler of Kernel.exit_handlers) {
         // self and args are wrong here, but they're wrong for all procs.
         // We need to figure out bindings before this will make sense
-        exit_handler.get_data<Proc>().call(ExecutionContext.current, []);
+        await exit_handler.get_data<Proc>().call(ExecutionContext.current, []);
     }
 
     /* @ts-ignore */
@@ -83,8 +83,8 @@ export async function evaluate(code: string, path?: string, absolute_path?: stri
                 }
             }
 
-            if (Object.send(e, "is_a?", [Object.find_constant("Exception")!]).is_truthy()) {
-                ExecutionContext.print_backtrace_rval(e);
+            if ((await Object.send(e, "is_a?", [(await Object.find_constant("Exception"))!])).is_truthy()) {
+                await ExecutionContext.print_backtrace_rval(e);
             }
         } else {
             console.error(e);
@@ -115,9 +115,16 @@ export {
     Main
 } from "./runtime";
 
+export { Compiler } from "./compiler";
+export { InstructionSequence } from "./instruction_sequence";
+
 export type { IO } from "./runtime";
 export { String } from "./runtime/string";
 export { RubyArray } from "./runtime/array";
+export { Hash } from "./runtime/hash"
+export { Integer } from "./runtime/integer";
+export { Float } from "./runtime/float";
+export { Proc } from "./runtime/proc";
 
 export { Object } from "./runtime/object";
 export { RubyError, LoadError } from "./errors";

@@ -12,7 +12,7 @@ export default class GetLocal extends Instruction {
         this.depth = depth;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const value = context.local_get(this.index, this.depth);
         context.push(value);
         return null;

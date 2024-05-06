@@ -12,7 +12,7 @@ export default class SetInstanceVariable extends Instruction {
         this.cache = cache;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const value = context.pop()!;
         context.frame!.self.iv_set(this.name, value);
         return null;

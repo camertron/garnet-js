@@ -37,7 +37,7 @@ export default class Defined extends Instruction {
         this.message = message;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const object = context.pop()!;
         let result: RValue | null = null;
 
@@ -82,7 +82,7 @@ export default class Defined extends Instruction {
                 let klass2 = context.frame!.self;
                 if (klass2.klass !== ModuleClass) klass2 = klass2.get_data<Class>().get_singleton_class();
 
-                if (klass2.get_data<Class>().find_constant(this.name)) {
+                if (await klass2.get_data<Class>().find_constant(this.name)) {
                     result = this.message;
                 }
 
@@ -101,14 +101,14 @@ export default class Defined extends Instruction {
                 throw new NotImplementedError("defined REF");
 
             case DefinedType.FUNC:
-                if (Object.find_method_under(object.klass, this.name)) {
+                if (await Object.find_method_under(object.klass, this.name)) {
                     result = this.message;
                 }
 
                 break;
 
             case DefinedType.CONST_FROM:
-                if (object.get_data<Module>().find_constant(this.name)) {
+                if (await object.get_data<Module>().find_constant(this.name)) {
                     result = this.message;
                 }
 

@@ -11,7 +11,7 @@ export default class SetLocalWC1 extends Instruction {
         this.index = index;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         return new SetLocal(this.index, 1).call(context);
     }
 

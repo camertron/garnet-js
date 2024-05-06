@@ -68,7 +68,7 @@ class ParseContext {
 }
 
 interface ISegment {
-    each_matching_path_in(path: string, cb: (matching_path: string) => void): void;
+    each_matching_path_in(path: string, cb: (matching_path: string) => Promise<void>): Promise<void>;
 }
 
 class RegExpSegment implements ISegment {
@@ -78,16 +78,16 @@ class RegExpSegment implements ISegment {
         this.matcher = matcher;
     }
 
-    each_matching_path_in(path: string, cb: (matching_path: string) => void): void {
+    async each_matching_path_in(path: string, cb: (matching_path: string) => void): Promise<void> {
         if (vmfs.is_directory(path)) {
-            vmfs.each_child_path(path, (child_path: string) => {
+            await vmfs.each_child_path(path, async (child_path: string) => {
                 if (this.matcher.test(child_path)) {
-                    cb(vmfs.join_paths(path, child_path));
+                    await cb(vmfs.join_paths(path, child_path));
                 }
             });
         } else {
             if (this.matcher.test(vmfs.basename(path))) {
-                cb(path);
+                await cb(path);
             }
         }
     }
@@ -100,11 +100,11 @@ class StaticSegment implements ISegment {
         this.segment_text = segment_text;
     }
 
-    each_matching_path_in(path: string, cb: (matching_path: string) => void): void {
+    async each_matching_path_in(path: string, cb: (matching_path: string) => Promise<void>): Promise<void> {
         const full_path = vmfs.join_paths(path, this.segment_text);
 
         if (vmfs.path_exists(full_path)) {
-            cb(full_path);
+            await cb(full_path);
         }
     }
 }
@@ -116,8 +116,8 @@ class RecursiveDirSegment implements ISegment {
         this.flags = flags;
     }
 
-    each_matching_path_in(path: string, cb: (matching_path: string) => void): void {
-        vmfs.each_child_path(path, (child_path: string) => {
+    async each_matching_path_in(path: string, cb: (matching_path: string) => Promise<void>): Promise<void> {
+        await vmfs.each_child_path(path, async (child_path: string) => {
             if (!this.flags.dot_match && child_path.startsWith(".")) {
                 return;
             }
@@ -125,9 +125,9 @@ class RecursiveDirSegment implements ISegment {
             const full_path = vmfs.join_paths(path, child_path);
 
             if (vmfs.is_directory(full_path)) {
-                this.each_matching_path_in(full_path, cb);
+                await this.each_matching_path_in(full_path, cb);
             } else {
-                cb(full_path);
+                await cb(full_path);
             }
         });
     }
@@ -142,24 +142,24 @@ export class GlobPattern {
         this.flags = flags;
     }
 
-    each_matching_path(base_path: string, cb: (matching_path: string) => void) {
+    async each_matching_path(base_path: string, cb: (matching_path: string) => Promise<void>) {
         const base_path_parts = vmfs.split_path(base_path);
 
-        this.each_matching_path_in(0, base_path, (matching_path: string): void => {
+        await this.each_matching_path_in(0, base_path, async (matching_path: string): Promise<void> => {
             if (base_path === "") {
-                cb(matching_path);
+                await cb(matching_path);
             } else {
-                cb(vmfs.join_paths(...vmfs.split_path(matching_path).slice(base_path_parts.length)));
+                await cb(vmfs.join_paths(...vmfs.split_path(matching_path).slice(base_path_parts.length)));
             }
         });
     }
 
-    private each_matching_path_in(segment_index: number, base_path: string, cb: (matching_path: string) => void) {
-        this.segments[segment_index].each_matching_path_in(base_path, (matching_path: string): void => {
+    private async each_matching_path_in(segment_index: number, base_path: string, cb: (matching_path: string) => Promise<void>) {
+        await this.segments[segment_index].each_matching_path_in(base_path, async (matching_path: string): Promise<void> => {
             if (segment_index === this.segments.length - 1) {
-                cb(matching_path);
+                await cb(matching_path);
             } else {
-                this.each_matching_path_in(segment_index + 1, matching_path, cb);
+                await this.each_matching_path_in(segment_index + 1, matching_path, cb);
             }
         });
     }

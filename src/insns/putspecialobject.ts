@@ -17,7 +17,7 @@ export default class PutSpecialObject extends Instruction {
         this.type = type;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         switch (this.type) {
             case SpecialObjectType.VMCORE:
                 context.push(VMCore);

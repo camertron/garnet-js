@@ -7,7 +7,18 @@ import { String } from "../runtime/string";
 import { Hash } from "./hash";
 
 export class Object {
-    static send(receiver: RValue, call_data_: MethodCallData | string, args: RValue[] = [], kwargs?: Hash, block?: RValue): RValue {
+    static async send(receiver: RValue, call_data_: MethodCallData | string, args: RValue[] = [], kwargs?: Hash, block?: RValue): Promise<RValue> {
+        for (const arg of args) {
+            if (arg instanceof Promise) debugger;
+        }
+
+        if (block instanceof Promise) debugger;
+
+        await kwargs?.each(async (k: RValue, v: RValue) => {
+            if (k instanceof Promise) debugger;
+            if (v instanceof Promise) debugger;
+        })
+
         let method_name: string;
         let call_data: MethodCallData | undefined;
 
@@ -19,14 +30,14 @@ export class Object {
             call_data = undefined;
         }
 
-        const method = Object.find_method_under(receiver, method_name);
+        const method = await Object.find_method_under(receiver, method_name);
 
-        if (block?.klass === Symbol.klass) {
-            block = Symbol.to_proc(block);
+        if (block?.klass === await Symbol.klass()) {
+            block = await Symbol.to_proc(block);
         }
 
         if (method) {
-            return method.call(
+            return await method.call(
                 ExecutionContext.current,
                 receiver,
                 args,
@@ -47,21 +58,21 @@ export class Object {
                 method_missing_call_data = MethodCallData.create("method_missing", args.length + 1, flags);
             }
 
-            return Object.send(receiver, method_missing_call_data, [String.new(method_name), ...args], kwargs, block);
+            return await Object.send(receiver, method_missing_call_data, [await String.new(method_name), ...args], kwargs, block);
         }
     }
 
-    static respond_to(obj: RValue, method_name: string): boolean {
-        return this.find_method_under(obj, method_name) ? true : false;
+    static async respond_to(obj: RValue, method_name: string): Promise<boolean> {
+        return await this.find_method_under(obj, method_name) ? true : false;
     }
 
     // While find_method_under below can be passed any object, this method expects you to pass it a
     // Module (or a Class, since classes inherit from Module).
-    static find_instance_method_under(mod: RValue, method_name: string, include_self: boolean = true, inherit: boolean = true): Callable | null {
-        return this.find_method_under_helper(mod, method_name, include_self, inherit);
+    static async find_instance_method_under(mod: RValue, method_name: string, include_self: boolean = true, inherit: boolean = true): Promise<Callable | null> {
+        return await this.find_method_under_helper(mod, method_name, include_self, inherit);
     }
 
-    static find_method_under(obj: RValue, method_name: string, include_self: boolean = true, inherit: boolean = true): Callable | null {
+    static async find_method_under(obj: RValue, method_name: string, include_self: boolean = true, inherit: boolean = true): Promise<Callable | null> {
         /* We check to see if the receiver has a singleton class in order to skip creating an
          * unnecessary one. Modules and classes always have a singleton class, but instances don't
          * unless one has been explicitly defined, i.e. to house some instance-specific behavior.
@@ -80,16 +91,16 @@ export class Object {
          * it for the desired method.
          */
         if (obj.has_singleton_class()) {
-            return this.find_method_under_helper(obj.get_singleton_class(), method_name, include_self, inherit);
+            return await this.find_method_under_helper(obj.get_singleton_class(), method_name, include_self, inherit);
         } else {
-            return this.find_method_under_helper(obj.klass, method_name, include_self, inherit);
+            return await this.find_method_under_helper(obj.klass, method_name, include_self, inherit);
         }
     }
 
-    private static find_method_under_helper(mod: RValue, method_name: string, include_self: boolean = true, inherit: boolean = true): Callable | null {
+    private static async find_method_under_helper(mod: RValue, method_name: string, include_self: boolean = true, inherit: boolean = true): Promise<Callable | null> {
         let found_method = null;
 
-        Runtime.each_unique_ancestor(mod, include_self, (ancestor: RValue): boolean => {
+        await Runtime.each_unique_ancestor(mod, include_self, async (ancestor: RValue): Promise<boolean> => {
             const ancestor_mod = ancestor.get_data<Module>();
 
             if (ancestor_mod.undefined_methods.has(method_name)) {
@@ -118,15 +129,15 @@ export class Object {
         return found_method;
     }
 
-    static find_super_method_under(self: RValue, method_owner: RValue, method_name: string): Callable | null {
+    static async find_super_method_under(self: RValue, method_owner: RValue, method_name: string): Promise<Callable | null> {
         if (self.has_singleton_class()) {
-            return this.find_super_method_under_helper(self.get_singleton_class(), method_owner, method_name);
+            return await this.find_super_method_under_helper(self.get_singleton_class(), method_owner, method_name);
         } else {
-            return this.find_super_method_under_helper(self.klass, method_owner, method_name);
+            return await this.find_super_method_under_helper(self.klass, method_owner, method_name);
         }
     }
 
-    static find_super_method_under_helper(self: RValue, method_owner: RValue, method_name: string) {
+    static async find_super_method_under_helper(self: RValue, method_owner: RValue, method_name: string) {
         let found_method_owner = false;
         let found_method: Callable | null = null;
 
@@ -139,7 +150,7 @@ export class Object {
          * have to search self's ancestry until we find owner, then start looking for the appropriate
          * method from there.
          */
-        Runtime.each_unique_ancestor(self, true, (ancestor: RValue): boolean => {
+        await Runtime.each_unique_ancestor(self, true, async (ancestor: RValue): Promise<boolean> => {
             if (ancestor === method_owner) {
                 found_method_owner = true;
                 return true;
@@ -165,19 +176,19 @@ export class Object {
         return `0x${id_str}`;
     }
 
-    static check_frozen(obj: RValue) {
+    static async check_frozen(obj: RValue) {
         if (obj.is_frozen()) {
-            const inspect_str = Object.send(obj, "inspect").get_data<string>();
+            const inspect_str = (await Object.send(obj, "inspect")).get_data<string>();
             throw new FrozenError(`can't modify frozen ${obj.klass.get_data<Class>().name}: ${inspect_str}`);
         }
     }
 
-    static find_constant(name: string): RValue | null {
-        return this.find_constant_under(ObjectClass, name);
+    static async find_constant(name: string): Promise<RValue | null> {
+        return await this.find_constant_under(ObjectClass, name);
     }
 
-    static find_constant_under(mod: RValue, name: string): RValue | null {
-        return mod.get_data<Module>().find_constant(name);
+    static async find_constant_under(mod: RValue, name: string): Promise<RValue | null> {
+        return await mod.get_data<Module>().find_constant(name);
     }
 
     static new() {
@@ -185,21 +196,21 @@ export class Object {
     }
 }
 
-export const init = () => {
-    (ObjectClass.get_data<Class>()).tap( (klass: Class) => {
+export const init = async () => {
+    await (ObjectClass.get_data<Class>()).tap(async (klass: Class) => {
         klass.include(KernelModule);
 
         // NOTE: send should actually be defined by the Kernel module
-        klass.define_native_singleton_method("send", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_singleton_method("send", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const method_name = args[0];
-            Runtime.assert_type(method_name, String.klass);
-            return Object.send(self.klass.get_data<Class>().get_singleton_class(), method_name.get_data<string>(), args);
+            Runtime.assert_type(method_name, await String.klass());
+            return await Object.send(self.klass.get_data<Class>().get_singleton_class(), method_name.get_data<string>(), args);
         });
 
-        klass.define_native_method("send", (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData) => {
+        klass.define_native_method("send", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData) => {
             const method_name = args[0];
 
-            if (method_name.klass === String.klass || method_name.klass === Symbol.klass) {
+            if (method_name.klass === await String.klass() || method_name.klass === await Symbol.klass()) {
                 if (call_data) {
                     const new_call_data = MethodCallData.create(method_name.get_data<string>(), call_data.argc - 1, call_data.flag, call_data.kw_arg);
                     return Object.send(self, new_call_data, args.slice(1), kwargs, block);
@@ -207,18 +218,18 @@ export const init = () => {
                     return Object.send(self, method_name.get_data<string>(), args.slice(1), kwargs, block);
                 }
             } else {
-                throw new TypeError(`${Object.send(method_name, "inspect").get_data<string>()} is not a symbol nor a string`);
+                throw new TypeError(`${(await Object.send(method_name, "inspect")).get_data<string>()} is not a symbol nor a string`);
             }
         });
 
-        klass.define_native_method("inspect", (self: RValue): RValue => {
+        klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const name = self.klass.get_data<Class>().full_name;
             let parts = [`${name}:${Object.object_id_to_str(self.object_id)}`];
 
             if (self.ivars) {
                 for (const ivar_name of self.ivars.keys()) {
                     const ivar = self.iv_get(ivar_name);
-                    const inspect_str = Object.send(ivar, "inspect").get_data<string>();
+                    const inspect_str = (await Object.send(ivar, "inspect")).get_data<string>();
                     parts.push(`${ivar_name}=${inspect_str}`)
                 }
             }
@@ -226,7 +237,7 @@ export const init = () => {
             return String.new(`#<${parts.join(" ")}>`)
         });
 
-        klass.alias_method("to_s", "inspect");
+        await klass.alias_method("to_s", "inspect");
 
         klass.define_native_method("dup", (self: RValue): RValue => {
             const copy = new RValue(self.klass);

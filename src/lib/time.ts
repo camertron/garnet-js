@@ -10,8 +10,8 @@ import { Object } from "../runtime/object";
 class Time {
     private static klass_: RValue;
 
-    static get klass(): RValue {
-        const klass = Object.find_constant("Time");
+    static async klass(): Promise<RValue> {
+        const klass = await Object.find_constant("Time");
 
         if (klass) {
             this.klass_ = klass;
@@ -24,8 +24,8 @@ class Time {
 
     public date: Date;
 
-    static new(date: Date) {
-        return new RValue(Time.klass, new Time(date));
+    static async new(date: Date) {
+        return new RValue(await Time.klass(), new Time(date));
     }
 
     constructor(date: Date) {
@@ -34,26 +34,26 @@ class Time {
 }
 
 export const init = () => {
-    Runtime.define_class("Time", ObjectClass, (klass: Class) => {
-        klass.include(Object.find_constant("Comparable")!);
+    Runtime.define_class("Time", ObjectClass, async (klass: Class) => {
+        klass.include((await Object.find_constant("Comparable"))!);
 
-        klass.define_native_singleton_method("now", (self: RValue, args: RValue[]): RValue => {
-            return Time.new(new Date());
+        klass.define_native_singleton_method("now", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            return await Time.new(new Date());
         });
 
-        klass.define_native_method("-", (self: RValue, args: RValue[]): RValue => {
-            if (Kernel.is_a(args[0], Numeric.klass)) {
+        klass.define_native_method("-", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            if (await Kernel.is_a(args[0], await Numeric.klass())) {
                 throw new NotImplementedError("Time#- with a numeric argument is not yet implemented");
             } else if (args[0].klass === self.klass) {
                 const millis = self.get_data<Time>().date.getMilliseconds() - args[0].get_data<Time>().date.getMilliseconds();
-                return Float.new(millis / 1000);
+                return await Float.new(millis / 1000);
             } else {
                 throw new TypeError(`can't convert ${args[0].klass.get_data<Class>().name} into exact number`);
             }
         });
 
-        klass.define_native_method("to_f", (self: RValue): RValue => {
-            return Float.new(self.get_data<Time>().date.getTime() / 1000);
+        klass.define_native_method("to_f", async (self: RValue): Promise<RValue> => {
+            return await Float.new(self.get_data<Time>().date.getTime() / 1000);
         });
     });
 };

@@ -26,27 +26,27 @@ describe("Arguments", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(RubyArray.klass);
+        expect(result.klass).toBe(await RubyArray.klass());
 
         const elements = result.get_data<RubyArray>().elements;
         expect(elements.length).toEqual(2);
 
-        expect(elements[0].klass).toBe(RubyArray.klass);
+        expect(elements[0].klass).toBe(await RubyArray.klass());
         const splat_args = elements[0].get_data<RubyArray>();
         expect(splat_args.elements.length).toEqual(2);
 
-        expect(splat_args.elements[0].klass).toBe(String.klass);
+        expect(splat_args.elements[0].klass).toBe(await String.klass());
         expect(splat_args.elements[0].get_data<string>()).toEqual("arg1");
-        expect(splat_args.elements[1].klass).toBe(String.klass);
+        expect(splat_args.elements[1].klass).toBe(await String.klass());
         expect(splat_args.elements[1].get_data<string>()).toEqual("arg2");
 
-        expect(elements[1].klass).toBe(Hash.klass);
+        expect(elements[1].klass).toBe(await Hash.klass());
         const kwsplat_args = elements[1].get_data<Hash>();
         expect(kwsplat_args.length).toEqual(2);
 
-        expect(kwsplat_args.get(Runtime.intern("arg3")).klass).toBe(String.klass);
-        expect(kwsplat_args.get(Runtime.intern("arg3")).get_data<string>()).toEqual("arg3");
-        expect(kwsplat_args.get(Runtime.intern("arg4")).klass).toBe(String.klass);
-        expect(kwsplat_args.get(Runtime.intern("arg4")).get_data<string>()).toEqual("arg4");
+        expect((await kwsplat_args.get(await Runtime.intern("arg3"))).klass).toBe(await String.klass());
+        expect((await kwsplat_args.get(await Runtime.intern("arg3"))).get_data<string>()).toEqual("arg3");
+        expect((await kwsplat_args.get(await Runtime.intern("arg4"))).klass).toBe(await String.klass());
+        expect((await kwsplat_args.get(await Runtime.intern("arg4"))).get_data<string>()).toEqual("arg4");
     });
 });

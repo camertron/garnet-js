@@ -11,7 +11,7 @@ export default class SetClassVariable extends Instruction {
         this.name = name;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         let klass = context.frame!.self;
         if (klass.klass !== ClassClass) klass = klass.klass;
         klass.iv_set(this.name, context.pop()!);

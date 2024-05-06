@@ -7,31 +7,31 @@ import Instruction from "../instruction";
 // it was already an Array, to avoid mutating it when concatenating.
 //
 export default class ConcatArray extends Instruction {
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const [left, right] = context.popn(2);
-        const result = RubyArray.new();
+        const result = await RubyArray.new();
 
-        this.coerce_and_add(left, result);
-        this.coerce_and_add(right, result);
+        await this.coerce_and_add(left, result);
+        await this.coerce_and_add(right, result);
 
         context.push(result);
 
         return null;
     }
 
-    private coerce_and_add(from: RValue, to: RValue) {
+    private async coerce_and_add(from: RValue, to: RValue) {
         const to_elements = to.get_data<RubyArray>().elements;
 
         switch (from.klass) {
-            case RubyArray.klass:
+            case await RubyArray.klass():
                 to_elements.push(...from.get_data<RubyArray>().elements);
                 break;
 
             default:
-                if (Object.respond_to(from, "to_a")) {
-                    const arr = Object.send(from, "to_a");
+                if (await Object.respond_to(from, "to_a")) {
+                    const arr = await Object.send(from, "to_a");
 
-                    if (arr.klass === RubyArray.klass) {
+                    if (arr.klass === await RubyArray.klass()) {
                         to_elements.push(...arr.get_data<RubyArray>().elements);
                     } else {
                         const class_name = from.klass.get_data<Class>().name;

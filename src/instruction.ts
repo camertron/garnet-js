@@ -11,7 +11,7 @@ export type ValueType = {
 
 // Abstract base instruction.
 export default abstract class Instruction {
-    static to_ruby(object: ValueType): RValue {
+    static async to_ruby(object: ValueType): Promise<RValue> {
         switch (object.type) {
             case "String":
                 return String.new(object.value as string);
@@ -20,7 +20,7 @@ export default abstract class Instruction {
             case "Integer":
                 return Integer.new(object.value as number);
             case "Float":
-                return Float.new(object.value as number);
+                return await Float.new(object.value as number);
             case "TrueClass":
             case "FalseClass":
                 return object.value as boolean ? Qtrue : Qfalse;
@@ -33,7 +33,7 @@ export default abstract class Instruction {
         }
     }
 
-    abstract call(context: ExecutionContext): ExecutionResult;
+    abstract call(context: ExecutionContext): Promise<ExecutionResult>;
 
     // Whether or not this instruction is a branch instruction.
     does_branch(): boolean {

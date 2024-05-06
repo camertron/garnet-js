@@ -1,5 +1,5 @@
 import { BlockCallData, CallData, CallDataFlag, MethodCallData } from "./call_data";
-import { ArgumentError, LocalJumpError, NativeError, RubyError } from "./errors";
+import { ArgumentError, NativeError, RubyError } from "./errors";
 import { BlockFrame, ClassFrame, EnsureFrame, Frame, MethodFrame, RescueFrame, TopFrame } from "./frame";
 import Instruction from "./instruction";
 import { CatchBreak, CatchEnsure, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
@@ -13,7 +13,6 @@ import { RubyArray } from "./runtime/array";
 import { Proc } from "./runtime/proc";
 import { ParameterMetadata } from "./runtime/parameter-meta";
 import { LexicalScope } from "./compiler";
-import Dup from "./insns/dup";
 
 export type ExecutionResult = JumpResult | LeaveResult | null;
 
@@ -99,18 +98,26 @@ export class ExecutionContext {
     constructor() {
         this.stack = [];
         this.top_locals = new Map();
+    }
 
+    static async create(): Promise<ExecutionContext> {
+        const ec = new ExecutionContext();
+        await ec.init();
+        return ec;
+    }
+
+    async init() {
         this.globals = {
-            '$:': RubyArray.new(),  // load path
-            '$"': RubyArray.new(),  // loaded features
-            '$,': Qnil,             // field separator for print and Array#join
-            '$/': String.new("\n"), // line separator
+            '$:': await RubyArray.new(),  // load path
+            '$"': await RubyArray.new(),  // loaded features
+            '$,': Qnil,                   // field separator for print and Array#join
+            '$/': await String.new("\n"), // line separator
             '$stdout': STDOUT,
             '$stderr': STDERR,
         };
 
         // The load path global is a "special" array with this singleton method (maybe others?)
-        this.globals['$:'].get_singleton_class().get_data<Class>().tap((klass: Class) => {
+        await this.globals['$:'].get_singleton_class().get_data<Class>().tap(async (klass: Class) => {
             // This is used to look up "features," i.e. native extensions that are part of the
             // Ruby stdlib. I'm not sure how to handle this sort of thing right now, so let's
             // just return nil ¯\_(ツ)_/¯
@@ -123,8 +130,8 @@ export class ExecutionContext {
         this.globals['$LOAD_PATH'] = this.globals['$:'];
     }
 
-    push_onto_load_path(path: string) {
-        this.globals["$:"].get_data<RubyArray>().elements.push(String.new(path));
+    async push_onto_load_path(path: string) {
+        this.globals["$:"].get_data<RubyArray>().elements.push(await String.new(path));
     }
 
     // This returns the instruction sequence object that is currently being
@@ -142,7 +149,7 @@ export class ExecutionContext {
         }
     }
 
-    run_frame(frame: Frame, cb?: () => Label | null): RValue {
+    async run_frame(frame: Frame, cb?: () => Promise<Label | null>): Promise<RValue> {
         // Set the current frame to the given value.
         let previous = this.frame;
         this.frame = frame;
@@ -159,16 +166,16 @@ export class ExecutionContext {
         this.stack.push(...locals);
 
         // Yield so that some frame-specific setup can be done.
-        const start_label = cb ? cb() : null;
+        const start_label = cb ? await cb() : null;
 
         if (start_label) {
             frame.pc = frame.iseq.compiled_insns.indexOf(start_label);
         }
 
-        return this.execute_frame(frame, previous);
+        return await this.execute_frame(frame, previous);
     }
 
-    execute_frame(frame: Frame, previous: Frame | null): RValue {
+    async execute_frame(frame: Frame, previous: Frame | null): Promise<RValue> {
         this.frame = frame;
 
         // Finally we can execute the instructions one at a time. If they return
@@ -195,12 +202,12 @@ export class ExecutionContext {
                     let result: ExecutionResult | RValue = null;
 
                     try {
-                        result = (insn as Instruction).call(this);
+                        result = await (insn as Instruction).call(this);
 
                         // @TODO: remove me
                         // @ts-ignore
                         // for (const elem of this.stack) {
-                        //     if (elem.rval === undefined) {
+                        //     if (!elem.rval) {
                         //         debugger;
                         //     }
                         // }
@@ -261,12 +268,12 @@ export class ExecutionContext {
                                 if (error instanceof RValue) {
                                     error_rval = error;
                                 } else {
-                                    error_rval = error.to_rvalue();
+                                    error_rval = await error.to_rvalue();
                                 }
 
                                 if (!catch_entry) {
                                     if (ensure_entry) {
-                                        this.run_ensure_frame(ensure_entry.iseq!, frame, error_rval);
+                                        await this.run_ensure_frame(ensure_entry.iseq!, frame, error_rval);
                                     }
 
                                     // uncaught exception
@@ -278,10 +285,10 @@ export class ExecutionContext {
                                 this.frame = frame;
 
                                 frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.cont_label);
-                                result = this.run_rescue_frame(catch_entry.iseq!, frame, error_rval);
+                                result = await this.run_rescue_frame(catch_entry.iseq!, frame, error_rval);
 
                                 if (ensure_entry) {
-                                    this.run_ensure_frame(ensure_entry.iseq!, frame, Qnil);
+                                    await this.run_ensure_frame(ensure_entry.iseq!, frame, Qnil);
                                 }
 
                                 this.stack.push(new RValuePointer(result));
@@ -340,10 +347,10 @@ export class ExecutionContext {
         return backtrace;
     }
 
-    create_backtrace_rvalue(): RValue {
+    async create_backtrace_rvalue(): Promise<RValue> {
         const backtrace = this.create_backtrace();
-        const lines = backtrace.map(line => String.new(line));
-        return RubyArray.new(lines);
+        const lines = await Promise.all(backtrace.map(line => String.new(line)));
+        return await RubyArray.new(lines);
     }
 
     static print_backtrace(e: any) {
@@ -357,9 +364,9 @@ export class ExecutionContext {
         }
     }
 
-    static print_backtrace_rval(rval: RValue) {
-        const backtrace = Object.send(rval, "backtrace").get_data<RubyArray>().elements;
-        const message = Object.send(rval, "message").get_data<string>();
+    static async print_backtrace_rval(rval: RValue) {
+        const backtrace = (await Object.send(rval, "backtrace")).get_data<RubyArray>().elements;
+        const message = (await Object.send(rval, "message")).get_data<string>();
         const stdout = STDOUT.get_data<IO>();
 
         stdout.puts(`${backtrace[0].get_data<string>()}: ${message} (${rval.klass.get_data<Class>().full_name})`);
@@ -404,7 +411,23 @@ export class ExecutionContext {
       return current;
     }
 
-    run_top_frame(iseq: InstructionSequence, stack_index?: number): RValue {
+    topmost_method_frame_matching_current_lexical_scope(): MethodFrame | null {
+        const lexical_scope = this.frame!.iseq.lexical_scope;
+        let current_frame = this.frame;
+        let topmost_matching: MethodFrame | null = null;
+
+        while (current_frame) {
+            if (current_frame instanceof MethodFrame && current_frame.iseq.lexical_scope.id === lexical_scope.id) {
+                topmost_matching = current_frame;
+            }
+
+            current_frame = current_frame.parent;
+        }
+
+        return topmost_matching;
+    }
+
+    async run_top_frame(iseq: InstructionSequence, stack_index?: number): Promise<RValue> {
         const new_top_frame = new TopFrame(iseq, stack_index);
         const result = this.run_frame(new_top_frame, () => {
             // @TODO: only set items on this.top_locals if they have been defined
@@ -414,23 +437,23 @@ export class ExecutionContext {
             //     }
             // }
 
-            return null;
+            return Promise.resolve(null);
         });
 
         return result;
     }
 
     // this is also used to call lambdas
-    run_block_frame(call_data: BlockCallData, calling_convention: CallingConvention, iseq: InstructionSequence, binding: Binding, args: RValue[], kwargs?: Hash, owner?: Module, frame_callback?: (frame: BlockFrame) => void): RValue {
+    async run_block_frame(call_data: BlockCallData, calling_convention: CallingConvention, iseq: InstructionSequence, binding: Binding, args: RValue[], kwargs?: Hash, block?: RValue, owner?: Module, frame_callback?: (frame: BlockFrame) => void): Promise<RValue> {
         const original_stack = this.stack;
 
         try {
-            return this.with_stack(binding.stack, () => {
-                const block_frame = new BlockFrame(call_data, calling_convention,iseq, binding, original_stack, args, kwargs, owner);
+            return await this.with_stack(binding.stack, async () => {
+                const block_frame = new BlockFrame(call_data, calling_convention,iseq, binding, original_stack, args, kwargs, block, owner);
                 frame_callback?.(block_frame);
 
-                return this.run_frame(block_frame, () => {
-                    return this.setup_arguments(call_data, calling_convention, iseq, args, kwargs, undefined);
+                return this.run_frame(block_frame, async () => {
+                    return await this.setup_arguments(call_data, calling_convention, iseq, args, kwargs, block);
                 });
             });
         } catch (e) {
@@ -442,7 +465,7 @@ export class ExecutionContext {
         }
     }
 
-    with_stack(stack: RValuePointer[], cb: () => RValue): RValue {
+    async with_stack(stack: RValuePointer[], cb: () => Promise<RValue>): Promise<RValue> {
         const old_stack = this.stack;
 
         // Copy the stack here so block-owned locals aren't shared by separate
@@ -452,17 +475,17 @@ export class ExecutionContext {
         this.stack = [...stack];
 
         try {
-            return cb();
+            return await cb();
         } finally {
             this.stack = old_stack;
         }
     }
 
-    run_class_frame(iseq: InstructionSequence, klass: RValue, nesting?: RValue[]): RValue {
-        return this.run_frame(new ClassFrame(iseq, this.frame!, this.stack.length, klass, nesting));
+    async run_class_frame(iseq: InstructionSequence, klass: RValue, nesting?: RValue[]): Promise<RValue> {
+        return await this.run_frame(new ClassFrame(iseq, this.frame!, this.stack.length, klass, nesting));
     }
 
-    run_method_frame(call_data: MethodCallData, nesting: RValue[], iseq: InstructionSequence, self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, owner?: Module): RValue {
+    async run_method_frame(call_data: MethodCallData, nesting: RValue[], iseq: InstructionSequence, self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, owner?: Module): Promise<RValue> {
         const method_frame = new MethodFrame(
             iseq,
             nesting,
@@ -477,7 +500,7 @@ export class ExecutionContext {
         );
 
         try {
-            const return_value = this.run_frame(method_frame, () => {
+            const return_value = await this.run_frame(method_frame, () => {
                 return this.setup_arguments(call_data, CallingConvention.METHOD_LAMBDA, iseq, args, kwargs, block);
             });
 
@@ -487,7 +510,7 @@ export class ExecutionContext {
             const ensure_entry = this.find_catch_entry(method_frame, CatchEnsure);
 
             if (ensure_entry) {
-                this.run_ensure_frame(ensure_entry.iseq!, method_frame, Qnil);
+                await this.run_ensure_frame(ensure_entry.iseq!, method_frame, Qnil);
             }
 
             this.stack.splice(method_frame.stack_index);
@@ -506,17 +529,17 @@ export class ExecutionContext {
         }
     }
 
-    run_rescue_frame(iseq: InstructionSequence, frame: Frame, error: RValue): RValue {
-        return this.run_frame(new RescueFrame(iseq, frame, this.stack.length), () => {
+    async run_rescue_frame(iseq: InstructionSequence, frame: Frame, error: RValue): Promise<RValue> {
+        return await this.run_frame(new RescueFrame(iseq, frame, this.stack.length), () => {
             this.local_set(0, 0, error);
-            return null
+            return Promise.resolve(null);
         });
     }
 
-    run_ensure_frame(iseq: InstructionSequence, frame: Frame, error: RValue): RValue {
-        return this.run_frame(new EnsureFrame(iseq, frame, this.stack.length), () => {
+    async run_ensure_frame(iseq: InstructionSequence, frame: Frame, error: RValue): Promise<RValue> {
+        return await this.run_frame(new EnsureFrame(iseq, frame, this.stack.length), () => {
             this.local_set(0, 0, error);
-            return null
+            return Promise.resolve(null);
         });
     }
 
@@ -565,7 +588,7 @@ export class ExecutionContext {
         }
     }
 
-    private setup_arguments(call_data: CallData, calling_convention: CallingConvention, iseq: InstructionSequence, args: RValue[], kwargs?: Hash, block?: RValue | null): Label | null {
+    private async setup_arguments(call_data: CallData, calling_convention: CallingConvention, iseq: InstructionSequence, args: RValue[], kwargs?: Hash, block?: RValue | null): Promise<Label | null> {
         let locals = [...args];
         let local_index = this.inc_local_index(-1, iseq);
         let start_label: Label | null = null;
@@ -574,7 +597,7 @@ export class ExecutionContext {
             // splatted array is always the last element
             const splat_arr = locals[call_data.argc - 1];
 
-            if (splat_arr && splat_arr.klass === RubyArray.klass) {
+            if (splat_arr && splat_arr.klass === await RubyArray.klass()) {
                 locals.splice(call_data.argc - 1, 1, ...splat_arr.get_data<RubyArray>().elements);
             }
         }
@@ -585,7 +608,7 @@ export class ExecutionContext {
         }
 
         if (!block && call_data && call_data.has_flag(CallDataFlag.ARGS_BLOCKARG)) {
-            if (locals.length > 0 && locals[locals.length - 1].klass === Proc.klass) {
+            if (locals.length > 0 && locals[locals.length - 1].klass === await Proc.klass()) {
                 block = locals.pop();
             } else {
                 // this code path should not be possible, raise an error?
@@ -599,7 +622,7 @@ export class ExecutionContext {
         // Apparently blocks and procs destructure one level of their args automatically.
         // Eg. {}.map { |a, b| ... } automatically destructures [a, b] while {}.map { |a| ... } does not,
         // and instead passes a two-element array to the block.
-        if (calling_convention === CallingConvention.BLOCK_PROC && lead_num > locals.length && locals[0]?.klass === RubyArray.klass) {
+        if (calling_convention === CallingConvention.BLOCK_PROC && lead_num > locals.length && locals[0]?.klass === await RubyArray.klass()) {
             const elements = [...locals[0].get_data<RubyArray>().elements];
 
             if (elements.length <= lead_num) {
@@ -658,10 +681,10 @@ export class ExecutionContext {
         if (iseq.argument_options.rest_start != null) {
             if (iseq.argument_options.post_start != null) {
                 const length = locals.length - (iseq.argument_options.post_num || 0);
-                this.local_set(local_index, 0, RubyArray.new(locals.splice(0, length)));
+                this.local_set(local_index, 0, await RubyArray.new(locals.splice(0, length)));
                 // locals = locals.slice(length);
             } else {
-                this.local_set(local_index, 0, RubyArray.new([...locals]))
+                this.local_set(local_index, 0, await RubyArray.new([...locals]))
                 locals.length = 0;
             }
 
@@ -680,12 +703,12 @@ export class ExecutionContext {
         // keyword arguments have been passed as the last argument in the
         // positional args array (likely forwarded via ...).
         if (iseq.argument_options.keyword_bits_index != null && !call_data.has_flag(CallDataFlag.KWARG) && !call_data.has_flag(CallDataFlag.KW_SPLAT)) {
-            if (locals.length > 0 && locals[locals.length - 1].klass === Hash.klass) {
+            if (locals.length > 0 && locals[locals.length - 1].klass === await Hash.klass()) {
                 const kwargs_hash = locals.pop()!;
                 kwargs ||= new Hash();
 
-                kwargs_hash.get_data<Hash>().each((k, v) => {
-                    kwargs!.set(k, v);
+                await kwargs_hash.get_data<Hash>().each(async (k, v) => {
+                    await kwargs!.set(k, v);
                 });
 
                 // Since locals is a copy of args, the original args array will
@@ -709,14 +732,16 @@ export class ExecutionContext {
 
         if (keyword_option) {
             // First, set up the keyword bits array.
-            const keyword_bits = keyword_option.map((keyword) => !!kwargs && kwargs.has_symbol(keyword[0]));
+            const keyword_bits = await Promise.all(
+                keyword_option.map(async (keyword) => !!kwargs && await kwargs.has_symbol(keyword[0]))
+            );
 
             for (let i = 0; i < iseq.local_table.locals.length; i ++) {
                 const local = iseq.local_table.locals[i];
 
                 // If this is the keyword bits local, then set it appropriately.
                 if (local.name === "keyword_bits") {
-                    const keyword_bits_rval = RubyArray.new(keyword_bits.map((bit) => bit ? Qtrue : Qfalse));
+                    const keyword_bits_rval = await RubyArray.new(keyword_bits.map((bit) => bit ? Qtrue : Qfalse));
                     this.local_set(i, 0, keyword_bits_rval);
                     continue;
                 }
@@ -743,10 +768,10 @@ export class ExecutionContext {
 
                 if (config[1] === null) {
                     // required keyword
-                    if (kwargs && kwargs.has_symbol(name)) {
+                    if (kwargs && await kwargs.has_symbol(name)) {
                         this.local_set(i, 0, kwargs.get_by_symbol(name)!);
                     } else {
-                        throw new ArgumentError(`missing keyword: ${Object.send(Runtime.intern(name), "inspect").get_data<string>()}`);
+                        throw new ArgumentError(`missing keyword: ${(await Object.send(await Runtime.intern(name), "inspect")).get_data<string>()}`);
                     }
                 } else {
                     // optional keyword with expression default value
@@ -766,9 +791,9 @@ export class ExecutionContext {
 
                 // avoid mutating original args array
                 const old_args = this.local_get(lookup.index, lookup.depth).get_data<RubyArray>().elements;
-                this.local_set(lookup.index, lookup.depth, RubyArray.new([...old_args, Hash.from_hash(kwargs_hash)]));
+                this.local_set(lookup.index, lookup.depth, await RubyArray.new([...old_args, await Hash.from_hash(kwargs_hash)]));
             } else {
-                this.local_set(local_index, 0, kwargs ? Hash.from_hash(kwargs) : Hash.new());
+                this.local_set(local_index, 0, kwargs ? await Hash.from_hash(kwargs) : await Hash.new());
                 local_index = this.inc_local_index(local_index, iseq);
             }
         }
@@ -826,11 +851,11 @@ export class ExecutionContext {
 
     get_binding(): Binding {
         return new Binding(
-            this.frame!.self,
-            this.frame!.nesting,
+            this.frame?.self || Qnil,
+            this.frame?.nesting || [],
             [...this.stack],
-            this.frame!,
-            this.stack_len
+            this.stack_len,
+            this.frame
         );
     }
 }

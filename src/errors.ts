@@ -1,29 +1,28 @@
-import { BacktraceLocation } from "./lib/thread";
 import { Class, Module, ObjectClass, Qnil, Qtrue, RValue, Runtime } from "./runtime";
 import { Object } from "./runtime/object";
 import { String } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
 
 export const init = () => {
-    const ExceptionClass = Runtime.define_class("Exception", ObjectClass, (klass: Class) => {
+    const ExceptionClass = Runtime.define_class("Exception", ObjectClass, async (klass: Class) => {
         klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
             self.data = new UserDefinedException(self.klass, args[0] || Qnil);
             return Qnil;
         });
 
-        klass.define_native_method("message", (self: RValue): RValue => {
+        klass.define_native_method("message", async (self: RValue): Promise<RValue> => {
             const message = self.get_data<IRubyError>().message;
 
             if (message instanceof RValue) {
                 return message;
             } else {
-                return String.new(message);
+                return await String.new(message);
             }
         });
 
-        klass.alias_method("to_s", "message");
+        await klass.alias_method("to_s", "message");
 
-        klass.define_native_method("full_message", (self: RValue): RValue => {
+        klass.define_native_method("full_message", async (self: RValue): Promise<RValue> => {
             const error = self.get_data<IRubyError>();
             const message = error.message instanceof RValue ? error.message.get_data<string>() : error.message;
             const lines = [`${error.backtrace[0]}: ${message} (${self.klass.get_data<Class>().name})`];
@@ -32,26 +31,26 @@ export const init = () => {
                 lines.push(`    ${error.backtrace[i]}`);
             }
 
-            return String.new(lines.join("\n"));
+            return await String.new(lines.join("\n"));
         });
 
-        klass.define_native_method("set_backtrace", (self: RValue, args: RValue[]): RValue => {
-            Runtime.assert_type(args[0], RubyArray.klass);
+        klass.define_native_method("set_backtrace", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            Runtime.assert_type(args[0], await RubyArray.klass());
             const backtrace = [];
 
             for (const element of args[0].get_data<RubyArray>().elements) {
-                Runtime.assert_type(element, String.klass);
+                Runtime.assert_type(element, await String.klass());
                 backtrace.push(element.get_data<string>());
             }
 
             const error = self.get_data<IRubyError>();
             error.backtrace = backtrace;
-            error.backtrace_rval = RubyArray.new([...args[0].get_data<RubyArray>().elements]);
+            error.backtrace_rval = await RubyArray.new([...args[0].get_data<RubyArray>().elements]);
 
             return Qnil;
         });
 
-        klass.define_native_method("backtrace", (self: RValue): RValue => {
+        klass.define_native_method("backtrace", async (self: RValue): Promise<RValue> => {
             const error = self.get_data<IRubyError>();
 
             if (error.backtrace_rval === Qnil) {
@@ -62,10 +61,10 @@ export const init = () => {
                 const backtrace = [];
 
                 for (const element of error.backtrace) {
-                    backtrace.push(String.new(element));
+                    backtrace.push(await String.new(element));
                 }
 
-                error.backtrace_rval = RubyArray.new(backtrace);
+                error.backtrace_rval = await RubyArray.new(backtrace);
             }
 
             return error.backtrace_rval;
@@ -130,12 +129,12 @@ export abstract class RubyError extends Error {
     public backtrace_locations: RValue[];
     public backtrace_locations_rval: RValue = Qnil;
 
-    to_rvalue(): RValue {
-        this.rvalue ||= new RValue(this.ruby_class, this);
+    async to_rvalue(): Promise<RValue> {
+        this.rvalue ||= new RValue(await this.ruby_class(), this);
         return this.rvalue;
     }
 
-    abstract get ruby_class(): RValue;
+    abstract ruby_class(): Promise<RValue>;
 }
 
 export class UserDefinedException {
@@ -151,8 +150,8 @@ export class UserDefinedException {
         this.message = message;
     }
 
-    get ruby_class(): RValue {
-        return this.klass;
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(this.klass);
     }
 }
 
@@ -166,8 +165,8 @@ export class StandardError extends RubyError {
         this.name = "StandardError";
     }
 
-    get ruby_class(): RValue {
-        return StandardError.ruby_class ||= Object.find_constant("StandardError")!;
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(StandardError.ruby_class ||= (await Object.find_constant("StandardError"))!);
     }
 }
 
@@ -179,8 +178,8 @@ export class NotImplementedError extends RubyError {
         this.name = "NotImplementedError";
     }
 
-    get ruby_class(): RValue {
-        return NotImplementedError.ruby_class ||= Object.find_constant("NotImplementedError")!;
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(NotImplementedError.ruby_class ||= (await Object.find_constant("NotImplementedError"))!);
     }
 }
 
@@ -192,8 +191,8 @@ export class NameError extends RubyError {
         this.name = "NameError";
     }
 
-    get ruby_class(): RValue {
-        return NameError.ruby_class ||= Object.find_constant("NameError")!;
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(NameError.ruby_class ||= (await Object.find_constant("NameError"))!);
     }
 }
 
@@ -205,8 +204,8 @@ export class LocalJumpError extends RubyError {
         this.name = "LocalJumpError";
     }
 
-    get ruby_class(): RValue {
-        return LocalJumpError.ruby_class ||= Object.find_constant("LocalJumpError")!;
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(LocalJumpError.ruby_class ||= (await Object.find_constant("LocalJumpError"))!);
     }
 }
 
@@ -218,8 +217,8 @@ export class NoMethodError extends RubyError {
         this.name = "NoMethodError";
     }
 
-    get ruby_class(): RValue {
-        return NoMethodError.ruby_class ||= Object.find_constant("NoMethodError")!;
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(NoMethodError.ruby_class ||= (await Object.find_constant("NoMethodError"))!);
     }
 }
 
@@ -231,8 +230,8 @@ export class ArgumentError extends RubyError {
         this.name = "ArgumentErrorClass";
     }
 
-    get ruby_class(): RValue {
-        return ArgumentError.ruby_class ||= Object.find_constant("ArgumentError")!;
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(ArgumentError.ruby_class ||= (await Object.find_constant("ArgumentError"))!);
     }
 }
 
@@ -244,8 +243,8 @@ export class TypeError extends RubyError {
         this.name = "TypeError";
     }
 
-    get ruby_class(): RValue {
-        return TypeError.ruby_class ||= Object.find_constant("TypeError")!;
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(TypeError.ruby_class ||= (await Object.find_constant("TypeError"))!);
     }
 }
 
@@ -257,8 +256,8 @@ export class LoadError extends RubyError {
         this.name = "LoadError";
     }
 
-    get ruby_class(): RValue {
-        return LoadError.ruby_class ||= Object.find_constant("LoadError")!;
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(LoadError.ruby_class ||= (await Object.find_constant("LoadError"))!);
     }
 }
 
@@ -270,8 +269,8 @@ export class RuntimeError extends RubyError {
         this.name = "RuntimeError";
     }
 
-    get ruby_class(): RValue {
-        return RuntimeError.ruby_class ||= Object.find_constant("RuntimeError")!;
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(RuntimeError.ruby_class ||= (await Object.find_constant("RuntimeError"))!);
     }
 }
 
@@ -283,8 +282,8 @@ export class IndexError extends RubyError {
         this.name = "IndexError";
     }
 
-    get ruby_class(): RValue {
-        return IndexError.ruby_class ||= Object.find_constant("IndexError")!;
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(IndexError.ruby_class ||= (await Object.find_constant("IndexError"))!);
     }
 }
 
@@ -296,8 +295,8 @@ export class StopIteration extends RubyError {
         this.name = "StopIteration";
     }
 
-    get ruby_class(): RValue {
-        return StopIteration.ruby_class ||= Object.find_constant("StopIteration")!;
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(StopIteration.ruby_class ||= (await Object.find_constant("StopIteration"))!);
     }
 }
 
@@ -309,8 +308,8 @@ export class RangeError extends RubyError {
         this.name = "RangeError";
     }
 
-    get ruby_class(): RValue {
-        return RangeError.ruby_class ||= Object.find_constant("RangeError")!;
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(RangeError.ruby_class ||= (await Object.find_constant("RangeError"))!);
     }
 }
 
@@ -322,8 +321,8 @@ export class KeyError extends RubyError {
         this.name = "KeyError";
     }
 
-    get ruby_class(): RValue {
-        return KeyError.ruby_class ||= Object.find_constant("KeyError")!;
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(KeyError.ruby_class ||= (await Object.find_constant("KeyError"))!);
     }
 }
 
@@ -335,8 +334,8 @@ export class FrozenError extends RubyError {
         this.name = "FrozenError";
     }
 
-    get ruby_class(): RValue {
-        return FrozenError.ruby_class ||= Object.find_constant("FrozenError")!;
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(FrozenError.ruby_class ||= (await Object.find_constant("FrozenError"))!);
     }
 }
 
@@ -348,8 +347,8 @@ export class SyntaxError extends RubyError {
         this.name = "SyntaxError";
     }
 
-    get ruby_class(): RValue {
-        return SyntaxError.ruby_class ||= Object.find_constant("SyntaxError")!;
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(SyntaxError.ruby_class ||= (await Object.find_constant("SyntaxError"))!);
     }
 }
 
@@ -361,8 +360,8 @@ export class ErrnoENOENT extends RubyError {
         this.name = "ENOENT";
     }
 
-    get ruby_class() {
-        return ErrnoENOENT.ruby_class ||= Object.find_constant("Errno")!.get_data<Module>().find_constant("ENOENT")!;
+    async ruby_class() {
+        return ErrnoENOENT.ruby_class ||= (await (await Object.find_constant("Errno"))!.get_data<Module>().find_constant("ENOENT"))!;
     }
 }
 
@@ -374,8 +373,8 @@ export class ErrnoEINVAL extends RubyError {
         this.name = "EINVAL";
     }
 
-    get ruby_class() {
-        return ErrnoEINVAL.ruby_class ||= Object.find_constant("Errno")!.get_data<Module>().find_constant("EINVAL")!;
+    async ruby_class() {
+        return ErrnoEINVAL.ruby_class ||= (await (await Object.find_constant("Errno"))!.get_data<Module>().find_constant("EINVAL"))!;
     }
 }
 
@@ -391,8 +390,8 @@ export class SystemExit extends RubyError {
         this.name = "SystemExit";
     }
 
-    get ruby_class() {
-        return SystemExit.ruby_class ||= Object.find_constant("SystemExit")!;
+    async ruby_class() {
+        return SystemExit.ruby_class ||= (await Object.find_constant("SystemExit"))!;
     }
 }
 
@@ -404,8 +403,8 @@ export class EncodingCompatibilityError extends RubyError {
         this.name = "Encoding::CompatibilityError";
     }
 
-    get ruby_class(): RValue {
-        return EncodingCompatibilityError.ruby_class ||= Object.find_constant("Encoding")!.get_data<Module>().find_constant("CompatibilityError")!;
+    async ruby_class() {
+        return (EncodingCompatibilityError.ruby_class ||= (await (await Object.find_constant("Encoding"))!.get_data<Module>().find_constant("CompatibilityError")))!;
     }
 }
 
@@ -417,8 +416,8 @@ export class EncodingConverterNotFoundError extends RubyError {
         this.name = "Encoding::ConverterNotFoundError";
     }
 
-    get ruby_class(): RValue {
-        return EncodingConverterNotFoundError.ruby_class ||= Object.find_constant("Encoding")!.get_data<Module>().find_constant("ConverterNotFoundError")!;
+    async ruby_class() {
+        return EncodingConverterNotFoundError.ruby_class ||= (await (await Object.find_constant("Encoding"))!.get_data<Module>().find_constant("ConverterNotFoundError"))!;
     }
 }
 
@@ -430,8 +429,8 @@ export class ThreadError extends RubyError {
         this.name = "ThreadError";
     }
 
-    get ruby_class(): RValue {
-        return ThreadError.ruby_class ||= Object.find_constant("ThreadError")!;
+    async ruby_class(): Promise<RValue> {
+        return ThreadError.ruby_class ||= (await Object.find_constant("ThreadError"))!;
     }
 }
 
@@ -443,7 +442,7 @@ export class ZeroDivisionError extends RubyError {
         this.name = "ZeroDivisionError";
     }
 
-    get ruby_class(): RValue {
-        return ZeroDivisionError.ruby_class ||= Object.find_constant("ZeroDivisionError")!;
+    async ruby_class(): Promise<RValue> {
+        return ZeroDivisionError.ruby_class ||= (await Object.find_constant("ZeroDivisionError"))!;
     }
 }

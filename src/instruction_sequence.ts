@@ -52,7 +52,8 @@ import ToRegexp from "./insns/toregexp";
 import Instruction, { ValueType } from "./instruction";
 import { LocalTable, Lookup } from "./local_table";
 import { CompilerOptions } from "./compiler_options";
-import { RValue } from "./runtime";
+import { Module, ObjectClass, RValue } from "./runtime";
+import { Object } from "./runtime/object";
 import { String as RubyString } from "./runtime/string";
 import CheckKeyword from "./insns/checkkeyword";
 import SetClassVariable from "./insns/setclassvariable";
@@ -426,7 +427,15 @@ export class InstructionSequence {
     }
 
     putstring(str: string) {
-        this.push(new PutString(RubyString.new(str)));
+        this.push(new PutString(this.make_string(str)));
+    }
+
+    // utility function
+    make_string(str: string): RValue {
+        // we have to look the constant up this way because the compiler does not
+        // support async visitor methods
+        const string_class = ObjectClass.get_data<Module>().constants["String"];
+        return new RValue(string_class, str);
     }
 
     leave() {

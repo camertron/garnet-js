@@ -1,6 +1,6 @@
 import { IndexError, NameError, RuntimeError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Class, ObjectClass, Qnil, RValue, Runtime } from "../runtime";
+import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { String as RubyString } from "../runtime/string";
 import * as WASM from "../wasm";
 import { Integer } from "./integer";
@@ -104,72 +104,85 @@ export const init = async () => {
     onigmo = { exports: new OnigmoExportsWrapper(onigmo_instance.exports as unknown as OnigmoExports) };
 
     Runtime.define_class("Regexp", ObjectClass, (klass: Class) => {
-        klass.define_native_singleton_method("compile", (_self: RValue, args: RValue[]): RValue => {
+        klass.define_native_singleton_method("compile", async (_self: RValue, args: RValue[]): Promise<RValue> => {
             // @TODO: handle flags/options
-            return Regexp.new(Runtime.coerce_to_string(args[0]).get_data<string>(), ONIG_OPTION_NONE);
+            const pattern = await Runtime.coerce_to_string(args[0]);
+            return await Regexp.new(pattern.get_data<string>(), ONIG_OPTION_NONE);
         });
 
-        klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("initialize", async (self: RValue, args: RValue[]): Promise<RValue> => {
             // @TODO: handle flags/options
-            self.data = Regexp.compile(Runtime.coerce_to_string(args[0]).get_data<string>(), ONIG_OPTION_NONE);
+            const pattern = await Runtime.coerce_to_string(args[0]);
+            self.data = Regexp.compile(pattern.get_data<string>(), ONIG_OPTION_NONE);
             return Qnil;
         });
 
-        klass.define_native_method("=~", (self: RValue, args: RValue[]): RValue => {
-            const str = Runtime.coerce_to_string(args[0]);
+        klass.define_native_method("=~", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const str = await Runtime.coerce_to_string(args[0]);
             const str_data = str.get_data<string>();
             const regexp = self.get_data<Regexp>();
             const result = regexp.search(str_data);
 
             if (result) {
-                Regexp.set_svars(result);
+                await Regexp.set_svars(result);
                 return Integer.get(result.captures[0][0]);
             } else {
                 return Qnil;
             }
         });
 
-        klass.define_native_method("inspect", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("inspect", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const pattern = self.get_data<Regexp>().pattern;
-            return RubyString.new(`/${pattern}/`);
+            return await RubyString.new(`/${pattern}/`);
+        });
+
+        klass.define_native_method("match?", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            let pattern: Regexp = self.get_data<Regexp>();
+            const str = await Runtime.coerce_to_string(args[0]);
+
+            if (pattern.search(str.get_data<string>()) === null) {
+                return Qfalse;
+            }
+
+            return Qtrue;
         });
     });
 
     Runtime.define_class("MatchData", ObjectClass, (klass: Class) => {
-        klass.define_native_method("captures", (self: RValue): RValue => {
+        klass.define_native_method("captures", async (self: RValue): Promise<RValue> => {
             const match_data = self.get_data<MatchData>();
             const captures = [];
 
             for (let i = 1; i < match_data.captures.length; i ++) {
                 const [begin, end] = match_data.captures[i];
-                captures.push(RubyString.new(match_data.str.slice(begin, end)));
+                captures.push(await RubyString.new(match_data.str.slice(begin, end)));
             }
 
-            return RubyArray.new(captures);
+            return await RubyArray.new(captures);
         });
 
-        klass.define_native_method("begin", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("begin", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const match_data = self.get_data<MatchData>();
-            Runtime.assert_type(args[0], Integer.klass);
+            Runtime.assert_type(args[0], await Integer.klass());
             const index = args[0].get_data<number>();
-            return Integer.get(match_data.begin(index));
+            return await Integer.get(match_data.begin(index));
         });
 
-        klass.define_native_method("end", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("end", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const match_data = self.get_data<MatchData>();
-            Runtime.assert_type(args[0], Integer.klass);
+            Runtime.assert_type(args[0], await Integer.klass());
             const index = args[0].get_data<number>();
-            return Integer.get(match_data.end(index));
+            return await Integer.get(match_data.end(index));
         });
 
-        klass.define_native_method("match", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("match", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const match_data = self.get_data<MatchData>();
-            Runtime.assert_type(args[0], Integer.klass);
+            Runtime.assert_type(args[0], await Integer.klass());
             const index = args[0].get_data<number>();
             return RubyString.new(match_data.match(index));
         });
 
-        klass.define_native_method("inspect", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("inspect", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const match_data = self.get_data<MatchData>();
             const fragments = [`#<MatchData ${RubyString.inspect(match_data.match(0))}`];
 
@@ -177,7 +190,7 @@ export const init = async () => {
                 fragments.push(`${i}:${RubyString.inspect(match_data.match(i))}`);
             }
 
-            return RubyString.new(`${fragments.join(" ")}>`);
+            return await RubyString.new(`${fragments.join(" ")}>`);
         });
     });
 
@@ -463,8 +476,8 @@ export class MatchData {
 
     private static klass_: RValue;
 
-    static get klass(): RValue {
-        const klass = Object.find_constant("MatchData");
+    static async klass(): Promise<RValue> {
+        const klass = await Object.find_constant("MatchData");
 
         if (klass) {
             this.klass_ = klass;
@@ -484,9 +497,9 @@ export class MatchData {
         this.captures = captures;
     }
 
-    to_rval() {
+    async to_rval() {
         if (!this.rval) {
-            this.rval = new RValue(MatchData.klass, this);
+            this.rval = new RValue(await MatchData.klass(), this);
         }
 
         return this.rval;
@@ -521,8 +534,8 @@ export class MatchData {
 export class Regexp {
     private static klass_: RValue;
 
-    static get klass(): RValue {
-        const klass = Object.find_constant("Regexp");
+    static async klass(): Promise<RValue> {
+        const klass = await Object.find_constant("Regexp");
 
         if (klass) {
             this.klass_ = klass;
@@ -533,8 +546,8 @@ export class Regexp {
         return this.klass_;
     }
 
-    static new(pattern: string, flags: number): RValue {
-        return new RValue(this.klass, this.compile(pattern, flags));
+    static async new(pattern: string, flags: number): Promise<RValue> {
+        return new RValue(await this.klass(), this.compile(pattern, flags));
     }
 
     private static make_compile_info(flags: number): CompileInfoFields {
@@ -586,10 +599,10 @@ export class Regexp {
         return err_msg.to_string();
     }
 
-    static set_svars(match_data: MatchData) {
+    static async set_svars(match_data: MatchData) {
         const ec = ExecutionContext.current;
-        ec.frame_svar()!.svars["$~"] = match_data.to_rval();
-        ec.frame_svar()!.svars["$&"] = RubyString.new(match_data.match(0));
+        ec.frame_svar()!.svars["$~"] = await match_data.to_rval();
+        ec.frame_svar()!.svars["$&"] = await RubyString.new(match_data.match(0));
     }
 
     static build_flags(ignore_case: boolean = false, multi_line: boolean = false, extend: boolean = false): number {
@@ -637,7 +650,7 @@ export class Regexp {
         return result;
     }
 
-    scan(str: string, callback: (match_data: MatchData) => boolean): void {
+    async scan(str: string, callback: (match_data: MatchData) => Promise<boolean>) {
         const str_ptr = UTF16String.create(str);
         const region = new Region(onigmo.exports.onig_region_new());
         let last_pos = 0;
@@ -654,7 +667,7 @@ export class Regexp {
                 break;
             }
 
-            if (!callback(MatchData.from_region(str, region))) {
+            if (!(await callback(MatchData.from_region(str, region)))) {
                 break;
             }
 

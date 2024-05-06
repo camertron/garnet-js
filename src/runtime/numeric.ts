@@ -5,8 +5,8 @@ import { Object } from "../runtime/object";
 export class Numeric {
     private static klass_: RValue;
 
-    static get klass(): RValue {
-        const klass = Object.find_constant("Numeric");
+    static async klass(): Promise<RValue> {
+        const klass = await Object.find_constant("Numeric");
 
         if (klass) {
             this.klass_ = klass;
@@ -19,7 +19,7 @@ export class Numeric {
 }
 
 export const init = () => {
-    Runtime.define_class("Numeric", ObjectClass, (klass: Class) => {
-        klass.include(Object.find_constant("Comparable")!);
+    Runtime.define_class("Numeric", ObjectClass, async (klass: Class) => {
+        klass.include((await Object.find_constant("Comparable"))!);
     });
 }

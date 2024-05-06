@@ -10,7 +10,7 @@ export default class OptSetInlineCache extends Instruction {
         this.cache = cache;
     }
 
-    call(_context: ExecutionContext): ExecutionResult {
+    async call(_context: ExecutionContext): Promise<ExecutionResult> {
         // Since we're not actually populating inline caches in YARV, we don't need
         // to do anything in this instruction.
         return null;

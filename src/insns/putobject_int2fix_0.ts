@@ -3,8 +3,8 @@ import Instruction from "../instruction";
 import { Integer } from "../runtime/integer";
 
 export default class PutObjectInt2Fix0 extends Instruction {
-    call(context: ExecutionContext): ExecutionResult {
-        context.push(Integer.get(0));
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
+        context.push(await Integer.get(0));
         return null;
     }
 

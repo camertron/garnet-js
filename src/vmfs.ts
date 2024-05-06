@@ -10,8 +10,8 @@ interface IFileHandle {
     offset(): number;
     is_readable(): boolean;
     is_writable(): boolean;
-    read(length: number): Buffer;
-    write(bytes: Buffer): void;
+    read(length: number): Uint8Array;
+    write(bytes: Uint8Array): void;
     close(): void;
 }
 
@@ -46,10 +46,10 @@ abstract class FileSystem {
     abstract get separator(): string;
 
     // operations
-    abstract each_child_path(base_path: string, cb: (child_path: string) => void): void;
+    abstract each_child_path(base_path: string, cb: (child_path: string) => Promise<void>): void;
     abstract open(path: string): IFileHandle;
-    abstract read(path: string): Buffer;
-    abstract write(path: string, bytes: Buffer): void;
+    abstract read(path: string): Uint8Array;
+    abstract write(path: string, bytes: Uint8Array): void;
 
     normalize_path(path: string): string {
         const orig_segments = this.split_path(path);
@@ -118,11 +118,16 @@ const remove_leading_separators = (str: string, separator: string): string => {
     return str.replace(get_leading_separator_re(separator), "");
 };
 
+export class ENOENT extends Error {
+    public code = "ENOENT";
+    public errno = -2;
+}
+
 class VirtualFileSystem extends FileSystem {
     static ROOT_PATH: string = "/";
     static SEPARATOR: string = "/";
 
-    private files: Trie<string, Buffer>;
+    private files: Trie<string, Uint8Array>;
 
     constructor() {
         super();
@@ -177,10 +182,10 @@ class VirtualFileSystem extends FileSystem {
     }
 
     is_relative(path: string): boolean {
-        return path.startsWith(".");
+        return !path.startsWith(VirtualFileSystem.SEPARATOR);
     }
 
-    each_child_path(base_path: string, cb: (child_path: string) => void) {
+    each_child_path(base_path: string, cb: (child_path: string) => Promise<void>) {
         throw new Error("Method not implemented.");
     }
 
@@ -188,14 +193,19 @@ class VirtualFileSystem extends FileSystem {
         throw new Error("Method not implemented.");
     }
 
-    read(path: string): Buffer {
-        throw new Error("Method not implemented.");
+    read(path: string): Uint8Array {
+        const key = this.split_path(path);
+        if (this.files.has(key)) {
+            return this.files.get(key)!;
+        } else {
+            throw new ENOENT(`no such file or directory, open '${path}'`);
+        }
     }
 
-    write(path: string, bytes: Buffer): void {
+    write(path: string, bytes: Uint8Array): void {
         path = this.normalize_path(path);
-        const p = this.split_path(path);
-        this.files.set(p, bytes);
+        const key = this.split_path(path);
+        this.files.set(key, bytes);
     }
 }
 
@@ -259,9 +269,9 @@ class NodeFileSystem extends FileSystem {
         }
     }
 
-    each_child_path(base_path: string, cb: (child_path: string) => void) {
+    async each_child_path(base_path: string, cb: (child_path: string) => Promise<void>) {
         for (const file of fs.readdirSync(base_path)) {
-            cb(file);
+            await cb(file);
         }
     }
 
@@ -269,11 +279,11 @@ class NodeFileSystem extends FileSystem {
         throw new Error("Method not implemented.");
     }
 
-    read(path: string): Buffer {
+    read(path: string): Uint8Array {
         return fs.readFileSync(path);
     }
 
-    write(path: string, bytes: Buffer) {
+    write(path: string, bytes: Uint8Array) {
         throw new Error("Method not implemented.");
     }
 }

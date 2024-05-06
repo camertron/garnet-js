@@ -27,7 +27,7 @@ export default class Throw extends Instruction {
         this.type = type;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const state = this.type & THROW_STATE_MASK;
         const value = context.pop()!;
 
@@ -35,7 +35,7 @@ export default class Throw extends Instruction {
             case ThrowType.NONE:
                 if (value.klass == NilClass) {
                     // do nothing
-                } else if (Object.send(value, "is_a?", [Object.find_constant("Exception")!]).is_truthy()) {
+                } else if ((await Object.send(value, "is_a?", [(await Object.find_constant("Exception"))!])).is_truthy()) {
                     throw value;
                 } else {
                     throw new NotImplementedError("unexpected throw type and value combination");
@@ -44,23 +44,13 @@ export default class Throw extends Instruction {
                 break;
 
             case ThrowType.RETURN:
-                const lexical_scope = context.frame!.iseq.lexical_scope;
-                let current_frame = context.frame;
-                let topmost_frame_matching_lexical_scope;
+                const frame = context.topmost_method_frame_matching_current_lexical_scope();
 
-                while (current_frame) {
-                    if (current_frame.iseq.lexical_scope.id === lexical_scope.id) {
-                        topmost_frame_matching_lexical_scope = current_frame;
-                    }
-
-                    current_frame = current_frame.parent;
-                }
-
-                if (!topmost_frame_matching_lexical_scope) {
+                if (!frame) {
                     throw new LocalJumpError("unexpected return");
                 }
 
-                throw new ReturnError(value, topmost_frame_matching_lexical_scope);
+                throw new ReturnError(value, frame);
 
             case ThrowType.BREAK:
                 throw new BreakError(value);

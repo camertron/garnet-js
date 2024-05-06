@@ -2,7 +2,7 @@ import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
 export default class Dup extends Instruction {
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const value = context.pop()!;
         context.push(value);
         context.push(value);

@@ -161,8 +161,13 @@ export const load_module = async (locator: string): Promise<WebAssembly.Instance
 
     return WebAssembly.instantiate(module, config).then((inst) => {
         instance = inst;
-        // depending on the module, you might have to call start() instead
-        wasi.initialize(instance);
+
+        if (instance.exports['_start']) {
+            wasi.start(instance);
+        } else if (instance.exports['_initialize']) {
+            wasi.initialize(instance);
+        }
+
         return instance;
     });
 }

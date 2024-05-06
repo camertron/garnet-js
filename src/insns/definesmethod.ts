@@ -19,7 +19,7 @@ export default class DefineSMethod extends Instruction {
         this.lexical_scope = lexical_scope;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const mod = context.pop()!;
 
         context.define_method(

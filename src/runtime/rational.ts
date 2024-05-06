@@ -9,7 +9,7 @@ import { Object } from "./object";
 let inited = false;
 
 export class Rational {
-    static from_float(p1: number): RValue {
+    static async from_float(p1: number): Promise<RValue> {
         let n = 0, d = 1, s = 1;
         let z = 1;
 
@@ -78,10 +78,10 @@ export class Rational {
             throw new ZeroDivisionError("divided by 0");
         }
 
-        return new RValue(this.klass, new Rational(n, d, s < 0));
+        return new RValue(await this.klass(), new Rational(n, d, s < 0));
     }
 
-    static from_string(p1: string): RValue {
+    static async from_string(p1: string): Promise<RValue> {
         let n = 0, d = 1, s = 1;
         var v = 0, w = 0, x = 0, y = 1, z = 1;
 
@@ -141,7 +141,7 @@ export class Rational {
             throw new ZeroDivisionError("divided by 0");
         }
 
-        return new RValue(this.klass, new Rational(n, d, s < 0));
+        return new RValue(await this.klass(), new Rational(n, d, s < 0));
     }
 
     private static assign(n: string, s: number, p1: string): number {
@@ -156,8 +156,8 @@ export class Rational {
 
     private static klass_: RValue;
 
-    static get klass(): RValue {
-        const klass = Object.find_constant("Rational");
+    static async klass(): Promise<RValue> {
+        const klass = await Object.find_constant("Rational");
 
         if (klass) {
             this.klass_ = klass;
@@ -168,8 +168,8 @@ export class Rational {
         return this.klass_;
     }
 
-    static new(n: number, d: number): RValue {
-        return new RValue(this.klass, new Rational(Math.abs(n), Math.abs(d), (n < 0) !== (d < 0)));
+    static async new(n: number, d: number): Promise<RValue> {
+        return new RValue(await this.klass(), new Rational(Math.abs(n), Math.abs(d), (n < 0) !== (d < 0)));
     }
 
     public n: number;
@@ -201,25 +201,25 @@ export class Rational {
     }
 }
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("Rational", Numeric.klass, (klass: Class) => {
-        klass.define_native_singleton_method("new", (self: RValue, args: RValue[]): RValue => {
+    Runtime.define_class("Rational", await Numeric.klass(), (klass: Class) => {
+        klass.define_native_singleton_method("new", async (self: RValue, args: RValue[]): Promise<RValue> => {
             let rational;
 
             if (args.length === 1) {
                 switch (args[0].klass) {
-                    case String.klass:
+                    case await String.klass():
                         rational = Rational.from_string(args[0].get_data<string>());
                         break;
 
-                    case Integer.klass:
+                    case await Integer.klass():
                         const n = args[0].get_data<number>();
                         rational = Rational.new(n, 1);
                         break;
 
-                    case Float.klass:
+                    case await Float.klass():
                         rational = Rational.from_float(args[0].get_data<number>());
                         break;
 
@@ -228,8 +228,8 @@ export const init = () => {
                 }
             } else {
                 // @TODO: support float arguments
-                Runtime.assert_type(args[0], Integer.klass);
-                Runtime.assert_type(args[1], Integer.klass);
+                Runtime.assert_type(args[0], await Integer.klass());
+                Runtime.assert_type(args[1], await Integer.klass());
 
                 const n = args[0].get_data<number>();
                 const d = args[1].get_data<number>();
@@ -240,32 +240,30 @@ export const init = () => {
             return rational;
         });
 
-        klass.define_native_method("inspect", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("inspect", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const rational = self.get_data<Rational>();
-            return String.new(`(${rational.negative ? "-" : ""}${rational.n}/${rational.d})`);
+            return await String.new(`(${rational.negative ? "-" : ""}${rational.n}/${rational.d})`);
         });
 
-        klass.define_native_method("<=>", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("<=>", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const rational = self.get_data<Rational>();
             let n: number, other_n: number;
 
             switch (args[0].klass) {
-                case Integer.klass:
-                case Float.klass:
+                case await Integer.klass():
+                case await Float.klass():
                     n = rational.n;
                     other_n = args[0].get_data<number>() * rational.d;
 
                     if (n > other_n) {
-                        return Integer.get(1);
+                        return await Integer.get(1);
                     } else if (n < other_n) {
-                        return Integer.get(-1);
+                        return await Integer.get(-1);
                     } else {
-                        return Integer.get(0);
+                        return await Integer.get(0);
                     }
 
-                    break;
-
-                case Rational.klass:
+                case await Rational.klass():
                     const other_rational = args[0].get_data<Rational>();
                     n = rational.n * other_rational.d;
                     other_n = other_rational.n * rational.d;

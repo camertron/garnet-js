@@ -10,7 +10,7 @@ export default class AdjustStack extends Instruction {
         this.size = size;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         context.popn(this.size);
         return null;
     }

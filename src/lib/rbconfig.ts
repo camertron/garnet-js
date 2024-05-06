@@ -12,17 +12,20 @@ if (is_node) {
 
 let inited = false;
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
-    const config_rvalue = Hash.new();
+    const config_rvalue = await Hash.new();
     const config = config_rvalue.get_data<Hash>();
 
-    config.set(String.new("EXEEXT"), String.new("")); // change this for windows?
-    config.set(String.new("RUBY_INSTALL_NAME"), String.new("ruby"));
+    await config.set(await String.new("EXEEXT"), await String.new("")); // change this for windows?
+    await config.set(await String.new("RUBY_INSTALL_NAME"), await String.new("ruby"));
 
     if (is_node) {
-        config.set(String.new("bindir"), String.new(vmfs.real_path(vmfs.join_paths(url.fileURLToPath(import.meta.url), "..", "..", "..", "exe"))));
+        await config.set(
+            await String.new("bindir"),
+            await String.new(vmfs.real_path(vmfs.join_paths(url.fileURLToPath(import.meta.url), "..", "..", "..", "exe")))
+        );
     }
 
     Runtime.define_module("RbConfig", (mod: Module): void => {

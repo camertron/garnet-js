@@ -10,7 +10,7 @@ export default class SetN extends Instruction {
         this.index = index;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         context.setn(this.index, context.peek());
         return null;
     }

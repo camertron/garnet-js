@@ -11,7 +11,7 @@ export class Jump extends Instruction {
         this.label = label;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         return context.jump(this.label);
     }
 

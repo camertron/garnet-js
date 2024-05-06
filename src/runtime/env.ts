@@ -11,10 +11,10 @@ export const init = () => {
     const env_hash = new Hash();
     const env = new RValue(ObjectClass);
 
-    env.get_singleton_class().get_data<Class>().define_native_method("[]", (_self: RValue, args: RValue[]): RValue => {
-        Runtime.assert_type(args[0], String.klass);
+    env.get_singleton_class().get_data<Class>().define_native_method("[]", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+        Runtime.assert_type(args[0], await String.klass());
 
-        const result = env_hash.get(args[0]);
+        const result = await env_hash.get(args[0]);
 
         if (is_node && result === Qnil) {
             const result_from_env = process.env[args[0].get_data<string>()];
@@ -29,10 +29,10 @@ export const init = () => {
         return result;
     });
 
-    env.get_singleton_class().get_data<Class>().define_native_method("[]=", (_self: RValue, args: RValue[]): RValue => {
-        Runtime.assert_type(args[0], String.klass);
-        Runtime.assert_type(args[1], String.klass);
-        env_hash.set(args[0], args[1]);
+    env.get_singleton_class().get_data<Class>().define_native_method("[]=", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+        Runtime.assert_type(args[0], await String.klass());
+        Runtime.assert_type(args[1], await String.klass());
+        await env_hash.set(args[0], args[1]);
         return args[1];
     });
 

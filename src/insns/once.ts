@@ -15,11 +15,11 @@ export default class Once extends Instruction {
         this.cache = cache;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         if (this.executed) return null;
 
         context.push(
-            context.run_block_frame(
+            await context.run_block_frame(
                 BlockCallData.create(0), CallingConvention.BLOCK_PROC, this.iseq, context.get_binding(), []
             )
         );

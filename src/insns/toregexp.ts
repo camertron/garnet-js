@@ -14,9 +14,15 @@ export default class ToRegexp extends Instruction {
         this.size = size;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
-        const pattern = context.popn(this.size).map((elem) => Runtime.coerce_to_string(elem).get_data<string>()).join("");
-        context.push(Regexp.new(pattern, this.flags));
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
+        const chunks = await Promise.all(
+            context.popn(this.size).map(async (elem) => {
+                return (await Runtime.coerce_to_string(elem)).get_data<string>()
+            })
+        );
+
+        const pattern = chunks.join("");
+        context.push(await Regexp.new(pattern, this.flags));
         return null;
     }
 

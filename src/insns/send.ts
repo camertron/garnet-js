@@ -18,14 +18,14 @@ export default class Send extends Instruction {
         this.block_iseq = block_iseq;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         let block = undefined;
 
         if (this.block_iseq) {
-            block = Proc.from_iseq(context, this.block_iseq);
+            block = await Proc.from_iseq(context, this.block_iseq);
         } else if (this.call_data.has_flag(CallDataFlag.ARGS_BLOCKARG)) {
             block = context.pop()!;
-            if (block !== Qnil) block = Object.send(block, "to_proc");
+            if (block !== Qnil) block = await Object.send(block, "to_proc");
         }
 
         let kwargs: Hash | undefined = undefined;
@@ -37,14 +37,14 @@ export default class Send extends Instruction {
 
             for (let i = 0; i < this.call_data.kw_arg!.length; i ++) {
                 const keyword = this.call_data.kw_arg![i];
-                kwargs.set_by_symbol(keyword, keyword_values[i]);
+                await kwargs.set_by_symbol(keyword, keyword_values[i]);
             }
         }
 
         const args = context.popn(this.call_data.argc);
         const receiver = context.pop()!;
 
-        const result = Object.send(receiver, this.call_data, args, kwargs, block);
+        const result = await Object.send(receiver, this.call_data, args, kwargs, block);
         context.push(result);
 
         return null;

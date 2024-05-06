@@ -13,7 +13,7 @@ export default class CheckKeyword extends Instruction {
         this.keyword_index = keyword_index;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const keyword_bits = context.local_get(this.keyword_bits_index, 0);
         context.push(keyword_bits.get_data<RubyArray>().elements[this.keyword_index]);
         return null;

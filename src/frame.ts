@@ -89,7 +89,7 @@ export class BlockFrame extends Frame implements IFrameWithOwner {
     public original_stack: RValuePointer[];
     public owner?: Module;
 
-    constructor(call_data: BlockCallData, calling_convention: CallingConvention, iseq: InstructionSequence, binding: Binding, original_stack: RValuePointer[], args: RValue[], kwargs?: Hash, owner?: Module) {
+    constructor(call_data: BlockCallData, calling_convention: CallingConvention, iseq: InstructionSequence, binding: Binding, original_stack: RValuePointer[], args: RValue[], kwargs?: Hash, block?: RValue, owner?: Module) {
         super(iseq, binding.parent_frame, binding.stack_index, binding.self, binding.nesting);
 
         this.call_data = call_data;
@@ -105,7 +105,7 @@ export class BlockFrame extends Frame implements IFrameWithOwner {
         let stack_index;
 
         if (depth > 0) {
-            stack_index = this.frame_at(this.binding.parent_frame, depth - 1)!.stack_index + index;
+            stack_index = this.frame_at(this.binding.parent_frame!, depth - 1)!.stack_index + index;
         } else {
             stack_index = context.frame!.stack_index + index;
         }
@@ -117,7 +117,7 @@ export class BlockFrame extends Frame implements IFrameWithOwner {
         let stack_index;
 
         if (depth > 0) {
-            stack_index = this.frame_at(this.binding.parent_frame, depth - 1)!.stack_index + index;
+            stack_index = this.frame_at(this.binding.parent_frame!, depth - 1)!.stack_index + index;
         } else {
             stack_index = context.frame!.stack_index + index;
         }

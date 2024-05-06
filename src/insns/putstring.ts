@@ -11,7 +11,7 @@ export default class PutString extends Instruction {
         this.string = string;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         context.push(this.string);
         return null;
     }

@@ -12,7 +12,7 @@ export default class SetLocal extends Instruction {
         this.depth = depth;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const value = context.pop()!;
         context.local_set(this.index, this.depth, value);
         return null;

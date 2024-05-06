@@ -1,10 +1,11 @@
 import {beforeAll, describe, expect, test} from '@jest/globals';
-import * as Garnet from "../garnet";
 import { TrueClass } from '../runtime';
 import { RubyArray } from "../runtime/array";
 import { Symbol } from "../runtime/symbol";
+import { String } from "../runtime/string";
 import { evaluate } from '../test_helpers';
 import { LoadError } from '../garnet';
+import * as Garnet from "../garnet";
 
 beforeAll(() => {
     return Garnet.init();
@@ -28,7 +29,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(Symbol.klass);
+        expect(result.klass).toBe(await Symbol.klass());
         expect(result.get_data<string>()).toEqual("handled");
     });
 
@@ -49,7 +50,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(RubyArray.klass);
+        expect(result.klass).toBe(await RubyArray.klass());
         const results = result.get_data<RubyArray>().elements.map((val) => val.get_data<boolean>());
         expect(results).toEqual([false, true]);
     });
@@ -67,7 +68,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(Symbol.klass);
+        expect(result.klass).toBe(await Symbol.klass());
         expect(result.get_data<string>()).toEqual("handled");
     });
 
@@ -84,7 +85,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(Symbol.klass);
+        expect(result.klass).toBe(await Symbol.klass());
         expect(result.get_data<string>()).toEqual("handled");
     });
 
@@ -98,7 +99,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(Symbol.klass);
+        expect(result.klass).toBe(await Symbol.klass());
         expect(result.get_data<string>()).toEqual("no_error");
     });
 
@@ -113,7 +114,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(Symbol.klass);
+        expect(result.klass).toBe(await Symbol.klass());
         expect(result.get_data<string>()).toEqual("handled");
     });
 
@@ -129,7 +130,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(Symbol.klass);
+        expect(result.klass).toBe(await Symbol.klass());
         expect(result.get_data<string>()).toEqual("no_error");
     });
 
@@ -146,7 +147,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(Symbol.klass);
+        expect(result.klass).toBe(await Symbol.klass());
         expect(result.get_data<string>()).toEqual("handled");
     });
 
@@ -160,10 +161,10 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        expect(() => evaluate(code)).rejects.toThrow(LoadError);
+        await expect(async () => await evaluate(code)).rejects.toThrow(LoadError);
     });
 
-    test("rescues StandardError by default if no error class is provided", () => {
+    test("rescues StandardError by default if no error class is provided", async () => {
         const code = `
             begin
                 require "foo"
@@ -173,7 +174,7 @@ describe("begin / rescue / end", () => {
             end
         `;
 
-        expect(() => evaluate(code)).rejects.toThrow(LoadError);
+        await expect(async () => await evaluate(code)).rejects.toThrow(LoadError);
     });
 
     test("runs the ensure clause on error", async () => {
@@ -244,7 +245,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(Garnet.String.klass);
+        expect(result.klass).toBe(await String.klass());
         expect(result.get_data<string>()).toEqual("cannot load such file -- foo");
     });
 });

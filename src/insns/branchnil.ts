@@ -12,7 +12,7 @@ export class BranchNil extends Instruction {
         this.label = label;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const condition = context.pop();
 
         if (condition && condition.klass == NilClass) {

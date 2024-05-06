@@ -10,13 +10,13 @@ import { Hash } from "./hash";
 export class Method {
     private static klass_: RValue;
 
-    static new(name: string, callable: Callable): RValue {
-        return new RValue(this.klass, new Method(name, callable));
+    static async new(name: string, callable: Callable): Promise<RValue> {
+        return new RValue(await this.klass(), new Method(name, callable));
     }
 
-    static get klass(): RValue {
+    static async klass(): Promise<RValue> {
         if (!this.klass_) {
-            const klass = Object.find_constant("Method");
+            const klass = await Object.find_constant("Method");
 
             if (klass) {
                 this.klass_ = klass;
@@ -44,13 +44,13 @@ export class Method {
 export class UnboundMethod {
     private static klass_: RValue;
 
-    static new(name: string, callable: Callable): RValue {
-        return new RValue(this.klass, new UnboundMethod(name, callable));
+    static async new(name: string, callable: Callable): Promise<RValue> {
+        return new RValue(await this.klass(), new UnboundMethod(name, callable));
     }
 
-    static get klass(): RValue {
+    static async klass(): Promise<RValue> {
         if (!this.klass_) {
-            const klass = Object.find_constant("UnboundMethod");
+            const klass = await Object.find_constant("UnboundMethod");
 
             if (klass) {
                 this.klass_ = klass;
@@ -81,25 +81,27 @@ export const init = async () => {
     if (inited) return;
 
     Runtime.define_class("Method", ObjectClass, (klass: Class) => {
-        klass.define_native_method("parameters", (self: RValue): RValue => {
+        klass.define_native_method("parameters", async (self: RValue): Promise<RValue> => {
             const callable = self.get_data<Method>().callable;
 
             if (!(callable instanceof InterpretedCallable)) {
                 throw new ArgumentError("getting parameters for native methods is not yet supported");
             }
 
-            return RubyArray.new(
-                callable.parameters_meta.map((meta) => {
-                    return RubyArray.new([
-                        Runtime.intern(meta.type_str),
-                        Runtime.intern(meta.name)
-                    ]);
-                })
+            return await RubyArray.new(
+                await Promise.all(
+                    callable.parameters_meta.map(async (meta) => {
+                        return RubyArray.new([
+                            await Runtime.intern(meta.type_str),
+                            await Runtime.intern(meta.name)
+                        ]);
+                    })
+                )
             );
         });
 
-        klass.define_native_method("to_proc", (self: RValue): RValue => {
-            return Proc.from_native_fn(ExecutionContext.current, (block_self: RValue, block_args: RValue[], block_kwargs?: Hash, block_block?: RValue, block_call_data?: MethodCallData): RValue => {
+        klass.define_native_method("to_proc", async (self: RValue): Promise<RValue> => {
+            return await Proc.from_native_fn(ExecutionContext.current, async (block_self: RValue, block_args: RValue[], block_kwargs?: Hash, block_block?: RValue, block_call_data?: MethodCallData): Promise<RValue> => {
                 const mtd = self.get_data<Method>();
                 let mtd_call_data;
 
@@ -114,7 +116,7 @@ export const init = async () => {
                     mtd_call_data = MethodCallData.from_args(mtd.name, block_args, block_kwargs);
                 }
 
-                return mtd.callable.call(
+                return await mtd.callable.call(
                     ExecutionContext.current,
                     block_self,
                     block_args,

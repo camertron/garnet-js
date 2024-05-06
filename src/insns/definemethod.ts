@@ -20,7 +20,7 @@ export default class DefineMethod extends Instruction {
         this.lexical_scope = lexical_scope;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         context.define_method(
             context.frame!.self,
             this.name,
@@ -29,7 +29,7 @@ export default class DefineMethod extends Instruction {
             this.lexical_scope
         );
 
-        Object.send(context.frame!.self.klass, "method_added", [Runtime.intern(this.name)]);
+        await Object.send(context.frame!.self.klass, "method_added", [await Runtime.intern(this.name)]);
 
         return null;
     }

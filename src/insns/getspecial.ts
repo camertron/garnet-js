@@ -19,7 +19,7 @@ export default class GetSpecial extends Instruction {
         this.number = number;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         switch (this.type) {
             case GetSpecialType.LASTLINE:
                 throw new NotImplementedError("getspecial LASTLINE");

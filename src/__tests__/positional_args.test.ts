@@ -2,7 +2,6 @@ import {beforeAll, describe, expect, test} from '@jest/globals';
 import * as Garnet from "../garnet";
 import { evaluate } from '../test_helpers';
 import { RubyArray, String } from '../garnet';
-import { ArgumentError } from '../errors';
 
 beforeAll(() => {
     return Garnet.init();
@@ -23,14 +22,14 @@ describe("Positional arguments", () => {
         `
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(RubyArray.klass);
+        expect(result.klass).toBe(await RubyArray.klass());
 
         const elements = result.get_data<RubyArray>().elements;
         expect(elements.length).toEqual(2);
 
-        expect(elements[0].klass).toBe(String.klass);
+        expect(elements[0].klass).toBe(await String.klass());
         expect(elements[0].get_data<string>()).toEqual("bar");
-        expect(elements[1].klass).toBe(String.klass);
+        expect(elements[1].klass).toBe(await String.klass());
         expect(elements[1].get_data<string>()).toEqual("baz");
     });
 
@@ -44,14 +43,14 @@ describe("Positional arguments", () => {
         `
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(RubyArray.klass);
+        expect(result.klass).toBe(await RubyArray.klass());
 
         const elements = result.get_data<RubyArray>().elements;
         expect(elements.length).toEqual(2);
 
-        expect(elements[0].klass).toBe(String.klass);
+        expect(elements[0].klass).toBe(await String.klass());
         expect(elements[0].get_data<string>()).toEqual("bar");
-        expect(elements[1].klass).toBe(String.klass);
+        expect(elements[1].klass).toBe(await String.klass());
         expect(elements[1].get_data<string>()).toEqual("baz");
     });
 
@@ -69,14 +68,14 @@ describe("Positional arguments", () => {
         `
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(RubyArray.klass);
+        expect(result.klass).toBe(await RubyArray.klass());
 
         const elements = result.get_data<RubyArray>().elements;
         expect(elements.length).toEqual(2);
 
-        expect(elements[0].klass).toBe(String.klass);
+        expect(elements[0].klass).toBe(await String.klass());
         expect(elements[0].get_data<string>()).toEqual("bar");
-        expect(elements[1].klass).toBe(String.klass);
+        expect(elements[1].klass).toBe(await String.klass());
         expect(elements[1].get_data<string>()).toEqual("baz");
     });
 
@@ -90,15 +89,15 @@ describe("Positional arguments", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(RubyArray.klass);
+        expect(result.klass).toBe(await RubyArray.klass());
 
         const elements = result.get_data<RubyArray>().elements;
         expect(elements.length).toEqual(2);
 
-        expect(elements[0].klass).toBe(String.klass);
+        expect(elements[0].klass).toBe(await String.klass());
         expect(elements[0].get_data<string>()).toEqual("bar");
 
-        expect(elements[1].klass).toBe(RubyArray.klass);
+        expect(elements[1].klass).toBe(await RubyArray.klass());
     });
 
     test("positional arg, multi-value splat", async () => {
@@ -111,15 +110,15 @@ describe("Positional arguments", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(RubyArray.klass);
+        expect(result.klass).toBe(await RubyArray.klass());
 
         const elements = result.get_data<RubyArray>().elements;
         expect(elements.length).toEqual(2);
 
-        expect(elements[0].klass).toBe(String.klass);
+        expect(elements[0].klass).toBe(await String.klass());
         expect(elements[0].get_data<string>()).toEqual("bar");
 
-        expect(elements[1].klass).toBe(RubyArray.klass);
+        expect(elements[1].klass).toBe(await RubyArray.klass());
         const splat_arr = elements[1].get_data<RubyArray>().elements;
 
         expect(splat_arr.length).toEqual(2);
@@ -137,22 +136,22 @@ describe("Positional arguments", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(RubyArray.klass);
+        expect(result.klass).toBe(await RubyArray.klass());
 
         const elements = result.get_data<RubyArray>().elements;
         expect(elements.length).toEqual(3);
 
-        expect(elements[0].klass).toBe(String.klass);
+        expect(elements[0].klass).toBe(await String.klass());
         expect(elements[0].get_data<string>()).toEqual("bar");
 
-        expect(elements[1].klass).toBe(RubyArray.klass);
+        expect(elements[1].klass).toBe(await RubyArray.klass());
         const splat_arr = elements[1].get_data<RubyArray>().elements;
 
         expect(splat_arr.length).toEqual(2);
         expect(splat_arr[0].get_data<string>()).toEqual("baz");
         expect(splat_arr[1].get_data<string>()).toEqual("boo");
 
-        expect(elements[2].klass).toBe(String.klass);
+        expect(elements[2].klass).toBe(await String.klass());
         expect(elements[2].get_data<string>()).toEqual("bit");
     });
 
@@ -165,7 +164,7 @@ describe("Positional arguments", () => {
             foo
         `;
 
-        expect(() => evaluate(code)).rejects.toThrow(
+        await expect(async () => await evaluate(code)).rejects.toThrow(
             "wrong number of arguments (given 0, expected 1)"
         );
     });

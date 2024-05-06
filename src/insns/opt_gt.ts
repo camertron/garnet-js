@@ -13,20 +13,20 @@ export default class OptGt extends Instruction {
         this.call_data = call_data;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const argc = this.call_data.argc + 1;
         const [receiver, ...args] = context.popn(argc);
 
         // This is supposed to be equivalent to MRI's "fast path" for comparing ints/floats.
         // @TODO: do the same thing for floats
-        if (receiver.klass == Integer.klass && args[0].klass == Integer.klass) {
+        if (receiver.klass === await Integer.klass() && args[0].klass === await Integer.klass()) {
             if (receiver.get_data<number>() > args[0].get_data<number>()) {
                 context.push(Qtrue);
             } else {
                 context.push(Qfalse);
             }
         } else {
-            const result = Object.send(receiver, this.call_data, args);
+            const result = await Object.send(receiver, this.call_data, args);
             context.push(result);
         }
 

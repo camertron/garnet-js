@@ -11,7 +11,7 @@ export default class GetBlockParamProxy extends Instruction {
         this.depth = depth;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         context.push(context.local_get(this.index, this.depth));
         return null;
     }

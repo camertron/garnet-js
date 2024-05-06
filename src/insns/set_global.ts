@@ -10,7 +10,7 @@ export default class SetGlobal extends Instruction {
         this.name = name;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const value = context.pop()!;
         context.globals[this.name] = value;
         return null;

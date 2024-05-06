@@ -13,21 +13,21 @@ export class Thread {
     private static thread_class_: RValue;
     private static current_: RValue;
 
-    static new(): RValue {
-        return new RValue(this.thread_class, new Thread());
+    static async new(): Promise<RValue> {
+        return new RValue(await this.thread_class(), new Thread());
     }
 
-    private static get thread_class(): RValue {
+    private static async thread_class(): Promise<RValue> {
         if (!this.thread_class_) {
-            this.thread_class_ = Object.find_constant("Thread")!;
+            this.thread_class_ = (await Object.find_constant("Thread"))!;
         }
 
         return this.thread_class_;
     }
 
-    static get current(): RValue {
+    static async current(): Promise<RValue> {
         if (!this.current_) {
-            this.current_ = Thread.new();
+            this.current_ = await Thread.new();
         }
 
         return this.current_;
@@ -47,13 +47,13 @@ export class Thread {
 export class Mutex {
     private static mutex_class_: RValue;
 
-    static new(): RValue {
-        return new RValue(this.mutex_class, new Mutex());
+    static async new(): Promise<RValue> {
+        return new RValue(await this.mutex_class(), new Mutex());
     }
 
-    private static get mutex_class(): RValue {
+    private static async mutex_class(): Promise<RValue> {
         if (!this.mutex_class_) {
-            this.mutex_class_ = Object.find_constant("Thread")!.get_data<Class>().find_constant("Mutex")!;
+            this.mutex_class_ = (await (await Object.find_constant("Thread"))!.get_data<Class>().find_constant("Mutex"))!;
         }
 
         return this.mutex_class_;
@@ -89,16 +89,15 @@ export class Mutex {
 export class BacktraceLocation {
     private static location_class_: RValue;
 
-    static new(path: string, lineno: number, label: string): RValue {
-        return new RValue(this.location_class, new BacktraceLocation(path, lineno, label));
+    static async new(path: string, lineno: number, label: string): Promise<RValue> {
+        return new RValue(await this.location_class(), new BacktraceLocation(path, lineno, label));
     }
 
-    private static get location_class(): RValue {
+    private static async location_class(): Promise<RValue> {
         if (!this.location_class_) {
-            this.location_class_ = Object
-                .find_constant("Thread")!.get_data<Class>()
-                .find_constant("Backtrace")!.get_data<Class>()
-                .find_constant("Location")!;
+            const thread_class = (await Object.find_constant("Thread"))!.get_data<Class>();
+            const backtrace_class = (await thread_class.find_constant("Backtrace"))!.get_data<Class>();
+            this.location_class_ = (await backtrace_class.find_constant("Location"))!;
         }
 
         return this.location_class_;
@@ -117,25 +116,25 @@ export class BacktraceLocation {
         this.label = label;
     }
 
-    get path_rval(): RValue {
+    async path_rval(): Promise<RValue> {
         if (!this.path_rval_) {
-            this.path_rval_ = String.new(this.path);
+            this.path_rval_ = await String.new(this.path);
         }
 
         return this.path_rval_;
     }
 
-    get lineno_rval(): RValue {
+    async lineno_rval(): Promise<RValue> {
         if (!this.lineno_rval_) {
-            this.lineno_rval_ = Integer.get(this.lineno);
+            this.lineno_rval_ = await Integer.get(this.lineno);
         }
 
         return this.lineno_rval_;
     }
 
-    get label_rval(): RValue {
+    async label_rval(): Promise<RValue> {
         if (!this.label_rval_) {
-            this.label_rval_ = String.new(this.label);
+            this.label_rval_ = await String.new(this.label);
         }
 
         return this.label_rval_;
@@ -147,8 +146,8 @@ export const init = () => {
 
     // Jesus I hope I don't have to implement this whole thing any time soon 😱
     const ThreadClass = Runtime.define_class("Thread", ObjectClass, (klass: Class) => {
-        klass.define_native_singleton_method("current", (_self: RValue): RValue => {
-            return Thread.current;
+        klass.define_native_singleton_method("current", async (_self: RValue): Promise<RValue> => {
+            return await Thread.current();
         });
 
         klass.define_native_method("join", (_self: RValue, _args: RValue[]) => {
@@ -156,22 +155,22 @@ export const init = () => {
             return Qnil;
         });
 
-        klass.define_native_method("[]", (self: RValue, args: RValue[]): RValue => {
-            return self.get_data<Thread>().data_store.get(args[0]);
+        klass.define_native_method("[]", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            return await self.get_data<Thread>().data_store.get(args[0]);
         });
 
-        klass.define_native_method("[]=", (self: RValue, args: RValue[]): RValue => {
-            self.get_data<Thread>().data_store.set(args[0], args[1]);
+        klass.define_native_method("[]=", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            await self.get_data<Thread>().data_store.set(args[0], args[1]);
             return args[1];
         });
     });
 
     const MutexClass = Runtime.define_class_under(ThreadClass, "Mutex", ObjectClass, (klass: Class) => {
-        klass.define_native_singleton_method("new", (self: RValue): RValue => {
-            return Mutex.new();
+        klass.define_native_singleton_method("new", async (self: RValue): Promise<RValue> => {
+            return await Mutex.new();
         });
 
-        klass.define_native_method("synchronize", (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
+        klass.define_native_method("synchronize", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             if (!block) {
                 throw new ThreadError("must be called with a block");
             }
@@ -181,7 +180,7 @@ export const init = () => {
 
             try {
                 mutex.lock();
-                return_value = block.get_data<Proc>().call(ExecutionContext.current, []);
+                return_value = await block.get_data<Proc>().call(ExecutionContext.current, []);
             } catch (e) {
                 if (e instanceof BreakError) {
                     mutex.unlock();
@@ -243,21 +242,21 @@ export const init = () => {
     });
 
     Runtime.define_class_under(BacktraceClass, "Location", ObjectClass, (klass: Class) => {
-        klass.define_native_method("path", (self: RValue): RValue => {
-            return self.get_data<BacktraceLocation>().path_rval;
+        klass.define_native_method("path", async (self: RValue): Promise<RValue> => {
+            return await self.get_data<BacktraceLocation>().path_rval();
         });
 
-        klass.define_native_method("lineno", (self: RValue): RValue => {
-            return self.get_data<BacktraceLocation>().lineno_rval;
+        klass.define_native_method("lineno", async (self: RValue): Promise<RValue> => {
+            return await self.get_data<BacktraceLocation>().lineno_rval();
         });
 
-        klass.define_native_method("label", (self: RValue): RValue => {
-            return self.get_data<BacktraceLocation>().label_rval;
+        klass.define_native_method("label", async (self: RValue): Promise<RValue> => {
+            return await self.get_data<BacktraceLocation>().label_rval();
         });
 
-        klass.define_native_method("inspect", (self: RValue): RValue => {
+        klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const loc = self.get_data<BacktraceLocation>();
-            return String.new(`${loc.path}:${loc.lineno} in ${loc.label}`);
+            return await String.new(`${loc.path}:${loc.lineno} in ${loc.label}`);
         });
     });
 

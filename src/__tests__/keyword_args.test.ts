@@ -24,12 +24,12 @@ describe("Keyword arguments", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(RubyArray.klass);
+        expect(result.klass).toBe(await RubyArray.klass());
 
         const elements = result.get_data<RubyArray>().elements;
         expect(elements.length).toEqual(1);
 
-        expect(elements[0].klass).toBe(String.klass);
+        expect(elements[0].klass).toBe(await String.klass());
         expect(elements[0].get_data<string>()).toEqual("bar");
     });
 
@@ -43,14 +43,14 @@ describe("Keyword arguments", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(RubyArray.klass);
+        expect(result.klass).toBe(await RubyArray.klass());
 
         const elements = result.get_data<RubyArray>().elements;
         expect(elements.length).toEqual(2);
 
-        expect(elements[0].klass).toBe(String.klass);
+        expect(elements[0].klass).toBe(await String.klass());
         expect(elements[0].get_data<string>()).toEqual("bar");
-        expect(elements[1].klass).toBe(String.klass);
+        expect(elements[1].klass).toBe(await String.klass());
         expect(elements[1].get_data<string>()).toEqual("baz");
     });
 
@@ -68,14 +68,14 @@ describe("Keyword arguments", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(RubyArray.klass);
+        expect(result.klass).toBe(await RubyArray.klass());
 
         const elements = result.get_data<RubyArray>().elements;
         expect(elements.length).toEqual(2);
 
-        expect(elements[0].klass).toBe(String.klass);
+        expect(elements[0].klass).toBe(await String.klass());
         expect(elements[0].get_data<string>()).toEqual("bar");
-        expect(elements[1].klass).toBe(String.klass);
+        expect(elements[1].klass).toBe(await String.klass());
         expect(elements[1].get_data<string>()).toEqual("baz");
     });
 
@@ -89,14 +89,14 @@ describe("Keyword arguments", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(RubyArray.klass);
+        expect(result.klass).toBe(await RubyArray.klass());
 
         const elements = result.get_data<RubyArray>().elements;
         expect(elements.length).toEqual(2);
 
-        expect(elements[0].klass).toBe(String.klass);
+        expect(elements[0].klass).toBe(await String.klass());
         expect(elements[0].get_data<string>()).toEqual("bar");
-        expect(elements[1].klass).toBe(String.klass);
+        expect(elements[1].klass).toBe(await String.klass());
         expect(elements[1].get_data<string>()).toEqual("bar");
     });
 
@@ -110,27 +110,27 @@ describe("Keyword arguments", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(RubyArray.klass);
+        expect(result.klass).toBe(await RubyArray.klass());
 
         const elements = result.get_data<RubyArray>().elements;
         expect(elements.length).toEqual(2);
 
-        expect(elements[0].klass).toBe(String.klass);
+        expect(elements[0].klass).toBe(await String.klass());
         expect(elements[0].get_data<string>()).toEqual("bar");
 
-        expect(elements[1].klass).toBe(Hash.klass);
+        expect(elements[1].klass).toBe(await Hash.klass());
         const kwargs = elements[1].get_data<Hash>();
 
         expect(kwargs.length).toEqual(2);
-        expect(kwargs.has(Runtime.intern("arg2"))).toBeTruthy();
-        expect(kwargs.has(Runtime.intern("arg3"))).toBeTruthy();
+        expect(kwargs.has(await Runtime.intern("arg2"))).toBeTruthy();
+        expect(kwargs.has(await Runtime.intern("arg3"))).toBeTruthy();
 
-        const arg2 = kwargs.get(Runtime.intern("arg2"));
-        expect(arg2.klass).toBe(String.klass);
+        const arg2 = await kwargs.get(await Runtime.intern("arg2"));
+        expect(arg2.klass).toBe(await String.klass());
         expect(arg2.get_data<string>()).toEqual("baz");
 
-        const arg3 = kwargs.get(Runtime.intern("arg3"));
-        expect(arg3.klass).toBe(String.klass);
+        const arg3 = await kwargs.get(await Runtime.intern("arg3"));
+        expect(arg3.klass).toBe(await String.klass());
         expect(arg3.get_data<string>()).toEqual("boo");
     });
 
@@ -143,7 +143,7 @@ describe("Keyword arguments", () => {
             foo
         `;
 
-        expect(() => evaluate(code)).rejects.toThrow("missing keyword: :arg1");
+        await expect(async () => await evaluate(code)).rejects.toThrow("missing keyword: :arg1");
     });
 
     test("kwsplat passed multiple splatted hashes and kwargs", async () => {
@@ -159,29 +159,29 @@ describe("Keyword arguments", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(Hash.klass);
+        expect(result.klass).toBe(await Hash.klass());
 
         const kwargs = result.get_data<Hash>();
         expect(kwargs.length).toEqual(4);
 
         for (const arg_name of ["arg1", "arg2", "arg3", "arg4"]) {
-            expect(kwargs.has(Runtime.intern(arg_name))).toBeTruthy();
+            expect(kwargs.has(await Runtime.intern(arg_name))).toBeTruthy();
         }
 
-        const arg1 = kwargs.get(Runtime.intern("arg1"));
-        expect(arg1.klass).toBe(String.klass);
+        const arg1 = await kwargs.get(await Runtime.intern("arg1"));
+        expect(arg1.klass).toBe(await String.klass());
         expect(arg1.get_data<string>()).toEqual("bar");
 
-        const arg2 = kwargs.get(Runtime.intern("arg2"));
-        expect(arg2.klass).toBe(String.klass);
+        const arg2 = await kwargs.get(await Runtime.intern("arg2"));
+        expect(arg2.klass).toBe(await String.klass());
         expect(arg2.get_data<string>()).toEqual("baz");
 
-        const arg3 = kwargs.get(Runtime.intern("arg3"));
-        expect(arg3.klass).toBe(String.klass);
+        const arg3 = await kwargs.get(await Runtime.intern("arg3"));
+        expect(arg3.klass).toBe(await String.klass());
         expect(arg3.get_data<string>()).toEqual("boo");
 
-        const arg4 = kwargs.get(Runtime.intern("arg4"));
-        expect(arg4.klass).toBe(String.klass);
+        const arg4 = await kwargs.get(await Runtime.intern("arg4"));
+        expect(arg4.klass).toBe(await String.klass());
         expect(arg4.get_data<string>()).toEqual("bit");
     });
 
@@ -195,7 +195,7 @@ describe("Keyword arguments", () => {
                 foo("arg1" => "foo")
             `;
 
-            expect(() => evaluate(code)).rejects.toThrow("missing keyword: :arg1");
+            await expect(async () => await evaluate(code)).rejects.toThrow("missing keyword: :arg1");
         });
 
         test("puts non-symbol keys into the kwsplat", async () => {
@@ -208,16 +208,16 @@ describe("Keyword arguments", () => {
             `;
 
             const result = await evaluate(code);
-            expect(result.klass).toBe(RubyArray.klass);
+            expect(result.klass).toBe(await RubyArray.klass());
 
             const elements = result.get_data<RubyArray>().elements;
             expect(elements.length).toEqual(2);
 
-            expect(elements[1].klass).toBe(Hash.klass);
+            expect(elements[1].klass).toBe(await Hash.klass());
             const kwsplat = elements[1].get_data<Hash>();
 
-            expect(kwsplat.has(String.new("arg2"))).toBeTruthy();
-            expect(kwsplat.has(Integer.get(3))).toBeTruthy();
+            expect(await kwsplat.has(await String.new("arg2"))).toBeTruthy();
+            expect(await kwsplat.has(await Integer.get(3))).toBeTruthy();
         });
 
         test("allows kwsplats mixed with individual kwargs", async () => {
@@ -233,7 +233,7 @@ describe("Keyword arguments", () => {
             `;
 
             const result = await evaluate(code);
-            expect(result.klass).toBe(RubyArray.klass);
+            expect(result.klass).toBe(await RubyArray.klass());
 
             const elements = result.get_data<RubyArray>().elements;
             expect(elements.length).toEqual(1);
@@ -242,31 +242,31 @@ describe("Keyword arguments", () => {
             expect(kwargs.length).toEqual(6);
 
             for (const arg of ["arg0", "arg1", "arg2", "arg3", "arg4", "arg5"]) {
-                expect(kwargs.has(Runtime.intern(arg))).toBeTruthy();
+                expect(kwargs.has(await Runtime.intern(arg))).toBeTruthy();
             }
 
-            const arg0 = kwargs.get(Runtime.intern("arg0"));
-            expect(arg0.klass).toBe(String.klass);
+            const arg0 = await kwargs.get(await Runtime.intern("arg0"));
+            expect(arg0.klass).toBe(await String.klass());
             expect(arg0.get_data<string>()).toEqual("arg0");
 
-            const arg1 = kwargs.get(Runtime.intern("arg1"));
-            expect(arg1.klass).toBe(String.klass);
+            const arg1 = await kwargs.get(await Runtime.intern("arg1"));
+            expect(arg1.klass).toBe(await String.klass());
             expect(arg1.get_data<string>()).toEqual("bar");
 
-            const arg2 = kwargs.get(Runtime.intern("arg2"));
-            expect(arg2.klass).toBe(String.klass);
+            const arg2 = await kwargs.get(await Runtime.intern("arg2"));
+            expect(arg2.klass).toBe(await String.klass());
             expect(arg2.get_data<string>()).toEqual("baz");
 
-            const arg3 = kwargs.get(Runtime.intern("arg3"));
-            expect(arg3.klass).toBe(String.klass);
+            const arg3 = await kwargs.get(await Runtime.intern("arg3"));
+            expect(arg3.klass).toBe(await String.klass());
             expect(arg3.get_data<string>()).toEqual("boo");
 
-            const arg4 = kwargs.get(Runtime.intern("arg4"));
-            expect(arg4.klass).toBe(String.klass);
+            const arg4 = await kwargs.get(await Runtime.intern("arg4"));
+            expect(arg4.klass).toBe(await String.klass());
             expect(arg4.get_data<string>()).toEqual("bit");
 
-            const arg5 = kwargs.get(Runtime.intern("arg5"));
-            expect(arg5.klass).toBe(String.klass);
+            const arg5 = await kwargs.get(await Runtime.intern("arg5"));
+            expect(arg5.klass).toBe(await String.klass());
             expect(arg5.get_data<string>()).toEqual("arg5");
         });
     });

@@ -10,7 +10,7 @@ export default class TopN extends Instruction {
         this.index = index;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         context.push(context.topn(this.index));
         return null;
     }

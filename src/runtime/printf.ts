@@ -26,7 +26,7 @@ export const left_pad = (str: string, pad_char: string, length: number): string 
     return `${str}${trailing}`;
 }
 
-const format_int = (idx: number, self: RValue, args: RValue[], flags: string, orig_width: string, precision: number): string => {
+const format_int = async (idx: number, self: RValue, args: RValue[], flags: string, orig_width: string, precision: number): Promise<string> => {
     if (idx >= args.length) {
         throw new ArgumentError("too few arguments");
     }
@@ -34,13 +34,13 @@ const format_int = (idx: number, self: RValue, args: RValue[], flags: string, or
     let width;
 
     if (flags.indexOf("*") > -1) {
-        width = Object.send(self, "Integer", [args[idx]]).get_data<number>();
+        width = (await Object.send(self, "Integer", [args[idx]])).get_data<number>();
         idx ++;
     } else {
         width = parseInt(orig_width)!;
     }
 
-    const val = Object.send(self, "Integer", [args[idx]]).get_data<number>();
+    const val = (await Object.send(self, "Integer", [args[idx]])).get_data<number>();
     let result = val.toString();
 
     if (val >= 0) {
@@ -73,13 +73,13 @@ const format_int = (idx: number, self: RValue, args: RValue[], flags: string, or
     }
 }
 
-export const sprintf = (pattern: RValue, objects: RValue[]): RValue => {
+export const sprintf = async (pattern: RValue, objects: RValue[]): Promise<RValue> => {
     const pattern_str = pattern.get_data<string>();
     const chunks = [];
     let last_pos = 0;
     let idx = 0;
 
-    Array.from(pattern_str.matchAll(printf_re)).forEach((match) => {
+    Array.from(pattern_str.matchAll(printf_re)).forEach(async (match) => {
         const cur_pos = match.index!
 
         if (cur_pos > last_pos) {
@@ -105,12 +105,12 @@ export const sprintf = (pattern: RValue, objects: RValue[]): RValue => {
                 break;
 
             case "s":
-                chunks.push(Object.send(objects[idx], "to_s").get_data<string>());
+                chunks.push((await Object.send(objects[idx], "to_s")).get_data<string>());
                 idx ++;
                 break;
 
             case "p":
-                chunks.push(Object.send(objects[idx], "inspect").get_data<string>());
+                chunks.push((await Object.send(objects[idx], "inspect")).get_data<string>());
                 idx ++;
                 break;
 
@@ -130,5 +130,5 @@ export const sprintf = (pattern: RValue, objects: RValue[]): RValue => {
     }
 
     const result = chunks.join("").replace("%%", "%");
-    return String.new(result);
+    return await String.new(result);
 }

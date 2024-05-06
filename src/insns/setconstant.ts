@@ -11,7 +11,7 @@ export default class SetConstant extends Instruction {
         this.name = name;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const parent = context.pop()!;
         const value = context.pop()!;
 

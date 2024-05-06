@@ -8,8 +8,8 @@ import { String } from "../runtime/string";
 class RubyDate {
     private static klass_: RValue;
 
-    static get klass(): RValue {
-        const klass = Object.find_constant("Date");
+    static async klass(): Promise<RValue> {
+        const klass = await Object.find_constant("Date");
 
         if (klass) {
             this.klass_ = klass;
@@ -20,8 +20,8 @@ class RubyDate {
         return this.klass_;
     }
 
-    static new(date: Date) {
-        return new RValue(RubyDate.klass, date);
+    static async new(date: Date) {
+        return new RValue(await RubyDate.klass(), date);
     }
 }
 
@@ -33,8 +33,8 @@ export class DateError extends RubyError {
         this.name = "Error";
     }
 
-    get ruby_class(): RValue {
-        return DateError.ruby_class ||= RubyDate.klass.get_data<Class>().constants["Error"];
+    async ruby_class() {
+        return DateError.ruby_class ||= (await RubyDate.klass()).get_data<Class>().constants["Error"];
     }
 }
 
@@ -124,19 +124,19 @@ const parse_pattern = (pattern: string) => {
     return new DatePattern(formats);
 }
 
-export const init = () => {
+export const init = async () => {
     Runtime.define_class("Date", ObjectClass, (klass: Class) => {
-        klass.define_native_singleton_method("today", (self: RValue): RValue => {
-            return RubyDate.new(new Date());
+        klass.define_native_singleton_method("today", async (self: RValue): Promise<RValue> => {
+            return await RubyDate.new(new Date());
         });
 
-        klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("initialize", async (self: RValue, args: RValue[]): Promise<RValue> => {
             let year, month, mday;
 
             if (args.length > 0) {
                 switch (args[0].klass) {
-                    case Integer.klass:
-                    case Float.klass:
+                    case await Integer.klass():
+                    case await Float.klass():
                         year = Math.floor(args[0].get_data<number>());
                         break;
 
@@ -150,8 +150,8 @@ export const init = () => {
 
             if (args.length > 1) {
                 switch (args[1].klass) {
-                    case Integer.klass:
-                    case Float.klass:
+                    case await Integer.klass():
+                    case await Float.klass():
                         month = Math.floor(args[1].get_data<number>());
                         break;
 
@@ -171,8 +171,8 @@ export const init = () => {
 
             if (args.length > 2) {
                 switch (args[2].klass) {
-                    case Integer.klass:
-                    case Float.klass:
+                    case await Integer.klass():
+                    case await Float.klass():
                         mday = Math.floor(args[2].get_data<number>());
                         break;
 
@@ -196,8 +196,8 @@ export const init = () => {
             return Qnil;
         });
 
-        klass.define_native_method("strftime", (self: RValue, args: RValue[]): RValue => {
-            const pattern_str = Runtime.coerce_to_string(args[0]).get_data<string>();
+        klass.define_native_method("strftime", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const pattern_str = (await Runtime.coerce_to_string(args[0])).get_data<string>();
             const pattern = parse_pattern(pattern_str);
 
             return String.new(pattern.format(self.get_data<Date>()));
@@ -205,15 +205,15 @@ export const init = () => {
 
         const inspect_pattern = parse_pattern("%Y-%m-%d")
 
-        klass.define_native_method("inspect", (self: RValue): RValue => {
+        klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const date_str = inspect_pattern.format(self.get_data<Date>());
-            return String.new(`#<Date ${date_str}>`);
+            return await String.new(`#<Date ${date_str}>`);
         });
 
-        klass.define_native_method("to_s", (self: RValue): RValue => {
-            return String.new(inspect_pattern.format(self.get_data<Date>()));
+        klass.define_native_method("to_s", async (self: RValue): Promise<RValue> => {
+            return await String.new(inspect_pattern.format(self.get_data<Date>()));
         });
     });
 
-    Runtime.define_class_under(RubyDate.klass, "Error", Object.find_constant("ArgumentError")!);
+    Runtime.define_class_under(await RubyDate.klass(), "Error", (await Object.find_constant("ArgumentError"))!);
 };

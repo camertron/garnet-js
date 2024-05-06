@@ -17,27 +17,27 @@ export default class SplatArray extends Instruction {
         this.flag = flag;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const value = context.pop()!;
 
-        if (value.klass === RubyArray.klass) {
+        if (value.klass === await RubyArray.klass()) {
             if (this.flag) {
-                context.push(RubyArray.new([...value.get_data<RubyArray>().elements]))
+                context.push(await RubyArray.new([...value.get_data<RubyArray>().elements]))
             } else {
                 context.push(value);
             }
         } else {
-            if (Object.respond_to(value, "to_a")) {
-                const arr = Object.send(value, "to_a");
+            if (await Object.respond_to(value, "to_a")) {
+                const arr = await Object.send(value, "to_a");
 
-                if (arr.klass === RubyArray.klass) {
+                if (arr.klass === await RubyArray.klass()) {
                     context.push(arr);
                 } else {
                     const class_name = value.klass.get_data<Class>().name;
                     throw new TypeError(`can't convert ${class_name} to Array (${class_name}#to_a gives ${arr.klass.get_data<Class>().name})`);
                 }
             } else {
-                context.push(RubyArray.new([value]));
+                context.push(await RubyArray.new([value]));
             }
         }
 

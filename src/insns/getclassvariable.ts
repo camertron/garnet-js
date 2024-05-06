@@ -11,7 +11,7 @@ export default class GetClassVariable extends Instruction {
         this.name = name;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         let klass = context.frame!.self;
         if (klass.klass !== ClassClass) klass = klass.klass;
         context.push(klass.iv_get(this.name));

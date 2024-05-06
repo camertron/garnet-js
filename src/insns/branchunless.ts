@@ -11,7 +11,7 @@ export default class BranchUnless extends Instruction {
         this.label = label;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const condition = context.pop();
 
         if (condition && !condition.is_truthy()) {

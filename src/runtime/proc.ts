@@ -13,20 +13,20 @@ export abstract class Proc {
     public binding: Binding;
     public calling_convention: CallingConvention;
 
-    static from_native_fn(context: ExecutionContext, method: NativeMethod, binding?: Binding): RValue {
+    static async from_native_fn(context: ExecutionContext, method: NativeMethod, binding?: Binding): Promise<RValue> {
         binding ||= context.get_binding();
-        return new RValue(this.klass, new NativeProc(method, binding));
+        return new RValue(await this.klass(), new NativeProc(method, binding));
     }
 
-    static from_iseq(context: ExecutionContext, iseq: InstructionSequence): RValue {
-        const binding = context.get_binding();
-        return new RValue(this.klass, new InterpretedProc(iseq, binding));
+    static async from_iseq(context: ExecutionContext, iseq: InstructionSequence, binding?: Binding): Promise<RValue> {
+        binding ||= context.get_binding();
+        return new RValue(await this.klass(), new InterpretedProc(iseq, binding));
     }
 
     private static klass_: RValue;
 
-    static get klass(): RValue {
-        const klass = Object.find_constant("Proc");
+    static async klass(): Promise<RValue> {
+        const klass = await Object.find_constant("Proc");
 
         if (klass) {
             this.klass_ = klass;
@@ -37,7 +37,7 @@ export abstract class Proc {
         return this.klass_;
     }
 
-    abstract call(context: ExecutionContext, args: RValue[], kwargs?: Hash, call_data?: BlockCallData, owner?: Module): RValue;
+    abstract call(context: ExecutionContext, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: BlockCallData, owner?: Module): Promise<RValue>;
     abstract with_binding(new_binding: Binding): Proc;
     abstract get arity(): number;
 }
@@ -54,8 +54,8 @@ export class NativeProc extends Proc {
         this.calling_convention = calling_convention;
     }
 
-    call(_context: ExecutionContext, args: RValue[], kwargs?: Hash, _call_data?: BlockCallData, _owner?: Module): RValue {
-        return this.callable(this.binding.self, args, kwargs);
+    async call(_context: ExecutionContext, args: RValue[], kwargs?: Hash, block?: RValue, _call_data?: BlockCallData, _owner?: Module): Promise<RValue> {
+        return await this.callable(this.binding.self, args, kwargs, block);
     }
 
     with_binding(new_binding: Binding): NativeProc {
@@ -81,9 +81,9 @@ export class InterpretedProc extends Proc {
         this.calling_convention = calling_convention;
     }
 
-    call(context: ExecutionContext, args: RValue[], kwargs?: Hash, call_data?: BlockCallData, owner?: Module, frame_callback?: (frame: BlockFrame) => void): RValue {
+    async call(context: ExecutionContext, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: BlockCallData, owner?: Module, frame_callback?: (frame: BlockFrame) => void): Promise<RValue> {
         call_data ||= BlockCallData.create(args.length);
-        return context.run_block_frame(call_data, this.calling_convention, this.iseq, this.binding, args, kwargs, owner, frame_callback);
+        return await context.run_block_frame(call_data, this.calling_convention, this.iseq, this.binding, args, kwargs, block, owner, frame_callback);
     }
 
     with_binding(new_binding: Binding): InterpretedProc {
@@ -102,17 +102,17 @@ let inited = false;
 export const init = () => {
     if (inited) return;
 
-    Runtime.define_class("Proc", ObjectClass, (klass: Class) => {
-        klass.define_native_method("call", (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData): RValue => {
+    Runtime.define_class("Proc", ObjectClass, async (klass: Class) => {
+        klass.define_native_method("call", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
             const ec = ExecutionContext.current
-            return self.get_data<Proc>().call(ec, args, kwargs, call_data || (ec.frame as BlockFrame).call_data);
+            return await self.get_data<Proc>().call(ec, args, kwargs, block, call_data || (ec.frame as BlockFrame).call_data);
         });
 
-        klass.define_native_method("arity", (self: RValue): RValue => {
-            return Integer.get(self.get_data<Proc>().arity);
+        klass.define_native_method("arity", async (self: RValue): Promise<RValue> => {
+            return await Integer.get(self.get_data<Proc>().arity);
         });
 
-        klass.alias_method("[]", "call");
+        await klass.alias_method("[]", "call");
 
         klass.define_native_method("to_proc", (self: RValue): RValue => {
             return self;

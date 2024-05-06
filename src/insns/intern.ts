@@ -6,9 +6,9 @@ import { Object } from "../runtime/object"
 export default class Intern extends Instruction {
     private calldata_: MethodCallData;
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const obj = context.pop()!;
-        const result = Object.send(obj, this.calldata);
+        const result = await Object.send(obj, this.calldata);
         context.push(result);
         return null;
     }

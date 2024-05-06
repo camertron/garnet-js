@@ -1,7 +1,8 @@
 import { MethodCallData, CallDataFlag } from "../call_data";
 import { NoMethodError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
-import { IFrameWithOwner, MethodFrame } from "../frame";
+import { BlockFrame, MethodFrame } from "../frame";
+import { Module } from "../garnet";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
 import { Hash } from "../runtime/hash";
@@ -19,17 +20,32 @@ export default class InvokeSuper extends Instruction {
         this.block_iseq = block_iseq;
     }
 
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const self = context.pop()!;
-        const method_frame = context.frame as MethodFrame;
-        const owner = (context.frame as IFrameWithOwner).owner;
 
-        if (owner) {
-            const method = Object.find_super_method_under(self, owner.rval, method_frame.call_data.mid);
+        let owning_frame: BlockFrame | MethodFrame | null;
+        let owner: Module | undefined;
+        let mid: string | undefined;
+
+        // Block frames with MethodCallData are possible because of define_method. We have to
+        // handle this special case by using the owner that's explicitly attached to the frame.
+        // Otherwise we look for the topmost method frame that matches our lexical scope.
+        if (context.frame instanceof BlockFrame && context.frame.call_data instanceof MethodCallData) {
+            owning_frame = context.frame;
+            owner = owning_frame.owner;
+            mid = (owning_frame.call_data as MethodCallData).mid;
+        } else {
+            owning_frame = context.topmost_method_frame_matching_current_lexical_scope();
+            owner = owning_frame ? owning_frame.owner : undefined;
+            mid = owning_frame ? owning_frame.iseq.name : undefined;
+        }
+
+        if (owning_frame && owner && mid) {
+            const method = await Object.find_super_method_under(self, owner.rval, mid);
             let block = undefined;
 
             if (this.block_iseq) {
-                block = Proc.from_iseq(context, this.block_iseq);
+                block = await Proc.from_iseq(context, this.block_iseq);
             } else if (this.call_data.has_flag(CallDataFlag.ARGS_BLOCKARG)) {
                 block = context.pop();
             }
@@ -47,7 +63,7 @@ export default class InvokeSuper extends Instruction {
                     }
 
                     const call_data = (context.frame as MethodFrame).call_data;
-                    result = method.call(context, self, method_frame.args, method_frame.kwargs, block, call_data);
+                    result = method.call(context, self, owning_frame.args, owning_frame.kwargs, block, call_data);
                 } else {
                     let kwargs: Hash | undefined = undefined;
                     if (this.call_data.has_flag(CallDataFlag.KW_SPLAT)) {
@@ -58,7 +74,7 @@ export default class InvokeSuper extends Instruction {
 
                         for (let i = 0; i < this.call_data.kw_arg!.length; i ++) {
                             const keyword = this.call_data.kw_arg![i];
-                            kwargs.set_by_symbol(keyword, keyword_values[i]);
+                            await kwargs.set_by_symbol(keyword, keyword_values[i]);
                         }
                     }
 
@@ -66,13 +82,18 @@ export default class InvokeSuper extends Instruction {
                     result = method.call(context, self, args, kwargs, block, this.call_data);
                 }
 
-                context.push(result);
+                context.push(await result);
                 return null;
             }
         }
 
-        const inspect_str = Object.send(self, "inspect").get_data<string>();
-        throw new NoMethodError(`super: no superclass method \`${method_frame.call_data.mid}' for ${inspect_str}`)
+        const inspect_str = (await Object.send(self, "inspect")).get_data<string>();
+
+        if (mid) {
+            throw new NoMethodError(`super: no superclass method \`${mid}' for ${inspect_str}`)
+        } else {
+            throw new NoMethodError("super called outside of method");
+        }
     }
 
     length(): number {

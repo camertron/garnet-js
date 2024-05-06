@@ -1,24 +1,15 @@
-export const each_codepoint = function*(str: string) {
-    for (let byteIndex = 0; byteIndex < str.length; byteIndex ++) {
-        const code = str.charCodeAt(byteIndex);
-
-        if (0xd800 <= code && code <= 0xdbff) {
-            const hi = code;
-            byteIndex ++;
-            const low = str.charCodeAt(byteIndex);
-            yield (hi - 0xd800) * 0x400 + (low - 0xdc00) + 0x10000;
-        } else {
-            yield code;
-        }
+// Adapted from: https://stackoverflow.com/a/52171480
+export const hash_string = (str: string, seed: number = 0): number => {
+    let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+    for(let i = 0, ch; i < str.length; i++) {
+        ch = str.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
     }
+    h1  = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+    h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2  = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+    h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+
+    return 4294967296 * (2097151 & h2) + (h1 >>> 0);
 };
-
-export const hash_string = (str: string): number => {
-    let h = 0;
-
-    for(let cp of each_codepoint(str)) {
-        h = Math.imul(31, h) + cp | 0;
-    }
-
-    return h;
-}

@@ -16,7 +16,7 @@ export default class GetConstant extends Instruction {
     // "Get constant variable <name>. If klass (second stack value) is Qnil
     // and allow_nil (first stack value) is Qtrue, constants are searched in
     // the current scope. Otherwise, get constant under klass class or module."
-    call(context: ExecutionContext): ExecutionResult {
+    async call(context: ExecutionContext): Promise<ExecutionResult> {
         const allow_nil = context.pop()!.get_data<boolean>();
         let parent = context.pop();
 
@@ -24,7 +24,7 @@ export default class GetConstant extends Instruction {
             throw new NameError(`uninitialized constant ${this.name}`);
         }
 
-        const constant = ( () => {
+        const constant = await (async () => {
             // a parent of Qnil (and nils allowed) means look up the constant in the
             // current scope, i.e. self
             if (parent == Qnil) {

@@ -27,29 +27,29 @@ describe("Forwarded arguments", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(RubyArray.klass);
+        expect(result.klass).toBe(await RubyArray.klass());
 
         const elements = result.get_data<RubyArray>().elements;
         expect(elements.length).toEqual(2);
 
-        expect(elements[0].klass).toBe(RubyArray.klass);
+        expect(elements[0].klass).toBe(await RubyArray.klass());
         const positional_args = elements[0].get_data<RubyArray>().elements;
 
-        expect(positional_args[0].klass).toEqual(String.klass);
+        expect(positional_args[0].klass).toEqual(await String.klass());
         expect(positional_args[0].get_data<string>()).toEqual("arg1");
 
-        expect(positional_args[1].klass).toEqual(String.klass);
+        expect(positional_args[1].klass).toEqual(await String.klass());
         expect(positional_args[1].get_data<string>()).toEqual("arg2");
 
-        expect(elements[1].klass).toEqual(Hash.klass);
+        expect(elements[1].klass).toEqual(await Hash.klass());
         const kwargs = elements[1].get_data<Hash>();
         expect(kwargs.length).toEqual(2);
 
-        expect(kwargs.get(Runtime.intern("arg3")).klass).toBe(String.klass);
-        expect(kwargs.get(Runtime.intern("arg3")).get_data<string>()).toEqual("arg3");
+        expect((await kwargs.get(await Runtime.intern("arg3"))).klass).toBe(await String.klass());
+        expect((await kwargs.get(await Runtime.intern("arg3"))).get_data<string>()).toEqual("arg3");
 
-        expect(kwargs.get(Runtime.intern("arg4")).klass).toBe(String.klass);
-        expect(kwargs.get(Runtime.intern("arg4")).get_data<string>()).toEqual("arg4");
+        expect((await kwargs.get(await Runtime.intern("arg4"))).klass).toBe(await String.klass());
+        expect((await kwargs.get(await Runtime.intern("arg4"))).get_data<string>()).toEqual("arg4");
     });
 
     test("args forwarded to a native method", async () => {
@@ -69,28 +69,28 @@ describe("Forwarded arguments", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(RubyArray.klass);
+        expect(result.klass).toBe(await RubyArray.klass());
 
         const elements = result.get_data<RubyArray>().elements;
         expect(elements.length).toEqual(2);
 
-        expect(elements[0].klass).toBe(RubyArray.klass);
+        expect(elements[0].klass).toBe(await RubyArray.klass());
         const positional_args = elements[0].get_data<RubyArray>().elements;
 
-        expect(positional_args[0].klass).toEqual(String.klass);
+        expect(positional_args[0].klass).toEqual(await String.klass());
         expect(positional_args[0].get_data<string>()).toEqual("arg1");
 
-        expect(positional_args[1].klass).toEqual(String.klass);
+        expect(positional_args[1].klass).toEqual(await String.klass());
         expect(positional_args[1].get_data<string>()).toEqual("arg2");
 
-        expect(elements[1].klass).toEqual(Hash.klass);
+        expect(elements[1].klass).toEqual(await Hash.klass());
         const kwargs = elements[1].get_data<Hash>();
         expect(kwargs.length).toEqual(2);
 
-        expect(kwargs.get(Runtime.intern("arg3")).klass).toBe(String.klass);
-        expect(kwargs.get(Runtime.intern("arg3")).get_data<string>()).toEqual("arg3");
+        expect((await kwargs.get(await Runtime.intern("arg3"))).klass).toBe(await String.klass());
+        expect((await kwargs.get(await Runtime.intern("arg3"))).get_data<string>()).toEqual("arg3");
 
-        expect(kwargs.get(Runtime.intern("arg4")).klass).toBe(String.klass);
-        expect(kwargs.get(Runtime.intern("arg4")).get_data<string>()).toEqual("arg4");
+        expect((await kwargs.get(await Runtime.intern("arg4"))).klass).toBe(await String.klass());
+        expect((await kwargs.get(await Runtime.intern("arg4"))).get_data<string>()).toEqual("arg4");
     });
 });

@@ -8,7 +8,7 @@ import { String } from "../runtime/string";
 
 let inited = false;
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
     const signal_list = {
@@ -48,13 +48,13 @@ export const init = () => {
         "INFO": 29
     };
 
-    const signal_list_rvalue = Hash.new();
+    const signal_list_rvalue = await Hash.new();
     const signal_list_hash = signal_list_rvalue.get_data<Hash>();
 
-    Object.keys(signal_list).forEach((signal_str) => {
-        signal_list_hash.set(
-            String.new(signal_str),
-            Integer.get(signal_list[signal_str as keyof typeof signal_list])
+    Object.keys(signal_list).forEach(async (signal_str) => {
+        await signal_list_hash.set(
+            await String.new(signal_str),
+            await Integer.get(signal_list[signal_str as keyof typeof signal_list])
         );
     });
 
@@ -62,14 +62,14 @@ export const init = () => {
     // would force us to add a bunch of null checks everywhere. Maybe a little messy, but it gets the job done.
     /* @ts-ignore */
     Runtime.define_class("Signal", null, (klass: Class) => {
-        klass.define_native_singleton_method("trap", (_self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
+        klass.define_native_singleton_method("trap", async (_self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             if (!block) {
                 throw new ArgumentError("tried to create Proc object without a block");
             }
 
             const sig_no = args[0] || Qnil;
 
-            if (sig_no.klass === String.klass) {
+            if (sig_no.klass === await String.klass()) {
                 let sig_str = sig_no.get_data<string>().toUpperCase();
                 if (sig_str.startsWith("SIG")) sig_str = sig_str.slice(3);
 
@@ -77,12 +77,12 @@ export const init = () => {
                     throw new ArgumentError(`unsupported signal \`SIG${sig_str}'`);
                 }
 
-                process.on(`SIG${sig_str}`, () => {
-                    block.get_data<Proc>().call(ExecutionContext.current, []);
+                process.on(`SIG${sig_str}`, async () => {
+                    await block.get_data<Proc>().call(ExecutionContext.current, []);
                 });
 
                 return block;
-            } else if (sig_no.klass === Integer.klass) {
+            } else if (sig_no.klass === await Integer.klass()) {
                 // not implemented yet
                 throw new NotImplementedError("Signal.trap cannot accept integer signal codes yet");
             } else {

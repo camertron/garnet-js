@@ -16,25 +16,25 @@ let code_path: string = "<code>";
 let script_argv: string[] = [];
 
 // current directory
-ExecutionContext.current.push_onto_load_path(process.env.PWD!);
+await ExecutionContext.current.push_onto_load_path(process.env.PWD!);
 // path to stdlib
-ExecutionContext.current.push_onto_load_path(path.resolve(path.join(__dirname, "..", "src", "lib")));
+await ExecutionContext.current.push_onto_load_path(path.resolve(path.join(__dirname, "..", "src", "lib")));
 
 Dir.setwd(process.env.PWD!);
 
 for (let i = 0; i < argv.length; i ++) {
     if (argv[i] == "-I") {
         const p = path.resolve(argv[i + 1])
-        ExecutionContext.current.push_onto_load_path(p);
+        await ExecutionContext.current.push_onto_load_path(p);
         i ++;
     } else if (argv[i].startsWith("-I")) {
         const p = path.resolve(argv[i].substring(2));
-        ExecutionContext.current.push_onto_load_path(p);
+        await ExecutionContext.current.push_onto_load_path(p);
     } else if (argv[i] == '-e') {
         code = argv[i + 1];
         i ++;
     } else if (argv[i] == "-r") {
-        Runtime.require(argv[i + 1]);
+        await Runtime.require(argv[i + 1]);
         i ++;
     } else if (argv[i] == "-m") {
         const module_name = argv[i + 1];
@@ -48,8 +48,8 @@ for (let i = 0; i < argv.length; i ++) {
         }
 
         dir = path.resolve(dir);
-        Dir.setwd(dir);
-        ExecutionContext.current.push_onto_load_path(dir);
+        await Dir.setwd(dir);
+        await ExecutionContext.current.push_onto_load_path(dir);
         process.chdir(dir);
 
         i ++;
@@ -60,10 +60,12 @@ for (let i = 0; i < argv.length; i ++) {
     }
 }
 
-Garnet.ObjectClass.get_data<Garnet.Class>().constants["ARGV"] = RubyArray.new(
-    script_argv.map((arg) => {
-        return String.new(arg);
-    })
+Garnet.ObjectClass.get_data<Garnet.Class>().constants["ARGV"] = await RubyArray.new(
+    await Promise.all(
+        script_argv.map((arg) => {
+            return String.new(arg);
+        })
+    )
 );
 
 let absolute_code_path;
@@ -74,7 +76,7 @@ if (code) {
 } else {
     code_path = argv[argv.length - 1];
     absolute_code_path = vmfs.real_path(code_path);
-    ExecutionContext.current.globals["$0"] = String.new(code_path);
+    ExecutionContext.current.globals["$0"] = await String.new(code_path);
 
     if (fs.existsSync(code_path)) {
         code = fs.readFileSync(code_path).toString('utf8');
