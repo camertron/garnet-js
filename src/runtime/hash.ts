@@ -567,7 +567,7 @@ export const init = () => {
                 });
             }
 
-            return Hash.from_hash(result);
+            return await Hash.from_hash(result);
         });
 
         klass.define_native_method("merge!", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {

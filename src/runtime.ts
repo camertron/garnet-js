@@ -42,6 +42,7 @@ import { init as enumerator_init } from "./runtime/enumerator";
 import { init as method_init } from "./runtime/method";
 import { init as fiber_init } from "./runtime/fiber";
 import { init as net_http_init } from "./lib/net/http";
+import { init as uri_init } from "./lib/uri";
 import { obj_id_hash } from "./util/object_id";
 import { String } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
@@ -49,6 +50,7 @@ import { Symbol } from "./runtime/symbol";
 import * as tty from "node:tty";
 import { ParameterMetadata } from "./runtime/parameter-meta";
 import { Hash } from "node:crypto";
+import { Mutex } from "./util/mutex";
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
@@ -68,6 +70,8 @@ type NativeExtension = {
 export class Runtime {
     static symbols: WeakMap<SymbolType, RValue> = new WeakMap();
     static native_extensions: {[key: string]: NativeExtension} = {};
+    static require_mutex: Mutex = new Mutex();
+    static load_mutex: Mutex = new Mutex();
 
     static define_module(name: string, cb?: ModuleDefinitionCallback): RValue {
         const obj = ObjectClass.get_data<Class>();
@@ -260,39 +264,41 @@ export class Runtime {
     }
 
     static async require(require_path: string): Promise<boolean> {
-        require_path = vmfs.normalize_path(require_path);
+        return await this.require_mutex.run(async () => {
+            require_path = vmfs.normalize_path(require_path);
 
-        const ec = ExecutionContext.current;
-        const absolute_path = vmfs.is_relative(require_path) ? this.find_on_load_path(require_path, false) : require_path;
-        const loaded_features = ec.globals['$"'].get_data<RubyArray>().elements;
+            const ec = ExecutionContext.current;
+            const absolute_path = vmfs.is_relative(require_path) ? this.find_on_load_path(require_path, false) : require_path;
+            const loaded_features = ec.globals['$"'].get_data<RubyArray>().elements;
 
-        if (absolute_path) {
-            // required files are only evaluated once
-            for (const loaded_feature of loaded_features) {
-                if (loaded_feature.get_data<string>() === absolute_path) {
-                    return false;
+            if (absolute_path) {
+                // required files are only evaluated once
+                for (const loaded_feature of loaded_features) {
+                    if (loaded_feature.get_data<string>() === absolute_path) {
+                        return false;
+                    }
                 }
+
+                await this.load(require_path, absolute_path);
+                loaded_features.push(await String.new(absolute_path!));
+                return true;
             }
 
-            await this.load(require_path, absolute_path);
-            loaded_features.push(await String.new(absolute_path!));
-            return true;
-        }
-
-        if (this.native_extensions[require_path]) {
-            for (const loaded_feature of loaded_features) {
-                if (loaded_feature.get_data<string>() === require_path) {
-                    return false;
+            if (this.native_extensions[require_path]) {
+                for (const loaded_feature of loaded_features) {
+                    if (loaded_feature.get_data<string>() === require_path) {
+                        return false;
+                    }
                 }
+
+                await this.load_native_extension(require_path);
+                loaded_features.push(await String.new(require_path));
+
+                return true;
             }
 
-            await this.load_native_extension(require_path);
-            loaded_features.push(await String.new(require_path));
-
-            return true;
-        }
-
-        throw new LoadError(`cannot load such file -- ${require_path}`);
+            throw new LoadError(`cannot load such file -- ${require_path}`);
+        });
     }
 
     static async require_relative(path: string, requiring_path: string) {
@@ -314,19 +320,21 @@ export class Runtime {
         return await this.load_absolute_path(require_path, absolute_path);
     }
 
-    static async load_absolute_path(require_path: string, absolute_path: string) {
-        const ec = ExecutionContext.current;
+    static async load_absolute_path(require_path: string, absolute_path: string): Promise<boolean> {
+        return await this.load_mutex.run(async () => {
+            const ec = ExecutionContext.current;
 
-        if (this.native_extensions[absolute_path]) {
-            return this.load_native_extension(absolute_path);
-        }
+            if (this.native_extensions[absolute_path]) {
+                return this.load_native_extension(absolute_path);
+            }
 
-        // Garnet does not support loading code in other encodings
-        const code = new TextDecoder('utf8').decode(vmfs.read(absolute_path));
-        const insns = Compiler.compile_string(code.toString(), require_path, absolute_path);
-        await ec.run_top_frame(insns, ec.stack_len);
+            // Garnet does not support loading code in other encodings
+            const code = new TextDecoder('utf8').decode(vmfs.read(absolute_path));
+            const insns = Compiler.compile_string(code.toString(), require_path, absolute_path);
+            await ec.run_top_frame(insns, ec.stack_len);
 
-        return true;
+            return true;
+        });
     }
 
     private static find_on_load_path(path: string, assume_extension: boolean = true): string | null {
@@ -367,6 +375,7 @@ Runtime.register_native_extension("rbconfig", rb_config_init);
 Runtime.register_native_extension("stringio", stringio_init);
 Runtime.register_native_extension("socket", socket_init);
 Runtime.register_native_extension("date", date_init);
+Runtime.register_native_extension("uri", uri_init);
 Runtime.register_native_extension("net/http", net_http_init);
 
 export enum Visibility {

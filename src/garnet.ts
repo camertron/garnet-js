@@ -117,6 +117,7 @@ export {
 
 export { Compiler } from "./compiler";
 export { InstructionSequence } from "./instruction_sequence";
+export { CallDataFlag, CallData, MethodCallData, BlockCallData, } from "./call_data";
 
 export type { IO } from "./runtime";
 export { String } from "./runtime/string";

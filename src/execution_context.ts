@@ -13,6 +13,7 @@ import { RubyArray } from "./runtime/array";
 import { Proc } from "./runtime/proc";
 import { ParameterMetadata } from "./runtime/parameter-meta";
 import { LexicalScope } from "./compiler";
+import { Mutex } from "./util/mutex";
 
 export type ExecutionResult = JumpResult | LeaveResult | null;
 
@@ -94,6 +95,9 @@ export class ExecutionContext {
 
     // The last top frame that was evaluated.
     public top_locals: Map<string, Local>;
+
+    // The global VM lock
+    public gvl: Mutex = new Mutex();
 
     constructor() {
         this.stack = [];
@@ -429,7 +433,7 @@ export class ExecutionContext {
 
     async run_top_frame(iseq: InstructionSequence, stack_index?: number): Promise<RValue> {
         const new_top_frame = new TopFrame(iseq, stack_index);
-        const result = this.run_frame(new_top_frame, () => {
+        const result = await this.run_frame(new_top_frame, () => {
             // @TODO: only set items on this.top_locals if they have been defined
             // for (const local of new_top_frame.iseq.local_table.locals) {
             //     if (!this.top_locals.has(local.name)) {
@@ -452,7 +456,7 @@ export class ExecutionContext {
                 const block_frame = new BlockFrame(call_data, calling_convention,iseq, binding, original_stack, args, kwargs, block, owner);
                 frame_callback?.(block_frame);
 
-                return this.run_frame(block_frame, async () => {
+                return await this.run_frame(block_frame, async () => {
                     return await this.setup_arguments(call_data, calling_convention, iseq, args, kwargs, block);
                 });
             });
