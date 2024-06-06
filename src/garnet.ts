@@ -64,7 +64,7 @@ export async function unsafe_evaluate(code: string, path?: string, absolute_path
 
     return await ExecutionContext.current.gvl.run(async () => {
         const insns = Compiler.compile_string(code, path || "<code>", absolute_path || "<code>", line, compiler_options);
-        return ExecutionContext.current.run_top_frame(insns);
+        return await ExecutionContext.current.run_top_frame(insns);
     });
 }
 

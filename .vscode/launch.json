@@ -13,13 +13,13 @@
                 "<node_internals>/**"
             ],
             // "command": "exe/ruby  -e 'class Foo; end; f = Foo.new; def f.bar; %q[bar]; end; puts f.bar'"
-            // "command": "exe/ruby examples/globals.rb"
+            // "command": "exe/ruby examples/delete.rb"
             // "command": "exe/ruby -I ../../phlex-ruby/phlex/lib -r rubygems -r phlex examples/phlex/super.rb"
             // "command": "exe/ruby -C ../../ioquatix/sus -I ../covered/lib bin/sus -- test/sus/it.rb",
             // "command": "exe/ruby -C ../../ioquatix/sus -I ../covered/lib bin/sus",
 
             "command": "exe/ruby -r rubygems -C ../../phlex-ruby/phlex -I ../../phlex-ruby/phlex/lib -I ../../ioquatix/sus -I ../../ioquatix/sus/lib ../../ioquatix/sus/bin/sus"
-            // "command": "exe/ruby -C ../../phlex-ruby/phlex -I ../../phlex-ruby/phlex/lib -I ../../ioquatix/sus -I ../../ioquatix/sus/lib -r rubygems ../../ioquatix/sus/bin/sus -- test/phlex/view/tags.rb"
+            // "command": "exe/ruby -C ../../phlex-ruby/phlex -I ../../phlex-ruby/phlex/lib -I ../../ioquatix/sus -I ../../ioquatix/sus/lib -r rubygems ../../ioquatix/sus/bin/sus -- test/phlex/view/naughty_business.rb"
 
             // "command": "exe/ruby -I ../../phlex-ruby/phlex/lib -r phlex examples/phlex/nav.rb"
             // "command": "exe/ruby -e 'puts [1, 2, 3].each_with_object([]) { |arr, item| arr << item }.inspect'"

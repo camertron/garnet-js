@@ -20,7 +20,7 @@ await ExecutionContext.current.push_onto_load_path(process.env.PWD!);
 // path to stdlib
 await ExecutionContext.current.push_onto_load_path(path.resolve(path.join(__dirname, "..", "src", "lib")));
 
-Dir.setwd(process.env.PWD!);
+await Dir.setwd(process.env.PWD!);
 
 for (let i = 0; i < argv.length; i ++) {
     if (argv[i] == "-I") {

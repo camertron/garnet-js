@@ -7,7 +7,7 @@ import { Range } from "./range";
 import { Object } from "./object";
 import { ExecutionContext } from "../execution_context";
 import { Encoding } from "./encoding";
-import { CharSelector } from "./char-selector";
+import { CharSelector, CharSelectors } from "./char-selector";
 import { Hash } from "./hash";
 import { RubyArray } from "../runtime/array";
 import { Numeric } from "./numeric";
@@ -785,6 +785,29 @@ export const init = () => {
             }
 
             return String.new(chars.join(""));
+        });
+
+        klass.define_native_method("delete", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const selector_strings = await Promise.all(
+                args.map(async (arg) => {
+                    return (await Runtime.coerce_to_string(arg)).get_data<string>();
+                })
+            )
+
+            const data = self.get_data<string>();
+            const selectors = CharSelectors.from(selector_strings);
+            const matches = selectors.matchAll(data);
+            const chunks = [];
+            let last_pos = 0;
+
+            for (const [start, stop] of matches) {
+                chunks.push(data.substring(last_pos, start));
+                last_pos = stop;
+            }
+
+            chunks.push(data.substring(last_pos));
+
+            return await String.new(chunks.join(""));
         });
 
         klass.define_native_method("clear", (self: RValue): RValue => {

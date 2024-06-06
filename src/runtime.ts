@@ -264,41 +264,39 @@ export class Runtime {
     }
 
     static async require(require_path: string): Promise<boolean> {
-        return await this.require_mutex.run(async () => {
-            require_path = vmfs.normalize_path(require_path);
+        require_path = vmfs.normalize_path(require_path);
 
-            const ec = ExecutionContext.current;
-            const absolute_path = vmfs.is_relative(require_path) ? this.find_on_load_path(require_path, false) : require_path;
-            const loaded_features = ec.globals['$"'].get_data<RubyArray>().elements;
+        const ec = ExecutionContext.current;
+        const absolute_path = vmfs.is_relative(require_path) ? this.find_on_load_path(require_path, false) : require_path;
+        const loaded_features = ec.globals['$"'].get_data<RubyArray>().elements;
 
-            if (absolute_path) {
-                // required files are only evaluated once
-                for (const loaded_feature of loaded_features) {
-                    if (loaded_feature.get_data<string>() === absolute_path) {
-                        return false;
-                    }
+        if (absolute_path) {
+            // required files are only evaluated once
+            for (const loaded_feature of loaded_features) {
+                if (loaded_feature.get_data<string>() === absolute_path) {
+                    return false;
                 }
-
-                await this.load(require_path, absolute_path);
-                loaded_features.push(await String.new(absolute_path!));
-                return true;
             }
 
-            if (this.native_extensions[require_path]) {
-                for (const loaded_feature of loaded_features) {
-                    if (loaded_feature.get_data<string>() === require_path) {
-                        return false;
-                    }
+            await this.load(require_path, absolute_path);
+            loaded_features.push(await String.new(absolute_path!));
+            return true;
+        }
+
+        if (this.native_extensions[require_path]) {
+            for (const loaded_feature of loaded_features) {
+                if (loaded_feature.get_data<string>() === require_path) {
+                    return false;
                 }
-
-                await this.load_native_extension(require_path);
-                loaded_features.push(await String.new(require_path));
-
-                return true;
             }
 
-            throw new LoadError(`cannot load such file -- ${require_path}`);
-        });
+            await this.load_native_extension(require_path);
+            loaded_features.push(await String.new(require_path));
+
+            return true;
+        }
+
+        throw new LoadError(`cannot load such file -- ${require_path}`);
     }
 
     static async require_relative(path: string, requiring_path: string) {
@@ -321,20 +319,18 @@ export class Runtime {
     }
 
     static async load_absolute_path(require_path: string, absolute_path: string): Promise<boolean> {
-        return await this.load_mutex.run(async () => {
-            const ec = ExecutionContext.current;
+        const ec = ExecutionContext.current;
 
-            if (this.native_extensions[absolute_path]) {
-                return this.load_native_extension(absolute_path);
-            }
+        if (this.native_extensions[absolute_path]) {
+            return this.load_native_extension(absolute_path);
+        }
 
-            // Garnet does not support loading code in other encodings
-            const code = new TextDecoder('utf8').decode(vmfs.read(absolute_path));
-            const insns = Compiler.compile_string(code.toString(), require_path, absolute_path);
-            await ec.run_top_frame(insns, ec.stack_len);
+        // Garnet does not support loading code in other encodings
+        const code = new TextDecoder('utf8').decode(vmfs.read(absolute_path));
+        const insns = Compiler.compile_string(code.toString(), require_path, absolute_path);
+        await ec.run_top_frame(insns, ec.stack_len);
 
-            return true;
-        });
+        return true;
     }
 
     private static find_on_load_path(path: string, assume_extension: boolean = true): string | null {
