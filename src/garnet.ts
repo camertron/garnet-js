@@ -1,4 +1,4 @@
-import { Qnil, RValue, init as initRuntime } from "./runtime";
+import { Qnil, RValue, Runtime, init as initRuntime } from "./runtime";
 import { ExecutionContext } from "./execution_context";
 import { vmfs } from "./vmfs";
 import { Compiler, ParseLocal } from "./compiler";
@@ -11,6 +11,7 @@ import { is_node } from "./env";
 import * as WASM from "./wasm";
 import { parsePrism } from "@ruby/prism/src/parsePrism";
 import { Regexp } from "./runtime/regexp";
+import { Hash } from "./runtime/hash";
 
 export async function init() {
     if (!ExecutionContext.current) {
@@ -52,13 +53,19 @@ export async function deinit() {
     ExecutionContext.current = null;
 }
 
-export async function unsafe_evaluate(code: string, path?: string, absolute_path?: string, line: number = 1, compiler_options?: CompilerOptions): Promise<RValue> {
+const check_ec = () => {
     if (!ExecutionContext.current) {
         throw new Error("The Ruby VM has not been initialized. Please call Garnet.init().");
     }
+}
 
-    const insns = Compiler.compile_string(code, path || "<code>", absolute_path || "<code>", line, compiler_options);
-    return ExecutionContext.current.run_top_frame(insns);
+export async function unsafe_evaluate(code: string, path?: string, absolute_path?: string, line: number = 1, compiler_options?: CompilerOptions): Promise<RValue> {
+    check_ec();
+
+    return await ExecutionContext.current.gvl.run(async () => {
+        const insns = Compiler.compile_string(code, path || "<code>", absolute_path || "<code>", line, compiler_options);
+        return ExecutionContext.current.run_top_frame(insns);
+    });
 }
 
 // Like unsafe_evaluate, but catches and prints errors
@@ -92,6 +99,48 @@ export async function evaluate(code: string, path?: string, absolute_path?: stri
 
         return Qnil;
     }
+}
+
+export async function send(receiver: RValue, method_name: string, args: RValue[] = [], kwargs?: Hash, block?: RValue): Promise<RValue> {
+    check_ec();
+
+    return await ExecutionContext.current.gvl.run(async () => {
+        return Object.send(receiver, method_name, args, kwargs, block);
+    });
+}
+
+export async function invoke_proc(proc: RValue, args: RValue[] = [], kwargs?: Hash, block?: RValue): Promise<RValue> {
+    check_ec();
+
+    return ExecutionContext.current.gvl.run(async () => {
+        return await proc.get_data<Proc>().call(ExecutionContext.current, args, kwargs, block);
+    });
+}
+
+export async function require(require_path: string): Promise<boolean> {
+    check_ec();
+
+    return await ExecutionContext.current.gvl.run(async () => {
+        return Runtime.require(require_path);
+    });
+}
+
+export async function find_constant(name: string): Promise<RValue | null> {
+    check_ec();
+
+    // wrap with gvl because of autoloading
+    return await ExecutionContext.current.gvl.run(async () => {
+        return Object.find_constant(name);
+    });
+}
+
+export async function find_constant_under(mod: RValue, name: string): Promise<RValue | null> {
+    check_ec();
+
+    // wrap with gvl because of autoloading
+    return await ExecutionContext.current.gvl.run(async () => {
+        return Object.find_constant_under(mod, name);
+    });
 }
 
 export {
