@@ -1,6 +1,5 @@
 import { BreakError, ExecutionContext } from "../execution_context";
 import { Module, Qnil, RValue, Runtime, Qfalse, Qtrue } from "../runtime"
-import { spaceship_compare } from "./comparable";
 import { Integer } from "./integer";
 import { Object } from "./object";
 import { Proc } from "./proc";
@@ -8,6 +7,7 @@ import { RubyArray } from "../runtime/array";
 import { ArgumentError, NameError } from "../errors";
 import { Lazy } from "./enumerator";
 import { Hash } from "./hash";
+import { schwartzian_quick_sort } from "../util/array_utils";
 
 export class Enumerable {
     private static module_: RValue;
@@ -181,39 +181,9 @@ export const init = () => {
             return memo || Qnil;
         });
 
-        const partition = async (array: [RValue, RValue][], left: number = 0, right: number = array.length - 1): Promise<number> => {
-            const pivot = array[Math.floor((right + left) / 2)];
-            let i = left;
-            let j = right;
-
-            while (i <= j) {
-                while (await spaceship_compare(array[i][0], pivot[0]) < 0) i ++;
-                while (await spaceship_compare(array[j][0], pivot[0]) > 0) j --;
-
-                if (i <= j) {
-                    [array[i], array[j]] = [array[j], array[i]];
-                    i ++;
-                    j --;
-                }
-            }
-
-            return i;
-        }
-
-        const quick_sort = async (array: [RValue, RValue][], left: number = 0, right: number = array.length - 1) => {
-            let index;
-
-            if (array.length > 1) {
-                index = await partition(array, left, right);
-
-                if (left < index - 1) await quick_sort(array, left, index - 1);
-                if (index < right) await quick_sort(array, index, right);
-            }
-        }
-
         // Uses a so-called "Schwartzian transform" that pre-computes the sort key for each item.
         // https://en.wikipedia.org/wiki/Schwartzian_transform
-        mod.define_native_method("sort_by", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+        mod.define_native_method("sort_by", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             if (block) {
                 const proc = block.get_data<Proc>();
                 const tuples: [RValue, RValue][] = [];
@@ -232,7 +202,7 @@ export const init = () => {
                     throw e;
                 }
 
-                await quick_sort(tuples);
+                await schwartzian_quick_sort(tuples);
 
                 return await RubyArray.new(tuples.map((tuple: RValue[]) => tuple[1]));
             } else {

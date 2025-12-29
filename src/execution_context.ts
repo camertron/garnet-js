@@ -8,7 +8,7 @@ import { ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, Qtrue
 import { Binding } from "./runtime/binding";
 import { Hash } from "./runtime/hash";
 import { Object } from "./runtime/object";
-import { String } from "./runtime/string";
+import { RubyString } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
 import { Proc } from "./runtime/proc";
 import { ParameterMetadata } from "./runtime/parameter-meta";
@@ -33,12 +33,33 @@ export class LeaveResult {
     }
 }
 
-class ThrownError extends Error {
+export enum ThrowType {
+    NONE = 0x0,
+    RETURN = 0x1,
+    BREAK = 0x2,
+    NEXT = 0x3,
+    RETRY = 0x4,
+    REDO = 0x5,
+    RAISE = 0x6,
+    THROW = 0x7,
+    FATAL = 0x8,
+    PAUSE = 0x9  // this one is not standard
+}
+
+abstract class ThrownError extends Error {
     public value: RValue;
 
     constructor(value: RValue) {
         super("This error was thrown by the Ruby VM.");
         this.value = value;
+    }
+
+    abstract get type(): number;
+}
+
+export class ThrowNoneError extends ThrownError {
+    get type(): number {
+        return ThrowType.NONE;
     }
 }
 
@@ -50,23 +71,41 @@ export class ReturnError extends ThrownError {
 
         this.return_from_frame = return_from_frame;
     }
+
+    override get type(): number {
+        return ThrowType.RETURN;
+    }
 }
 
 export class BreakError extends ThrownError {
+    override get type(): number {
+        return ThrowType.BREAK;
+    }
 }
 
 export class NextError extends ThrownError {
+    override get type(): number {
+        return ThrowType.NEXT;
+    }
 }
 
 export class PauseError extends ThrownError {
+    override get type(): number {
+        return ThrowType.PAUSE;
+    }
 }
 
+// Used for an actual ruby `throw` statement
 export class ThrowError extends ThrownError {
     public tag: RValue;
 
     constructor(tag: RValue, value: RValue) {
         super(value);
         this.tag = tag;
+    }
+
+    override get type(): number {
+        return ThrowType.THROW;
     }
 }
 
@@ -99,9 +138,13 @@ export class ExecutionContext {
     // The global VM lock
     public gvl: Mutex = new Mutex();
 
+    private static next_id: number = 0;
+    public id: number;
+
     constructor() {
         this.stack = [];
         this.top_locals = new Map();
+        this.id = ExecutionContext.next_id ++;
     }
 
     static async create(): Promise<ExecutionContext> {
@@ -115,7 +158,7 @@ export class ExecutionContext {
             '$:': await RubyArray.new(),  // load path
             '$"': await RubyArray.new(),  // loaded features
             '$,': Qnil,                   // field separator for print and Array#join
-            '$/': await String.new("\n"), // line separator
+            '$/': await RubyString.new("\n"), // line separator
             '$stdout': STDOUT,
             '$stderr': STDERR,
         };
@@ -135,7 +178,7 @@ export class ExecutionContext {
     }
 
     async push_onto_load_path(path: string) {
-        this.globals["$:"].get_data<RubyArray>().elements.push(await String.new(path));
+        this.globals["$:"].get_data<RubyArray>().elements.push(await RubyString.new(path));
     }
 
     // This returns the instruction sequence object that is currently being
@@ -193,7 +236,7 @@ export class ExecutionContext {
                     frame.pc += 1;
                     break;
 
-                case String:
+                case RubyString:
                     frame.pc += 1;
                     break;
 
@@ -353,7 +396,7 @@ export class ExecutionContext {
 
     async create_backtrace_rvalue(): Promise<RValue> {
         const backtrace = this.create_backtrace();
-        const lines = await Promise.all(backtrace.map(line => String.new(line)));
+        const lines = await Promise.all(backtrace.map(line => RubyString.new(line)));
         return await RubyArray.new(lines);
     }
 
@@ -606,6 +649,12 @@ export class ExecutionContext {
             }
         }
 
+        // Method was passed kwargs but does not accept them; pass kwargs as last positional arg.
+        if (iseq.argument_options.keyword_bits_index === null && iseq.argument_options.keyword_rest_start === null && kwargs) {
+            locals.push(await Hash.from_hash(kwargs));
+            kwargs = undefined;
+        }
+
         // Pop forwarded kwargs off the positional args array
         if (!kwargs && call_data.has_flag(CallDataFlag.KW_SPLAT_FWD)) {
             kwargs = locals.pop()!.get_data<Hash>();
@@ -622,6 +671,7 @@ export class ExecutionContext {
         // First, set up all of the leading arguments. These are positional and
         // required arguments at the start of the argument list.
         let lead_num = iseq.argument_options.lead_num || 0;
+        const post_num = iseq.argument_options.post_num || 0;
 
         // Apparently blocks and procs destructure one level of their args automatically.
         // Eg. {}.map { |a, b| ... } automatically destructures [a, b] while {}.map { |a| ... } does not,
@@ -643,14 +693,12 @@ export class ExecutionContext {
         for (let i = 0; i < lead_num; i ++) {
             // if calling a method or lambda, enforce required positional args
             if (calling_convention === CallingConvention.METHOD_LAMBDA && locals.length === 0) {
-                throw new ArgumentError(`wrong number of arguments (given ${args.length}, expected ${lead_num})`);
+                throw new ArgumentError(`wrong number of arguments (given ${args.length}, expected ${lead_num + post_num})`);
             }
 
             this.local_set(local_index, 0, locals.shift() || Qnil);
             local_index = this.inc_local_index(local_index, iseq);
         }
-
-        const post_num = iseq.argument_options.post_num || 0;
 
         // Next, set up all of the optional arguments. The opt array contains
         // the labels that the frame should start at if the optional is
@@ -698,14 +746,19 @@ export class ExecutionContext {
         // Next, set up any post arguments. These are positional arguments that
         // come after the splat argument.
         for (let i = 0; i < post_num; i ++) {
-            this.local_set(local_index, 0, locals.shift()!);
+            // if calling a method or lambda, enforce required positional args
+            if (calling_convention === CallingConvention.METHOD_LAMBDA && locals.length === 0) {
+                throw new ArgumentError(`wrong number of arguments (given ${args.length}, expected ${lead_num + post_num})`);
+            }
+
+            this.local_set(local_index, 0, locals.shift() || Qnil);
             local_index = this.inc_local_index(local_index, iseq);
         }
 
         // If there is a keyword bits index (i.e. we were called with kwargs),
         // but neither the KWARG nor the KW_SPLAT flags are set, that means
         // keyword arguments have been passed as the last argument in the
-        // positional args array (likely forwarded via ...).
+        // positional args array (perhaps forwarded via ...).
         if (iseq.argument_options.keyword_bits_index != null && !call_data.has_flag(CallDataFlag.KWARG) && !call_data.has_flag(CallDataFlag.KW_SPLAT)) {
             if (locals.length > 0 && locals[locals.length - 1].klass === await Hash.klass()) {
                 const kwargs_hash = locals.pop()!;
@@ -730,7 +783,7 @@ export class ExecutionContext {
 
         const keyword_option = iseq.argument_options.keyword;
 
-        if (kwargs && kwargs.length > 0 && !keyword_option && !iseq.argument_options.keyword_rest_start) {
+        if (kwargs && kwargs.length > 0 && !keyword_option && iseq.argument_options.keyword_rest_start === null) {
             throw new ArgumentError("no keywords accepted");
         }
 

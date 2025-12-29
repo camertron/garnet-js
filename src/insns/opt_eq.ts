@@ -4,7 +4,7 @@ import Instruction from "../instruction";
 import { Qfalse, Qtrue } from "../runtime";
 import { Integer } from "../runtime/integer";
 import { Object } from "../runtime/object"
-import { String } from "../runtime/string"
+import { RubyString } from "../runtime/string"
 import { Symbol } from "../runtime/symbol"
 
 export default class OptEq extends Instruction {
@@ -25,7 +25,7 @@ export default class OptEq extends Instruction {
         const arg0_class = args[0].klass;
 
         if ((receiver_class === await Integer.klass() && arg0_class === await Integer.klass()) ||
-            (receiver_class === await String.klass() && arg0_class === await String.klass()) ||
+            (receiver_class === await RubyString.klass() && arg0_class === await RubyString.klass()) ||
             (receiver_class === await Symbol.klass() && arg0_class === await Symbol.klass())) {
             if (receiver.get_data<number | string>() == args[0].get_data<number | string>()) {
                 context.push(Qtrue);

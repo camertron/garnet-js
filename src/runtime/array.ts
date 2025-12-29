@@ -1,15 +1,18 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
 import { BreakError, ExecutionContext } from "../execution_context";
-import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
+import { Class, Module, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { hash_combine } from "../util/hash_utils";
 import { Integer } from "./integer";
 import { Object } from "./object";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 import { Range } from "./range";
 import { Hash } from "./hash";
 import { ArgumentError, NameError, TypeError } from "../errors";
 import { Proc } from "./proc";
 import { Enumerator } from "./enumerator";
+import { quick_sort } from "../util/array_utils";
+import { spaceship_compare } from "./comparable";
+import { Numeric } from "./numeric";
 
 export class RubyArray {
     private static klass_: RValue;
@@ -62,7 +65,7 @@ export const init = () => {
                 if (args[0].klass === await RubyArray.klass()) {
                     init_arr = [...args[0].get_data<RubyArray>().elements];
                 } else {
-                    Runtime.assert_type(args[0], await Integer.klass());
+                    await Runtime.assert_type(args[0], await Integer.klass());
                     const size = args[0].get_data<number>();
 
                     // block supercedes default value
@@ -97,14 +100,14 @@ export const init = () => {
 
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const elements = self.get_data<RubyArray>().elements;
+            const strings: string[] = []
 
-            const strings = await Promise.all(
-                elements.map(async (element: RValue): Promise<string> => {
-                    return (await Object.send(element, "inspect")).get_data<string>();
-                })
-            );
+            for (const element of elements) {
+                const str = await Object.send(element, "inspect");
+                strings.push(str.get_data<string>());
+            }
 
-            return await String.new(`[${strings.join(", ")}]`);
+            return await RubyString.new(`[${strings.join(", ")}]`);
         });
 
         await klass.alias_method("to_s", "inspect");
@@ -314,8 +317,8 @@ export const init = () => {
             if (args[0].klass == (await Object.find_constant("Range"))!) {
                 const range = args[0].get_data<Range>();
 
-                Runtime.assert_type(range.begin, await Integer.klass());
-                Runtime.assert_type(range.end, await Integer.klass());
+                await Runtime.assert_type(range.begin, await Integer.klass());
+                await Runtime.assert_type(range.end, await Integer.klass());
 
                 let start_pos = range.begin.get_data<number>();
 
@@ -343,7 +346,7 @@ export const init = () => {
                 const index = Math.floor(args[0].get_data<number>());
 
                 if (args.length > 1) {
-                    Runtime.assert_type(args[1], await Integer.klass());
+                    await Runtime.assert_type(args[1], await Integer.klass());
                     const length = args[1].get_data<number>();
                     return RubyArray.new(elements.slice(index, index + length));
                 } else {
@@ -366,7 +369,7 @@ export const init = () => {
             const result = [];
 
             for (const element of elements) {
-                if (element.klass === await String.klass()) {
+                if (element.klass === await RubyString.klass()) {
                     result.push(element.get_data<string>());
                 } else if (element.klass === await RubyArray.klass()) {
                     result.push(...await stringify_and_flatten(element.get_data<RubyArray>().elements));
@@ -383,14 +386,14 @@ export const init = () => {
             let separator_str;
 
             if (separator.is_truthy()) {
-                Runtime.assert_type(separator, await String.klass());
+                await Runtime.assert_type(separator, await RubyString.klass());
                 separator_str = separator.get_data<string>();
             } else {
                 separator_str = "";
             }
 
             const result = (await stringify_and_flatten(self.get_data<RubyArray>().elements)).join(separator_str);
-            return String.new(result);
+            return RubyString.new(result);
         });
 
         klass.define_native_method("include?", async (self: RValue, args: RValue[]): Promise<RValue> => {
@@ -411,7 +414,7 @@ export const init = () => {
             let count = 1;
 
             if (args.length > 0) {
-                Runtime.assert_type(args[0], await Integer.klass());
+                await Runtime.assert_type(args[0], await Integer.klass());
                 count = args[0].get_data<number>();
             }
 
@@ -444,7 +447,7 @@ export const init = () => {
         });
 
         klass.define_native_method("+", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            Runtime.assert_type(args[0], await RubyArray.klass());
+            await Runtime.assert_type(args[0], await RubyArray.klass());
             return await RubyArray.new(self.get_data<RubyArray>().elements.concat(args[0].get_data<RubyArray>().elements));
         });
 
@@ -456,15 +459,20 @@ export const init = () => {
         klass.define_native_method("push", (self: RValue, args: RValue[], _kwargs?: Hash, _block?: RValue, call_data?: MethodCallData): RValue => {
             const elements = self.get_data<RubyArray>().elements;
 
-            // this is wrong but I don't know how to fix it, since I need to know which args are splatted
-            // but that info is not available right now. We'll need to capture more info in CallData.
-            if (call_data && call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
-                for (const arg of args) {
-                    elements.push(...arg.get_data<RubyArray>().elements);
-                }
-            } else {
+            // // this is wrong but I don't know how to fix it, since I need to know which args are splatted
+            // // but that info is not available right now. We'll need to capture more info in CallData.
+            // if (call_data && call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
+            //     for (const arg of args) {
+            //         try {
+            //             elements.push(...arg.get_data<RubyArray>().elements);
+            //         } catch(e) {
+            //             debugger;
+            //             throw e;
+            //         }
+            //     }
+            // } else {
                 elements.push(...args);
-            }
+            // }
 
             return self;
         });
@@ -480,7 +488,7 @@ export const init = () => {
             let count;
 
             if (args.length > 0) {
-                Runtime.assert_type(args[0], await Integer.klass());
+                await Runtime.assert_type(args[0], await Integer.klass());
                 count = args[0].get_data<number>();
             } else {
                 count = 1;
@@ -512,8 +520,12 @@ export const init = () => {
         });
 
         klass.define_native_method("concat", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            const ruby_array_class = await RubyArray.klass()
-            args.forEach((arg) => Runtime.assert_type(arg, ruby_array_class));
+            const ruby_array_class = await RubyArray.klass();
+
+            for (const arg of args) {
+                await Runtime.assert_type(arg, ruby_array_class);
+            }
+
             const elements = self.get_data<RubyArray>().elements;
             args.forEach((arg) => elements.push(...arg.get_data<RubyArray>().elements));
             return self;
@@ -546,7 +558,7 @@ export const init = () => {
         });
 
         klass.define_native_method("replace", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            Runtime.assert_type(args[0], await RubyArray.klass());
+            await Runtime.assert_type(args[0], await RubyArray.klass());
             const other = args[0];
             self.get_data<RubyArray>().elements = [...other.get_data<RubyArray>().elements];
             return self;
@@ -560,7 +572,7 @@ export const init = () => {
 
             for (const element of elements) {
                 const elem_hash = await Object.send(element, "hash");
-                Runtime.assert_type(elem_hash, await Integer.klass());
+                await Runtime.assert_type(elem_hash, await Integer.klass());
                 hash = hash_combine(hash, elem_hash.get_data<number>());
             }
 
@@ -647,6 +659,37 @@ export const init = () => {
             }
 
             return Qtrue;
+        });
+
+        const sort = async (elements: RValue[], block?: Proc) => {
+            let compare_fn = spaceship_compare;
+
+            if (block) {
+                compare_fn = async (x: RValue, y: RValue): Promise<number> => {
+                    const result = await block.call(ExecutionContext.current, [x, y]);
+
+                    if ((await Object.send(result, "is_a?", [await Numeric.klass()])).is_truthy()) {
+                        return result.get_data<number>();
+                    } else {
+                        const x_class_name = x.klass.get_data<Module>().name;
+                        const y_class_name = y.klass.get_data<Module>().name;
+                        throw new ArgumentError(`comparison of ${x_class_name} with ${y_class_name} failed`);
+                    }
+                };
+            }
+
+            await quick_sort(elements, compare_fn);
+        }
+
+        klass.define_native_method("sort", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const elements = [...self.get_data<RubyArray>().elements];
+            await sort(elements, block?.get_data<Proc>());
+            return await RubyArray.new(elements);
+        });
+
+        klass.define_native_method("sort!", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            await sort(self.get_data<RubyArray>().elements, block?.get_data<Proc>());
+            return self;
         });
     });
 

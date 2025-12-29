@@ -36,7 +36,7 @@ export default class ExpandArray extends Instruction {
         const postarg_flag = this.has_postarg_flag;
         const obj_data = object.get_data<RubyArray>().elements;
 
-        if (this.size == 0 && !splat_flag) {
+        if (this.size === 0 && !splat_flag) {
             // no space left on stack
         } else if (postarg_flag) {
             const values: RValue[] = [];
@@ -67,7 +67,9 @@ export default class ExpandArray extends Instruction {
             }
 
             if (this.size > values.length) {
-                for (let i = 0; i < this.size - values.length; i ++) {
+                const values_len = values.length;
+
+                for (let i = 0; i < this.size - values_len; i ++) {
                     values.push(Qnil);
                 }
             }

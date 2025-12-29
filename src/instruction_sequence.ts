@@ -54,7 +54,7 @@ import { LocalTable, Lookup } from "./local_table";
 import { CompilerOptions } from "./compiler_options";
 import { Module, ObjectClass, RValue } from "./runtime";
 import { Object } from "./runtime/object";
-import { String as RubyString } from "./runtime/string";
+import { RubyString as RubyString } from "./runtime/string";
 import CheckKeyword from "./insns/checkkeyword";
 import SetClassVariable from "./insns/setclassvariable";
 import GetClassVariable from "./insns/getclassvariable";
@@ -63,6 +63,7 @@ import GetBlockParamProxy from "./insns/getblockparamproxy";
 import ConcatArray from "./insns/concatarray";
 import { ParameterMetadata } from "./runtime/parameter-meta";
 import { LexicalScope } from "./compiler";
+import { Encoding } from "./runtime/encoding";
 
 export class Node {
     public instruction: Instruction;
@@ -426,16 +427,20 @@ export class InstructionSequence {
         this.push(new PutNil());
     }
 
-    putstring(str: string) {
-        this.push(new PutString(this.make_string(str)));
+    putstring(str: string, encoding?: RValue, frozen?: boolean, forcedBinary?: boolean) {
+        this.push(new PutString(this.make_string(str, encoding, Boolean(frozen), Boolean(forcedBinary))));
     }
 
     // utility function
-    make_string(str: string): RValue {
+    make_string(str: string, encoding?: RValue, frozen?: boolean, forcedBinary?: boolean): RValue {
         // we have to look the constant up this way because the compiler does not
         // support async visitor methods
         const string_class = ObjectClass.get_data<Module>().constants["String"];
-        return new RValue(string_class, str);
+        const rval = new RValue(string_class, str);
+        if (frozen) rval.freeze();
+        if (forcedBinary) RubyString.get_context(rval).forcedBinary = true;
+        if (encoding) RubyString.set_encoding(rval, encoding);
+        return rval;
     }
 
     leave() {

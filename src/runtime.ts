@@ -44,7 +44,7 @@ import { init as fiber_init } from "./runtime/fiber";
 import { init as net_http_init } from "./lib/net/http";
 import { init as uri_init } from "./lib/uri";
 import { obj_id_hash } from "./util/object_id";
-import { String } from "./runtime/string";
+import { RubyString } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
 import { Symbol } from "./runtime/symbol";
 import * as tty from "node:tty";
@@ -225,15 +225,15 @@ export class Runtime {
         return true;
     }
 
-    static assert_type(obj: RValue, type: Module): void;
-    static assert_type(obj: RValue, type: RValue): void;
-    static assert_type(obj: RValue, type: Module | RValue) {
+    static async assert_type(obj: RValue, type: Module): Promise<void>;
+    static async assert_type(obj: RValue, type: RValue): Promise<void>;
+    static async assert_type(obj: RValue, type: Module | RValue): Promise<void> {
         if (type instanceof Module) {
             if (obj.klass.get_data<Module>() !== type) {
                 throw new TypeError(`no implicit conversion of ${obj.klass.get_data<Module>().name} into ${type.name}`);
             }
         } else {
-            if (!Kernel.is_a(obj, type)) {
+            if (!(await Kernel.is_a(obj, type))) {
                 throw new TypeError(`no implicit conversion of ${obj.klass.get_data<Module>().name} into ${type.get_data<Module>().name}`);
             }
         }
@@ -241,7 +241,7 @@ export class Runtime {
 
     static async coerce_to_string(obj: RValue): Promise<RValue> {
         switch (obj.klass) {
-            case await String.klass():
+            case await RubyString.klass():
             case await Symbol.klass():
                 return obj;
             default:
@@ -249,7 +249,7 @@ export class Runtime {
                     const str = await Object.send(obj, "to_str");
 
                     // make sure classes that inherit from String also work here
-                    if (await Kernel.is_a(str, await String.klass())) {
+                    if (await Kernel.is_a(str, await RubyString.klass())) {
                         return str;
                     } else {
                         const obj_class_name = obj.klass.get_data<Class>().full_name;
@@ -261,6 +261,16 @@ export class Runtime {
                     throw new TypeError(`no implicit conversion of ${obj_class_name} into String`);
                 }
         }
+    }
+
+    static async coerce_all_to_string(objs: RValue[]): Promise<RValue[]> {
+        const result = [];
+
+        for (const obj of objs) {
+            result.push(await this.coerce_to_string(obj));
+        }
+
+        return result;
     }
 
     static async require(require_path: string): Promise<boolean> {
@@ -279,7 +289,7 @@ export class Runtime {
             }
 
             await this.load(require_path, absolute_path);
-            loaded_features.push(await String.new(absolute_path!));
+            loaded_features.push(await RubyString.new(absolute_path!));
             return true;
         }
 
@@ -291,7 +301,7 @@ export class Runtime {
             }
 
             await this.load_native_extension(require_path);
-            loaded_features.push(await String.new(require_path));
+            loaded_features.push(await RubyString.new(require_path));
 
             return true;
         }
@@ -757,7 +767,7 @@ export class Module {
 
     async full_name_rval(): Promise<RValue> {
         if (!this.full_name_rval_) {
-            this.full_name_rval_ = await String.new(this.full_name);
+            this.full_name_rval_ = await RubyString.new(this.full_name);
             this.full_name_rval_.freeze();
         }
 
@@ -890,9 +900,15 @@ export class RValue {
 
 export class RValuePointer {
     public rval: RValue;
+    public id: number;
+
+    private static next_id: number = 0;
 
     constructor(rval: RValue) {
         this.rval = rval;
+        this.id = RValuePointer.next_id ++;
+
+        // if (this.id === 21224 || this.id === 21225) debugger;
     }
 }
 
@@ -1038,7 +1054,7 @@ export const VMCore = new RValue(VMCoreClass);
 
 await NilClass.get_data<Class>().tap(async (klass: Class) => {
     klass.define_native_method("inspect", async (_self: RValue): Promise<RValue> => {
-        return await String.new("nil");
+        return await RubyString.new("nil");
     });
 
     klass.define_native_method("to_i", async (_self: RValue): Promise<RValue> => {
@@ -1046,7 +1062,7 @@ await NilClass.get_data<Class>().tap(async (klass: Class) => {
     });
 
     klass.define_native_method("to_s", async (_self: RValue): Promise<RValue> => {
-        return await String.new("");
+        return await RubyString.new("");
     });
 
     klass.define_native_method("any?", (_self: RValue): RValue => {
@@ -1068,11 +1084,11 @@ await NilClass.get_data<Class>().tap(async (klass: Class) => {
 
 await TrueClass.get_data<Class>().tap(async (klass: Class) => {
     klass.define_native_method("inspect", async (_self: RValue): Promise<RValue> => {
-        return await String.new("true");
+        return await RubyString.new("true");
     });
 
     klass.define_native_method("to_s", async (_self: RValue): Promise<RValue> => {
-        return await String.new("true");
+        return await RubyString.new("true");
     });
 
     klass.define_native_method("^", (_self: RValue, args: RValue[]): RValue => {
@@ -1098,11 +1114,11 @@ await TrueClass.get_data<Class>().tap(async (klass: Class) => {
 
 await FalseClass.get_data<Class>().tap(async (klass: Class) => {
     klass.define_native_method("inspect", async (_self: RValue): Promise<RValue> => {
-        return await String.new("false");
+        return await RubyString.new("false");
     });
 
     klass.define_native_method("to_s", async (_self: RValue): Promise<RValue> => {
-        return await String.new("false");
+        return await RubyString.new("false");
     });
 
     klass.define_native_method("^", (_self: RValue, args: RValue[]): RValue => {
@@ -1162,7 +1178,7 @@ await (ClassClass.get_data<Class>()).tap(async (klass: Class) => {
     });
 
     klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
-        return await String.new(self.get_data<Class>().full_name);
+        return await RubyString.new(self.get_data<Class>().full_name);
     });
 
     await klass.alias_method("to_s", "inspect");
@@ -1208,7 +1224,21 @@ await (BasicObjectClass.get_data<Class>()).tap(async (klass: Class) => {
         // const inspect_str = Object.send(self, "inspect").get_data<string>();
         // throw new NoMethodError(`undefined method \`${method_name}' for ${inspect_str}`);
         const method_name = args[0].get_data<string>();
-        throw new NoMethodError(`undefined method \`${method_name}' for ${self.klass.get_data<Class>().name}`);
+        let inspect_str;
+
+        switch (self.klass) {
+            case ClassClass:
+                inspect_str = `class ${self.get_data<Class>().name}`;
+                break;
+            case ModuleClass:
+                inspect_str = `module ${self.get_data<Module>().name}`;
+                break;
+            default:
+                inspect_str = `an instance of ${self.klass.get_data<Class>().name}`;
+                break;
+        }
+
+        throw new NoMethodError(`undefined method \`${method_name}' for ${inspect_str}`);
     });
 
     klass.define_native_method("__send__", async (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
@@ -1382,7 +1412,7 @@ export const init = async () => {
             // const release = (await import("os")).release().split(".")[0];
             const release = "foo";
 
-            return String.new(`${arch}-${platform}${release}`);
+            return RubyString.new(`${arch}-${platform}${release}`);
         } else {
             const userAgent = window.navigator.userAgent.toLowerCase();
             const browser =
@@ -1411,14 +1441,14 @@ export const init = async () => {
                 return 'unknown';
             })();
 
-            return String.new(`${browser}-${platform}`);
+            return RubyString.new(`${browser}-${platform}`);
         }
     })();
 
-    ObjectClass.get_data<Class>().constants["RUBY_VERSION"] = await String.new("3.2.2");
-    ObjectClass.get_data<Class>().constants["RUBY_ENGINE"] = await String.new("Garnet.js");
+    ObjectClass.get_data<Class>().constants["RUBY_VERSION"] = await RubyString.new("3.2.2");
+    ObjectClass.get_data<Class>().constants["RUBY_ENGINE"] = await RubyString.new("Garnet.js");
 
-    ObjectClass.get_data<Class>().constants["RUBY_DESCRIPTION"] = await String.new(
+    ObjectClass.get_data<Class>().constants["RUBY_DESCRIPTION"] = await RubyString.new(
         `Garnet.js ${ObjectClass.get_data<Class>().constants["RUBY_VERSION"].get_data<string>()} [${ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"].get_data<string>()}]`
     );
 

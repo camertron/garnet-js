@@ -1,6 +1,6 @@
 import { ArgumentError, NameError, ZeroDivisionError } from "../errors";
 import { Class, RValue, Runtime } from "../runtime";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 import { Float } from "./float";
 import { Integer } from "./integer";
 import { Numeric } from "./numeric";
@@ -89,7 +89,7 @@ export class Rational {
         const B = p1.match(/\d+|./g);
 
         if (B === null) {
-          throw new ArgumentError(`invalid value for convert(): ${String.inspect(p1)}`);
+          throw new ArgumentError(`invalid value for convert(): ${RubyString.inspect(p1)}`);
         }
 
         if (B[A] === '-') { // Check for minus sign at the beginning
@@ -148,7 +148,7 @@ export class Rational {
         let n_prime = parseInt(n, 10);
 
         if (isNaN(n_prime)) {
-            throw new ArgumentError(`invalid value for convert(): ${String.inspect(p1)}`);
+            throw new ArgumentError(`invalid value for convert(): ${RubyString.inspect(p1)}`);
         }
 
         return n_prime * s;
@@ -210,7 +210,7 @@ export const init = async () => {
 
             if (args.length === 1) {
                 switch (args[0].klass) {
-                    case await String.klass():
+                    case await RubyString.klass():
                         rational = Rational.from_string(args[0].get_data<string>());
                         break;
 
@@ -228,8 +228,8 @@ export const init = async () => {
                 }
             } else {
                 // @TODO: support float arguments
-                Runtime.assert_type(args[0], await Integer.klass());
-                Runtime.assert_type(args[1], await Integer.klass());
+                await Runtime.assert_type(args[0], await Integer.klass());
+                await Runtime.assert_type(args[1], await Integer.klass());
 
                 const n = args[0].get_data<number>();
                 const d = args[1].get_data<number>();
@@ -242,7 +242,7 @@ export const init = async () => {
 
         klass.define_native_method("inspect", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const rational = self.get_data<Rational>();
-            return await String.new(`(${rational.negative ? "-" : ""}${rational.n}/${rational.d})`);
+            return await RubyString.new(`(${rational.negative ? "-" : ""}${rational.n}/${rational.d})`);
         });
 
         klass.define_native_method("<=>", async (self: RValue, args: RValue[]): Promise<RValue> => {

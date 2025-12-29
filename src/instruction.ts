@@ -2,7 +2,7 @@ import { ExecutionContext, ExecutionResult } from "./execution_context";
 import { Qfalse, Qnil, Qtrue, Runtime, RValue } from "./runtime";
 import { Float } from "./runtime/float";
 import { Integer } from "./runtime/integer";
-import { String } from "./runtime/string";
+import { RubyString } from "./runtime/string";
 
 export type ValueType = {
     value: any,
@@ -14,11 +14,11 @@ export default abstract class Instruction {
     static async to_ruby(object: ValueType): Promise<RValue> {
         switch (object.type) {
             case "String":
-                return String.new(object.value as string);
+                return await RubyString.new(object.value as string);
             case "Symbol":
-                return Runtime.intern(object.value as string);
+                return await Runtime.intern(object.value as string);
             case "Integer":
-                return Integer.new(object.value as number);
+                return await Integer.new(object.value as number);
             case "Float":
                 return await Float.new(object.value as number);
             case "TrueClass":

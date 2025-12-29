@@ -3,7 +3,7 @@ import { BreakError, ExecutionContext } from "../execution_context";
 import { RValue, Class, Qtrue, Qfalse, Qnil, Runtime, ObjectClass } from "../runtime";
 import { Object } from "./object";
 import { Proc } from "./proc";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 import { Symbol } from "../runtime/symbol";
 import { Integer } from "./integer";
 import { hash_combine } from "../util/hash_utils";
@@ -223,7 +223,7 @@ export const init = () => {
                 pairs.push(`${key_str}=>${value_str}`);
             }
 
-            return String.new(`{${pairs.join(", ")}}`);
+            return RubyString.new(`{${pairs.join(", ")}}`);
         });
 
         klass.define_native_method("compare_by_identity", (self: RValue): RValue => {
@@ -308,7 +308,7 @@ export const init = () => {
             let replacement_hash: Hash | undefined = undefined;
 
             if (args.length > 0) {
-                Runtime.assert_type(args[0], await Hash.klass());
+                await Runtime.assert_type(args[0], await Hash.klass());
                 replacement_hash = args[0].get_data<Hash>();
             } else if (kwargs) {
                 replacement_hash = kwargs;
@@ -341,7 +341,7 @@ export const init = () => {
             let replacement_hash: Hash | undefined = undefined;
 
             if (args.length > 0) {
-                Runtime.assert_type(args[0], await Hash.klass());
+                await Runtime.assert_type(args[0], await Hash.klass());
                 replacement_hash = args[0].get_data<Hash>();
             } else if (kwargs) {
                 replacement_hash = kwargs;
@@ -433,7 +433,7 @@ export const init = () => {
         });
 
         klass.define_native_method("replace", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            Runtime.assert_type(args[0], await Hash.klass());
+            await Runtime.assert_type(args[0], await Hash.klass());
             const other = args[0].get_data<Hash>();
             self.get_data<Hash>().replace(other);
             return self;
@@ -458,7 +458,7 @@ export const init = () => {
             if (value) return value;
 
             if (block) {
-                return block.get_data<Proc>().call(ExecutionContext.current, [key]);
+                return await block.get_data<Proc>().call(ExecutionContext.current, [key]);
             } else if (args.length > 1) {
                 return args[1];
             } else {
@@ -547,7 +547,7 @@ export const init = () => {
             });
 
             for (const arg of args) {
-                Runtime.assert_type(arg, await Hash.klass());
+                await Runtime.assert_type(arg, await Hash.klass());
                 const other = arg.get_data<Hash>();
 
                 await other.each(async (k: RValue, v: RValue) => {
@@ -579,7 +579,7 @@ export const init = () => {
             const proc = block ? block.get_data<Proc>() : null;
 
             for (const arg of args) {
-                Runtime.assert_type(arg, await Hash.klass());
+                await Runtime.assert_type(arg, await Hash.klass());
                 const other = arg.get_data<Hash>();
 
                 await other.each(async (k: RValue, v: RValue) => {

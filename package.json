@@ -38,7 +38,7 @@
     "@garnet-js/encoding-shift-jis": "link:./packages/encoding-shift-jis",
     "@rollup/plugin-node-resolve": "^14.0.1",
     "@rollup/plugin-typescript": "^8.5.0",
-    "@ruby/prism": "0.26.0",
+    "@ruby/prism": "portal:./../../ruby/prism/javascript/",
     "@types/jest": "^29.5.8",
     "@types/node": "^20.9.1",
     "benchmarkify": "^3.0.0",
@@ -54,5 +54,6 @@
     "tsx": "^4.1.2",
     "typescript": "4.8.3",
     "typescript-eslint": "^7.8.0"
-  }
+  },
+  "packageManager": "yarn@4.3.0"
 }

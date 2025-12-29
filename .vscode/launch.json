@@ -5,6 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "showAsyncStacks": true,
             "type": "node-terminal",
             "request": "launch",
             "name": "Run Test Script",
@@ -13,20 +14,24 @@
                 "<node_internals>/**"
             ],
             // "command": "exe/ruby  -e 'class Foo; end; f = Foo.new; def f.bar; %q[bar]; end; puts f.bar'"
-            // "command": "exe/ruby examples/delete.rb"
+            "command": "exe/ruby examples/rescue_inside_block.rb"
             // "command": "exe/ruby -I ../../phlex-ruby/phlex/lib -r rubygems -r phlex examples/phlex/super.rb"
             // "command": "exe/ruby -C ../../ioquatix/sus -I ../covered/lib bin/sus -- test/sus/it.rb",
             // "command": "exe/ruby -C ../../ioquatix/sus -I ../covered/lib bin/sus",
 
-            "command": "exe/ruby -r rubygems -C ../../phlex-ruby/phlex -I ../../phlex-ruby/phlex/lib -I ../../ioquatix/sus -I ../../ioquatix/sus/lib ../../ioquatix/sus/bin/sus"
+            // "command": "exe/ruby -r rubygems -C ../../phlex-ruby/phlex -I ../../phlex-ruby/phlex/lib -I ../../ioquatix/sus -I ../../ioquatix/sus/lib ../../ioquatix/sus/bin/sus"
             // "command": "exe/ruby -C ../../phlex-ruby/phlex -I ../../phlex-ruby/phlex/lib -I ../../ioquatix/sus -I ../../ioquatix/sus/lib -r rubygems ../../ioquatix/sus/bin/sus -- test/phlex/view/naughty_business.rb"
 
             // "command": "exe/ruby -I ../../phlex-ruby/phlex/lib -r phlex examples/phlex/nav.rb"
             // "command": "exe/ruby -e 'puts [1, 2, 3].each_with_object([]) { |arr, item| arr << item }.inspect'"
-            // "command": "PATH=./bin:$PATH RUBY_EXE=exe/ruby exe/ruby -m @garnet-js/encoding-euc-jp/src/encoding-euc-jp -m @garnet-js/encoding-shift-jis/src/encoding-shift-jis -r encoding/euc_jp -r encoding/shift_jis -I /Users/camertron/workspace/ruby/mspec/lib -C ruby/spec /Users/camertron/workspace/ruby/mspec/bin/mspec-run -- core/string/concat_spec.rb core/string/empty_spec.rb"
+
+            // "command": "PATH=./bin:$PATH RUBY_EXE=exe/ruby exe/ruby -m @garnet-js/encoding-euc-jp/src/encoding-euc-jp -m @garnet-js/encoding-shift-jis/src/encoding-shift-jis -r encoding/euc_jp -r encoding/shift_jis -I /Users/camertron/workspace/ruby/mspec/lib -C ruby/spec /Users/camertron/workspace/ruby/mspec/bin/mspec-run -- core/string/concat_spec.rb core/string/delete_spec.rb"
+            // "command": "PATH=./bin:$PATH RUBY_EXE=exe/ruby exe/ruby -I /Users/camertron/workspace/ruby/mspec/lib -C ruby/spec /Users/camertron/workspace/ruby/mspec/bin/mspec-run -- language/block_spec.rb"
+            // "command": "PATH=./bin:$PATH RUBY_EXE=exe/ruby exe/ruby -I /Users/camertron/workspace/ruby/mspec/lib -C ruby/spec /Users/camertron/workspace/ruby/mspec/bin/mspec-run -- language/fixtures/break_spec.rb"
+
             // "command": "PATH=./bin:$PATH RUBY_EXE=bin/ruby bin/ruby -I /Users/camertron/workspace/ruby/mspec/lib -C ruby/spec /Users/camertron/workspace/ruby/mspec/bin/mspec -- run -h"
             // "command": "npx tsx ${workspaceFolder}/tester2.ts"
-            // "command": "node --experimental-vm-modules node_modules/.bin/jest --no-cache src/__tests__/keyword_args_test.ts"
+            // "command": "node --experimental-vm-modules node_modules/.bin/jest --no-cache src/__tests__/keyword.args_test.ts"
 
             // "command": "exe/ruby -r 'net/http' -e \"hostname = 'jsonplaceholder.typicode.com'; path = '/todos/1'; puts Net::HTTP.get(hostname, path)\""
         }

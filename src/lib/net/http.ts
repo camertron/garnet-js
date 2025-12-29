@@ -1,6 +1,6 @@
 import { Hash } from "../../garnet";
 import { Class, ObjectClass, RValue, Runtime } from "../../runtime";
-import { String } from "../../runtime/string";
+import { RubyString } from "../../runtime/string";
 import { URI } from "../uri";
 
 export const init = () => {
@@ -17,12 +17,12 @@ export const init = () => {
             const port = args.length > 2 ? args[2].get_data<number>() : DEFAULT_PORT;
 
             const result = await fetch(`http://${hostname.get_data<string>()}:${port}${path.get_data<string>()}`);
-            return await String.new(await result.text());
+            return await RubyString.new(await result.text());
         });
 
         klass.define_native_singleton_method("post_form", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            Runtime.assert_type(args[0], await URI.klass());
-            Runtime.assert_type(args[0], await Hash.klass());
+            await Runtime.assert_type(args[0], await URI.klass());
+            await Runtime.assert_type(args[0], await Hash.klass());
 
             const url = args[0].get_data<URI>().url;
             const form_data_hash = args[1].get_data<Hash>();

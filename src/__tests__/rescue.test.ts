@@ -2,7 +2,7 @@ import {beforeAll, describe, expect, test} from '@jest/globals';
 import { TrueClass } from '../runtime';
 import { RubyArray } from "../runtime/array";
 import { Symbol } from "../runtime/symbol";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 import { evaluate } from '../test_helpers';
 import { LoadError } from '../garnet';
 import * as Garnet from "../garnet";
@@ -245,7 +245,7 @@ describe("begin / rescue / end", () => {
         `;
 
         const result = await evaluate(code);
-        expect(result.klass).toBe(await String.klass());
+        expect(result.klass).toBe(await RubyString.klass());
         expect(result.get_data<string>()).toEqual("cannot load such file -- foo");
     });
 });

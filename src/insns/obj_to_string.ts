@@ -2,7 +2,7 @@ import { MethodCallData } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Object } from "../runtime/object"
-import { String } from "../runtime/string"
+import { RubyString } from "../runtime/string"
 
 export default class ObjToString extends Instruction {
     public calldata: MethodCallData;

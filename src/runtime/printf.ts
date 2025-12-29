@@ -1,7 +1,7 @@
 import { ArgumentError, NotImplementedError } from "../errors";
 import { RValue } from "../garnet";
 import { Object } from "../runtime/object";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 
 const printf_pattern = (
     "(?!\\\\)" +                  // string does not start with an escape character
@@ -79,7 +79,7 @@ export const sprintf = async (pattern: RValue, objects: RValue[]): Promise<RValu
     let last_pos = 0;
     let idx = 0;
 
-    Array.from(pattern_str.matchAll(printf_re)).forEach(async (match) => {
+    for (const match of Array.from(pattern_str.matchAll(printf_re))) {
         const cur_pos = match.index!
 
         if (cur_pos > last_pos) {
@@ -94,7 +94,7 @@ export const sprintf = async (pattern: RValue, objects: RValue[]): Promise<RValu
             case "d":
             case "i":
             case "u":
-                chunks.push(format_int(idx, pattern, objects, flags, width, precision));
+                chunks.push(await format_int(idx, pattern, objects, flags, width, precision));
                 idx ++;
                 break;
 
@@ -123,12 +123,12 @@ export const sprintf = async (pattern: RValue, objects: RValue[]): Promise<RValu
         }
 
         last_pos = cur_pos + match[0].length;
-    });
+    }
 
     if (last_pos < pattern_str.length - 1) {
         chunks.push(pattern_str.slice(last_pos));
     }
 
     const result = chunks.join("").replace("%%", "%");
-    return await String.new(result);
+    return await RubyString.new(result);
 }

@@ -169,7 +169,7 @@ export { InstructionSequence } from "./instruction_sequence";
 export { CallDataFlag, CallData, MethodCallData, BlockCallData, } from "./call_data";
 
 export type { IO } from "./runtime";
-export { String } from "./runtime/string";
+export { RubyString as String } from "./runtime/string";
 export { RubyArray } from "./runtime/array";
 export { Hash } from "./runtime/hash"
 export { Integer } from "./runtime/integer";

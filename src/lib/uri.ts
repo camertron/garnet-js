@@ -1,4 +1,4 @@
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 import { Object } from "../runtime/object";
 import { Class, Module, ObjectClass, RValue, Runtime } from "../runtime"
 import { NameError } from "../errors";
@@ -31,7 +31,7 @@ export class URI {
         if (!this.scheme_) {
             // remove trailing colon
             const protocol = this.url.protocol.slice(0, this.url.protocol.length - 1);
-            this.scheme_ = await String.new(protocol);
+            this.scheme_ = await RubyString.new(protocol);
         }
 
         return this.scheme_;

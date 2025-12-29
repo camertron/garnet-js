@@ -1,5 +1,5 @@
 import { Class, RValue, Runtime, Qnil, ObjectClass } from "../runtime";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 import { Object } from "../runtime/object";
 import { Integer } from "./integer";
 import { Numeric } from "./numeric";
@@ -32,21 +32,21 @@ export const init = async () => {
 
     Runtime.define_class("Float", await Numeric.klass(), (klass: Class) => {
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
-            return await String.new(self.get_data<number>().toString());
+            return await RubyString.new(self.get_data<number>().toString());
         });
 
         klass.define_native_method("/", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            Runtime.assert_type(args[0], await Numeric.klass());
+            await Runtime.assert_type(args[0], await Numeric.klass());
             return await Float.new(self.get_data<number>() / args[0].get_data<number>());
         });
 
         klass.define_native_method("-", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            Runtime.assert_type(args[0], await Numeric.klass());
+            await Runtime.assert_type(args[0], await Numeric.klass());
             return await Float.new(self.get_data<number>() - args[0].get_data<number>());
         });
 
         klass.define_native_method("*", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            Runtime.assert_type(args[0], await Numeric.klass());
+            await Runtime.assert_type(args[0], await Numeric.klass());
             return await Float.new(self.get_data<number>() * args[0].get_data<number>());
         });
 
@@ -55,7 +55,7 @@ export const init = async () => {
             let ndigits = 0;
 
             if (args.length > 0) {
-                Runtime.assert_type(args[0], await Integer.klass());
+                await Runtime.assert_type(args[0], await Integer.klass());
                 ndigits = args[0].get_data<number>();
             }
 
@@ -97,9 +97,9 @@ export const init = async () => {
             const num = self.get_data<number>();
 
             if (Number.isInteger(num)) {
-                return await String.new(num.toFixed(1));
+                return await RubyString.new(num.toFixed(1));
             } else {
-                return await String.new(num.toString());
+                return await RubyString.new(num.toString());
             }
         });
 

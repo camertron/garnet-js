@@ -49,4 +49,29 @@ describe("Arguments", () => {
         expect((await kwsplat_args.get(await Runtime.intern("arg4"))).klass).toBe(await String.klass());
         expect((await kwsplat_args.get(await Runtime.intern("arg4"))).get_data<string>()).toEqual("arg4");
     });
+
+    test("splat, splat", async () => {
+        const code = `
+            def foo(*args)
+                args
+            end
+
+            foo(*%w[a b], *%w[c d])
+        `;
+
+        const result = await evaluate(code);
+        expect(result.klass).toBe(await RubyArray.klass());
+
+        const elements = result.get_data<RubyArray>().elements;
+        expect(elements.length).toEqual(4);
+
+        expect(elements[0].klass).toBe(await String.klass());
+        expect(elements[0].get_data<string>()).toEqual("a");
+        expect(elements[1].klass).toBe(await String.klass());
+        expect(elements[1].get_data<string>()).toEqual("b");
+        expect(elements[2].klass).toBe(await String.klass());
+        expect(elements[2].get_data<string>()).toEqual("c");
+        expect(elements[3].klass).toBe(await String.klass());
+        expect(elements[3].get_data<string>()).toEqual("d");
+    });
 });

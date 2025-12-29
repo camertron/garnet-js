@@ -1,6 +1,6 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 
 export default class ConcatStrings extends Instruction {
     public count: number;
@@ -14,7 +14,7 @@ export default class ConcatStrings extends Instruction {
     async call(context: ExecutionContext): Promise<ExecutionResult> {
         const strings = context.popn(this.count);
         const joined = strings.map((str) => str.get_data<string>()).join("");
-        context.push(await String.new(joined));
+        context.push(await RubyString.new(joined));
         return null;
     }
 

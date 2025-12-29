@@ -15,12 +15,7 @@ export default class ToRegexp extends Instruction {
     }
 
     async call(context: ExecutionContext): Promise<ExecutionResult> {
-        const chunks = await Promise.all(
-            context.popn(this.size).map(async (elem) => {
-                return (await Runtime.coerce_to_string(elem)).get_data<string>()
-            })
-        );
-
+        const chunks: string[] = (await Runtime.coerce_all_to_string(context.popn(this.size))).map(element => element.get_data<string>());
         const pattern = chunks.join("");
         context.push(await Regexp.new(pattern, this.flags));
         return null;

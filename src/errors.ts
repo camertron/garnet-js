@@ -1,6 +1,6 @@
 import { Class, Module, ObjectClass, Qnil, Qtrue, RValue, Runtime } from "./runtime";
 import { Object } from "./runtime/object";
-import { String } from "./runtime/string";
+import { RubyString } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
 
 export const init = () => {
@@ -16,7 +16,7 @@ export const init = () => {
             if (message instanceof RValue) {
                 return message;
             } else {
-                return await String.new(message);
+                return await RubyString.new(message);
             }
         });
 
@@ -31,15 +31,15 @@ export const init = () => {
                 lines.push(`    ${error.backtrace[i]}`);
             }
 
-            return await String.new(lines.join("\n"));
+            return await RubyString.new(lines.join("\n"));
         });
 
         klass.define_native_method("set_backtrace", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            Runtime.assert_type(args[0], await RubyArray.klass());
+            await Runtime.assert_type(args[0], await RubyArray.klass());
             const backtrace = [];
 
             for (const element of args[0].get_data<RubyArray>().elements) {
-                Runtime.assert_type(element, await String.klass());
+                await Runtime.assert_type(element, await RubyString.klass());
                 backtrace.push(element.get_data<string>());
             }
 
@@ -61,7 +61,7 @@ export const init = () => {
                 const backtrace = [];
 
                 for (const element of error.backtrace) {
-                    backtrace.push(await String.new(element));
+                    backtrace.push(await RubyString.new(element));
                 }
 
                 error.backtrace_rval = await RubyArray.new(backtrace);
@@ -99,6 +99,7 @@ export const init = () => {
     const SystemCallErrorClass = Runtime.define_class("SystemCallError", StandardErrorClass);
     const ErrnoModule = Runtime.define_module("Errno");
     const ErrnoENOENTClass = Runtime.define_class_under(ErrnoModule, "ENOENT", SystemCallErrorClass);
+    const ErrnoENOTDIRClass = Runtime.define_class_under(ErrnoModule, "ENOTDIR", SystemCallErrorClass);
     const ErrnoEINVALClass = Runtime.define_class_under(ErrnoModule, "EINVAL", SystemCallErrorClass);
 
     const SystemExitClass = Runtime.define_class("SystemExit", ExceptionClass, (klass: Class) => {

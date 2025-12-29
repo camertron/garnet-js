@@ -5,7 +5,7 @@ import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, 
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 import { Proc } from "./proc";
 import { obj_id_hash } from "../util/object_id";
 import { BacktraceLocation } from "../lib/thread";
@@ -68,19 +68,19 @@ export const init = async () => {
 
     mod.define_native_method("require", async (_self: RValue, args: RValue[]): Promise<RValue> => {
         const path = args[0];
-        Runtime.assert_type(path, await String.klass());
+        await Runtime.assert_type(path, await RubyString.klass());
         return await Runtime.require(path.get_data<string>()) ? Qtrue : Qfalse;
     });
 
     mod.define_native_method("require_relative", async (_self: RValue, args: RValue[]): Promise<RValue> => {
         const path = args[0];
-        Runtime.assert_type(path, await String.klass());
+        await Runtime.assert_type(path, await RubyString.klass());
         return await Runtime.require_relative(path.get_data<string>(), ExecutionContext.current.frame!.iseq.absolute_path) ? Qtrue : Qfalse;
     });
 
     mod.define_native_method("load", async (_self: RValue, args: RValue[]): Promise<RValue> => {
         const path = args[0];
-        Runtime.assert_type(path, await String.klass());
+        await Runtime.assert_type(path, await RubyString.klass());
         return await Runtime.load(path.get_data<string>(), path.get_data<string>()) ? Qtrue : Qfalse;
     });
 
@@ -114,8 +114,8 @@ export const init = async () => {
 
     await mod.alias_method("kind_of?", "is_a?");
 
-    mod.define_native_method("instance_of?", (self: RValue, args: RValue[]): RValue => {
-        Runtime.assert_type(args[0], ClassClass);
+    mod.define_native_method("instance_of?", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        await Runtime.assert_type(args[0], ClassClass);
         return self.klass === args[0] ? Qtrue : Qfalse;
     });
 
@@ -130,7 +130,7 @@ export const init = async () => {
                     instance = await Object.send(args[0], "new", [args[1] || Qnil]);
                     break;
 
-                case await String.klass():
+                case await RubyString.klass():
                     instance = await Object.send((await Object.find_constant("RuntimeError"))!, "new", [args[0]]);
                     break;
 
@@ -182,7 +182,7 @@ export const init = async () => {
         }
 
         const result = (child_process as typeof import("child_process")).spawnSync(args[0].get_data<string>());
-        return await String.new(result.stdout.toString('utf-8')); // hopefully utf-8 is ok
+        return await RubyString.new(result.stdout.toString('utf-8')); // hopefully utf-8 is ok
     });
 
     mod.define_native_method("class", (self: RValue): RValue => {
@@ -197,7 +197,7 @@ export const init = async () => {
             case await Float.klass():
                 return Integer.get(Math.floor(args[0].get_data<number>()));
 
-            case await String.klass():
+            case await RubyString.klass():
                 const str = args[0].get_data<string>();
 
                 if (str.match(/^\d+$/)) {
@@ -257,7 +257,7 @@ export const init = async () => {
     mod.define_native_method("instance_variable_set", async (self: RValue, args: RValue[]): Promise<RValue> => {
         const first_arg = args[0] || Qnil;
 
-        if (first_arg.klass === await String.klass() || first_arg.klass === await Symbol.klass()) {
+        if (first_arg.klass === await RubyString.klass() || first_arg.klass === await Symbol.klass()) {
             const ivar_name = first_arg.get_data<string>();
             self.iv_set(ivar_name, args[1]);
             return args[1];
@@ -269,7 +269,7 @@ export const init = async () => {
     mod.define_native_method("instance_variable_get", async (self: RValue, args: RValue[]): Promise<RValue> => {
         const first_arg = args[0] || Qnil;
 
-        if (first_arg.klass === await String.klass() || first_arg.klass === await Symbol.klass()) {
+        if (first_arg.klass === await RubyString.klass() || first_arg.klass === await Symbol.klass()) {
             const ivar_name = first_arg.get_data<string>();
             return self.iv_get(ivar_name);
         } else {
@@ -282,7 +282,7 @@ export const init = async () => {
         let message = null;
 
         if (args.length > 0) {
-            Runtime.assert_type(args[0], await Integer.klass());
+            await Runtime.assert_type(args[0], await Integer.klass());
             status = args[0].get_data<number>();
         }
 
@@ -306,11 +306,15 @@ export const init = async () => {
 
         const first_arg = args[0] || Qnil;
 
-        if (first_arg.klass === await String.klass()) {
+        if (first_arg.klass === await RubyString.klass()) {
             if (args[1]) {
                 if (args[1].klass === await RubyArray.klass()) {
                     const elems = args[1].get_data<RubyArray>().elements;
-                    elems.forEach(async (elem) => Runtime.assert_type(elem, await String.klass()));
+
+                    for (const elem of elems) {
+                        await Runtime.assert_type(elem, await RubyString.klass());
+                    }
+
                     const elem_strings = elems.map((elem) => elem.get_data<string>());
                     // kexec(first_arg.get_data<string>(), elem_strings);
                     return Qnil;
@@ -325,7 +329,11 @@ export const init = async () => {
             throw new NotImplementedError("passing a hash as the first argument to Kernel#exec is not yet supported");
         } else if (first_arg.klass === await RubyArray.klass()) {
             const elems = args[0].get_data<RubyArray>().elements;
-            elems.forEach(async (elem) => Runtime.assert_type(elem, await String.klass()));
+
+            for (const elem of elems) {
+                await Runtime.assert_type(elem, await RubyString.klass());
+            }
+
             const elem_strings = elems.map((elem) => elem.get_data<string>());
             // kexec(elem_strings.join(" "));
             return Qnil;
@@ -335,7 +343,7 @@ export const init = async () => {
     });
 
     mod.define_native_method("__dir__", async (self: RValue, args: RValue[]): Promise<RValue> => {
-        return await String.new(vmfs.dirname(ExecutionContext.current.frame!.iseq.file));
+        return await RubyString.new(vmfs.dirname(ExecutionContext.current.frame!.iseq.file));
     });
 
     mod.define_native_method("nil?", (self: RValue): RValue => {
@@ -366,7 +374,7 @@ export const init = async () => {
 
     mod.define_native_method("extend", async (self: RValue, args: RValue[]): Promise<RValue> => {
         for (const module of args) {
-            Runtime.assert_type(module, ModuleClass);
+            await Runtime.assert_type(module, ModuleClass);
             self.get_data<Module>().extend(module);
             await Object.send(module, "extended", [self]);
         }
@@ -425,14 +433,14 @@ export const init = async () => {
         if (args.length === 1) {
             if (args[0].klass === (await Object.find_constant("Range"))!) {
                 const range = args[0].get_data<Range>();
-                Runtime.assert_type(range.begin, await Integer.klass());
-                Runtime.assert_type(range.end, await Integer.klass());
+                await Runtime.assert_type(range.begin, await Integer.klass());
+                await Runtime.assert_type(range.end, await Integer.klass());
                 start = range.begin.get_data<number>();
                 length = range.end.get_data<number>() - start;
             }
         } else if (args.length === 2) {
-            Runtime.assert_type(args[0], await Integer.klass());
-            Runtime.assert_type(args[1], await Integer.klass());
+            await Runtime.assert_type(args[0], await Integer.klass());
+            await Runtime.assert_type(args[1], await Integer.klass());
             start = args[0].get_data<number>();
             length = args[1].get_data<number>();
         }
@@ -477,7 +485,7 @@ export const init = async () => {
     });
 
     mod.define_native_method("instance_variable_defined?", async (self: RValue, args: RValue[]): Promise<RValue> => {
-        if (args[0].klass !== await String.klass() && args[0].klass !== await Symbol.klass()) {
+        if (args[0].klass !== await RubyString.klass() && args[0].klass !== await Symbol.klass()) {
             const inspect_str = (await Object.send(args[0], "inspect")).get_data<string>()
             throw new TypeError(`${inspect_str} is not a symbol nor a string`);
         }

@@ -29,7 +29,7 @@ export const init = () => {
             if (args[0] === mod.constants["CLOCK_MONOTONIC"]) {
                 return await Float.new(performance.now() / 1000);
             } else {
-                Runtime.assert_type(args[0], await Integer.klass());
+                await Runtime.assert_type(args[0], await Integer.klass());
                 const clock_num = args[0].get_data<number>();
                 throw new ErrnoEINVAL(`Invalid argument - clock_gettime(${clock_num})`);
             }

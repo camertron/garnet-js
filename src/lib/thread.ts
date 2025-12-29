@@ -1,7 +1,7 @@
 import { ThreadError } from "../errors";
 import { BreakError, ExecutionContext } from "../execution_context";
 import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 import { Proc } from "../runtime/proc";
 import { Object } from "../runtime/object";
 import { Integer } from "../runtime/integer";
@@ -118,7 +118,7 @@ export class BacktraceLocation {
 
     async path_rval(): Promise<RValue> {
         if (!this.path_rval_) {
-            this.path_rval_ = await String.new(this.path);
+            this.path_rval_ = await RubyString.new(this.path);
         }
 
         return this.path_rval_;
@@ -134,7 +134,7 @@ export class BacktraceLocation {
 
     async label_rval(): Promise<RValue> {
         if (!this.label_rval_) {
-            this.label_rval_ = await String.new(this.label);
+            this.label_rval_ = await RubyString.new(this.label);
         }
 
         return this.label_rval_;
@@ -256,7 +256,7 @@ export const init = () => {
 
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const loc = self.get_data<BacktraceLocation>();
-            return await String.new(`${loc.path}:${loc.lineno} in ${loc.label}`);
+            return await RubyString.new(`${loc.path}:${loc.lineno} in ${loc.label}`);
         });
     });
 

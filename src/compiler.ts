@@ -42,6 +42,7 @@ import {
     HashNode,
     IfNode,
     ImplicitNode,
+    ImplicitRestNode,
     IndexOperatorWriteNode,
     IndexOrWriteNode,
     IndexTargetNode,
@@ -54,6 +55,7 @@ import {
     InterpolatedRegularExpressionNode,
     InterpolatedStringNode,
     InterpolatedSymbolNode,
+    InterpolatedXStringNode,
     KeywordHashNode,
     KeywordRestParameterNode,
     LambdaNode,
@@ -111,10 +113,10 @@ import { Regexp } from "./runtime/regexp";
 import { DefinedType } from "./insns/defined";
 import { GetSpecialType } from "./insns/getspecial";
 import { SyntaxError } from "./errors";
-import { ThrowType } from "./insns/throw";
-import { String } from "./runtime/string";
 import { ParameterMetadata, ParametersMetadataBuilder } from "./runtime/parameter-meta";
 import Instruction from "./instruction";
+import { Encoding } from "./runtime/encoding";
+import { ThrowType } from "./execution_context";
 
 export type ParseLocal = {
     name: string
@@ -372,7 +374,7 @@ export class Compiler extends Visitor {
                             // Any kwargs that are not keyed by symbols must be optional and are
                             // slurped up into the kwsplat hash.
                             if (assoc_node.key instanceof SymbolNode && !found_kwsplat) {
-                                kw_arg.push(assoc_node.key.unescaped);
+                                kw_arg.push(assoc_node.key.unescaped.value);
                             } else {
                                 // If even one of the keys isn't a symbol, _all_ the kwargs are
                                 // passed in the kwsplat hash.
@@ -471,7 +473,12 @@ export class Compiler extends Visitor {
     }
 
     override visitBlockNode(node: BlockNode): InstructionSequence {
-        return this.with_child_iseq(this.iseq.block_child_iseq(this.start_line_for_loc(node.location)!, this.lexical_scope_stack.current()!), () => {
+        const block_begin_label = this.iseq.label();
+        const block_end_label = this.iseq.label();
+
+        this.iseq.push(block_begin_label);
+
+        const block_iseq = this.with_child_iseq(this.iseq.block_child_iseq(this.start_line_for_loc(node.location)!, this.lexical_scope_stack.current()!), () => {
             const begin_label = this.iseq.label();
             const end_label = this.iseq.label();
 
@@ -499,6 +506,11 @@ export class Compiler extends Visitor {
 
             this.iseq.catch_table.catch_next(begin_label, end_label, end_label, 0);
         });
+
+        this.iseq.push(block_end_label);
+        this.iseq.catch_table.catch_break(this.iseq, block_begin_label, block_end_label, block_end_label, 0);
+
+        return block_iseq;
     }
 
     override visitIntegerNode(node: IntegerNode) {
@@ -518,11 +530,12 @@ export class Compiler extends Visitor {
     override visitStringNode(node: StringNode) {
         if (!this.used) return
 
-        if (node.isFrozen()) {
-            this.iseq.putobject({type: "String", value: node.unescaped});
-        } else {
-            this.iseq.putstring(node.unescaped);
-        }
+        this.iseq.putstring(
+            node.unescaped.value,
+            Encoding.get_or_throw(node.unescaped.encoding),
+            node.isFrozen(),
+            node.isForcedBinaryEncoding()
+        );
     }
 
     override visitLocalVariableReadNode(node: LocalVariableReadNode) {
@@ -585,7 +598,7 @@ export class Compiler extends Visitor {
         const lookup = this.find_local_or_throw(node.name, node.depth + this.local_depth);
         this.iseq.getlocal(lookup.index, lookup.depth);
         this.with_used(true, () => this.visit(node.value));
-        this.iseq.send(MethodCallData.create(node.operator, 1), null);
+        this.iseq.send(MethodCallData.create(node.binaryOperator, 1), null);
         if (this.used) this.iseq.dup();
         this.iseq.setlocal(lookup.index, lookup.depth);
     }
@@ -646,12 +659,14 @@ export class Compiler extends Visitor {
         const stack_positions: InsnNode[] = [];
 
         for (const left of node.lefts) {
-            const pos = new StackPosition();
-            const pos_node = this.iseq.push(pos) as InsnNode;
-            stack_positions.push(pos_node);
-            pos.delta = this.with_used<number>(true, () => {
-                return this.measure_stack_change(() => this.visit(left))
-            });
+            if (left instanceof IndexTargetNode) {
+                const pos = new StackPosition();
+                const pos_node = this.iseq.push(pos) as InsnNode;
+                stack_positions.push(pos_node);
+                pos.delta = this.with_used<number>(true, () => {
+                    return this.measure_stack_change(() => this.visit(left))
+                });
+            }
         }
 
         if (node.rest) {
@@ -668,12 +683,14 @@ export class Compiler extends Visitor {
         }
 
         for (const right of node.rights) {
-            const pos = new StackPosition();
-            const pos_node = this.iseq.push(pos) as InsnNode;
-            stack_positions.push(pos_node);
-            pos.delta = this.with_used<number>(true, (): number => {
-                return this.measure_stack_change(() => this.visit(right));
-            });
+            if (right instanceof IndexTargetNode) {
+                const pos = new StackPosition();
+                const pos_node = this.iseq.push(pos) as InsnNode;
+                stack_positions.push(pos_node);
+                pos.delta = this.with_used<number>(true, (): number => {
+                    return this.measure_stack_change(() => this.visit(right));
+                });
+            }
         }
 
         // Visit all the value nodes. This is actually an ArrayNode that will result in
@@ -688,10 +705,9 @@ export class Compiler extends Visitor {
         this.iseq.expandarray(node.lefts.length, flags);
 
         for (const left of node.lefts) {
-            const pos_node = stack_positions.shift()!
-            const pos = pos_node.instruction as unknown as StackPosition;
-
             if (left instanceof IndexTargetNode) {
+                const pos_node = stack_positions.shift()!
+                const pos = pos_node.instruction as unknown as StackPosition;
                 const stack_pos = this.find_stack_position(pos_node);
 
                 for (let i = 0; i < pos.delta; i ++) {
@@ -715,10 +731,9 @@ export class Compiler extends Visitor {
                 this.iseq.expandarray(1, flags);
             }
 
-            const pos_node = stack_positions.shift()!
-            const pos = pos_node.instruction as unknown as StackPosition;
-
             if (rest.expression instanceof IndexTargetNode) {
+                const pos_node = stack_positions.shift()!
+                const pos = pos_node.instruction as unknown as StackPosition;
                 const stack_pos = this.find_stack_position(pos_node);
 
                 for (let i = 0; i < pos.delta; i ++) {
@@ -735,10 +750,9 @@ export class Compiler extends Visitor {
         }
 
         for (const right of node.rights) {
-            const pos_node = stack_positions.shift()!
-            const pos = pos_node.instruction as unknown as StackPosition;
-
             if (right instanceof IndexTargetNode) {
+                const pos_node = stack_positions.shift()!
+                const pos = pos_node.instruction as unknown as StackPosition;
                 const stack_pos = this.find_stack_position(pos_node);
 
                 for (let i = 0; i < pos.delta; i ++) {
@@ -933,7 +947,7 @@ export class Compiler extends Visitor {
         }
 
         if (node.keywords) {
-            if (!(node.keywordRest instanceof NoKeywordsParameterNode)) {
+            if (!(node.keywordRest instanceof NoKeywordsParameterNode) && node.keywords.length > 0) {
                 this.iseq.argument_options.keyword = [];
                 this.iseq.argument_options.keyword_bits_index = this.iseq.local_table.keyword_bits();
                 this.with_used(true, () => this.visitAll(node.keywords));
@@ -972,6 +986,11 @@ export class Compiler extends Visitor {
 
         this.iseq.argument_options.block_start = this.iseq.argument_size;
         this.iseq.argument_size ++;
+    }
+
+    // Eg. foo, = []
+    override visitImplicitRestNode(node: ImplicitRestNode) {
+        // Do we need to do anything here?
     }
 
     override visitForwardingArgumentsNode(node: ForwardingArgumentsNode): void {
@@ -1278,7 +1297,7 @@ export class Compiler extends Visitor {
 
     override visitSymbolNode(node: SymbolNode) {
         if (this.used) {
-            this.iseq.putobject({type: "Symbol", value: node.unescaped});
+            this.iseq.putobject({type: "Symbol", value: node.unescaped.value});
         }
     }
 
@@ -1522,6 +1541,21 @@ export class Compiler extends Visitor {
         this.iseq.intern();
     }
 
+    override visitInterpolatedXStringNode(node: InterpolatedXStringNode) {
+        for (const part of node.parts) {
+            this.with_used(true, () => this.visit(part));
+            this.iseq.dup();
+            this.iseq.objtostring(MethodCallData.create("to_s", 0, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE));
+            this.iseq.anytostring()
+        }
+
+        this.iseq.concatstrings(node.parts.length);
+
+        if (!this.used) {
+            this.iseq.pop()
+        }
+    }
+
     override visitEmbeddedStatementsNode(node: EmbeddedStatementsNode) {
         if (node.statements) {
             this.visit(node.statements);
@@ -1535,6 +1569,8 @@ export class Compiler extends Visitor {
     }
 
     override visitConstantPathNode(node: ConstantPathNode) {
+        if (!node.name) return
+
         if (node.parent == null) {
             this.iseq.putobject({type: "RValue", value: ObjectClass});
             this.iseq.putobject({type: "TrueClass", value: true});
@@ -1543,10 +1579,12 @@ export class Compiler extends Visitor {
             this.iseq.putobject({type: "FalseClass", value: false});
         }
 
-        this.iseq.getconstant((node.child as ConstantReadNode).name);
+        this.iseq.getconstant(node.name);
     }
 
     override visitConstantPathWriteNode(node: ConstantPathWriteNode) {
+        if (!node.target.name) return;
+
         if (node.target.parent) {
             this.with_used(true, () => this.visit(node.target.parent!));
         } else {
@@ -1561,7 +1599,7 @@ export class Compiler extends Visitor {
         }
 
         this.iseq.swap();
-        this.iseq.setconstant((node.target.child as ConstantReadNode).name);
+        this.iseq.setconstant(node.target.name);
     }
 
     override visitParenthesesNode(node: ParenthesesNode) {
@@ -1577,7 +1615,7 @@ export class Compiler extends Visitor {
     override visitInstanceVariableOperatorWriteNode(node: InstanceVariableOperatorWriteNode) {
         this.iseq.getinstancevariable(node.name);
         this.with_used(true, () => this.visit(node.value));
-        this.iseq.send(MethodCallData.create(node.operator, 1), null);
+        this.iseq.send(MethodCallData.create(node.binaryOperator, 1), null);
 
         if (this.used) {
             this.iseq.dup();
@@ -1865,7 +1903,7 @@ export class Compiler extends Visitor {
             // @TODO: handle all options
             const flags = Regexp.build_flags(node.isIgnoreCase(), node.isMultiLine(), node.isExtended());
             const regexp_class = ObjectClass.get_data<Module>().constants["Regexp"];
-            const regexp = new RValue(regexp_class, Regexp.compile(node.unescaped, flags));
+            const regexp = new RValue(regexp_class, Regexp.compile(node.unescaped.value, flags, node.isForcedBinaryEncoding()));
             this.iseq.putobject({type: "RValue", value: regexp});
         }
     }
@@ -2100,7 +2138,14 @@ export class Compiler extends Visitor {
 
     override visitXStringNode(node: XStringNode) {
         this.iseq.putself();
-        this.iseq.putobject({type: "String", value: node.unescaped});
+
+        this.iseq.putstring(
+            node.unescaped.value,
+            Encoding.get_or_throw(node.unescaped.encoding),
+            false,
+            node.isForcedBinaryEncoding()
+        );
+
         this.iseq.send(MethodCallData.create("`", 1, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE), null);
         if (!this.used) this.iseq.pop()
     }
@@ -2111,9 +2156,14 @@ export class Compiler extends Visitor {
         }
     }
 
-    override visitSourceFileNode(_node: SourceFileNode) {
+    override visitSourceFileNode(node: SourceFileNode) {
         if (this.used) {
-            this.iseq.putstring(this.path);
+            this.iseq.putstring(
+                node.filepath.value,
+                Encoding.get_or_throw(node.filepath.encoding),
+                node.isFrozen(),
+                node.isForcedBinaryEncoding()
+            );
         }
     }
 
@@ -2135,7 +2185,7 @@ export class Compiler extends Visitor {
             this.iseq.dupn(argc + 1);
             this.iseq.send(MethodCallData.create("[]", argc), null);
             this.with_used(true, () => this.visit(node.value));
-            this.iseq.send(MethodCallData.create(node.operator, 1), null);
+            this.iseq.send(MethodCallData.create(node.binaryOperator, 1), null);
             if (this.used) this.iseq.setn(argc + 2);
             this.iseq.send(MethodCallData.create("[]=", 1 + argc), null)
             this.iseq.pop();
@@ -2146,7 +2196,7 @@ export class Compiler extends Visitor {
             this.iseq.dup();
             this.iseq.send(MethodCallData.create("[]"), null);
             this.with_used(true, () => this.visit(node.value));
-            this.iseq.send(MethodCallData.create(node.operator, 1), null);
+            this.iseq.send(MethodCallData.create(node.binaryOperator, 1), null);
 
             if (this.used) {
                 this.iseq.swap();
@@ -2172,40 +2222,45 @@ export class Compiler extends Visitor {
         } else if (type === "ConstantPathNode") {
             const val = value as ConstantPathNode;
 
+            if (!val.name) {
+                this.iseq.putnil();
+                return;
+            }
+
             if (val.parent == null) {
                 this.iseq.putobject({type: "RValue", value: ObjectClass});
             } else {
                 this.with_used(true, () => this.visit(val.parent!));
             }
 
-            this.iseq.defined(DefinedType.CONST_FROM, (val.child as ConstantReadNode).name, this.iseq.make_string("constant"));
+            this.iseq.defined(DefinedType.CONST_FROM, val.name, this.iseq.make_string("constant", Encoding.us_ascii, true));
         } else if (type === "ConstantReadNode") {
-            this.iseq.defined(DefinedType.CONST, (value as ConstantReadNode).name, this.iseq.make_string("constant"));
+            this.iseq.defined(DefinedType.CONST, (value as ConstantReadNode).name, this.iseq.make_string("constant", Encoding.us_ascii, true));
         } else if (type === "FalseNode") {
-            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("true")});
+            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("true", Encoding.us_ascii, true)});
         } else if (type === "ForwardingSuperNode") {
             this.iseq.putself();
-            this.iseq.defined(DefinedType.ZSUPER, "", this.iseq.make_string("super"));
+            this.iseq.defined(DefinedType.ZSUPER, "", this.iseq.make_string("super", Encoding.us_ascii, true));
         } else if (type === "GlobalVariableReadNode") {
-            this.iseq.defined(DefinedType.GVAR, (value as GlobalVariableReadNode).name, this.iseq.make_string("global-variable"));
+            this.iseq.defined(DefinedType.GVAR, (value as GlobalVariableReadNode).name, this.iseq.make_string("global-variable", Encoding.us_ascii, true));
         } else if (type === "LocalVariableReadNode") {
-            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("local-variable")});
+            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("local-variable", Encoding.us_ascii, true)});
         } else if (type === "LocalVariableWriteNode" || type === "InstanceVariableWriteNode") {
-            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("assignment")});
+            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("assignment", Encoding.us_ascii, true)});
         } else if (type === "NilNode") {
             this.iseq.putobject({type: "NilClass", value: Qnil});
         } else if (type === "SelfNode") {
-            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("self")});
+            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("self", Encoding.us_ascii, true)});
         } else if (type === "TrueNode") {
-            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("true")});
+            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("true", Encoding.us_ascii, true)});
         } else if (type === "YieldNode") {
             this.iseq.putnil();
-            this.iseq.defined(DefinedType.YIELD, "", this.iseq.make_string("yield"));
+            this.iseq.defined(DefinedType.YIELD, "", this.iseq.make_string("yield", Encoding.us_ascii, true));
         } else if (type === "InstanceVariableReadNode") {
             this.iseq.putself();
-            this.iseq.defined(DefinedType.IVAR, (value as InstanceVariableReadNode).name, this.iseq.make_string("instance-variable"));
+            this.iseq.defined(DefinedType.IVAR, (value as InstanceVariableReadNode).name, this.iseq.make_string("instance-variable", Encoding.us_ascii, true));
         } else {
-            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("expression")});
+            this.iseq.putobject({type: "RValue", value: this.iseq.make_string("expression", Encoding.us_ascii, true)});
         }
     }
 

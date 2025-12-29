@@ -1,12 +1,14 @@
 import { BreakError, ExecutionContext } from "../execution_context";
-import { Qtrue } from "../runtime";
+import { Qfalse, Qtrue } from "../runtime";
 import { Class, ObjectClass, Qnil, Runtime, RValue, } from "../runtime";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 import { parse_glob } from "./parse-glob";
 import { Proc } from "./proc";
 import { RubyArray } from "../runtime/array";
 import { Numeric } from "./numeric";
 import { Hash } from "./hash";
+import { vmfs } from "../vmfs";
+import { Args } from "./arg-scanner";
 
 export class Dir {
     private static wd: string;
@@ -22,7 +24,7 @@ export class Dir {
 
     static async setwd(new_wd: string) {
         this.wd = new_wd;
-        this.wd_val = await String.new(this.wd);
+        this.wd_val = await RubyString.new(this.wd);
     }
 }
 
@@ -48,7 +50,7 @@ export const init = () => {
 
             if (kwargs && await kwargs.has_symbol("flags")) {
                 const f = kwargs.get_by_symbol("flags")!;
-                Runtime.assert_type(f, await Numeric.klass());
+                await Runtime.assert_type(f, await Numeric.klass());
                 flags = f.get_data<number>();
             }
 
@@ -59,7 +61,7 @@ export const init = () => {
 
                 try {
                     await pattern.each_matching_path(base_path, async (path: string) => {
-                        await proc.call(ExecutionContext.current, [await String.new(path)]);
+                        await proc.call(ExecutionContext.current, [await RubyString.new(path)]);
                     });
                 } catch (e) {
                     if (e instanceof BreakError) {
@@ -74,11 +76,17 @@ export const init = () => {
                 const matching_paths: RValue[] = [];
 
                 await pattern.each_matching_path(base_path, async (path: string) => {
-                    matching_paths.push(await String.new(path));
+                    matching_paths.push(await RubyString.new(path));
                 });
 
                 return await RubyArray.new(matching_paths);
             }
+        });
+
+        klass.define_native_singleton_method("exist?", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+            Args.check_arity(args.length, 1, 1);
+            const path = (await Runtime.coerce_to_string(args[0])).get_data<string>();
+            return vmfs.path_exists(path) && vmfs.is_directory(path) ? Qtrue : Qfalse;
         });
 
         await klass.get_singleton_class().get_data<Class>().alias_method("[]", "glob");

@@ -1,4 +1,4 @@
-import { Encoding, Runtime, register_encoding } from "@camertron/garnet-js/src/garnet";
+import { Encoding, Runtime, register_encoding } from "@camertron/garnet-js";
 import { to_unicode } from "./unicode-map"
 
 let inited = false;
@@ -28,4 +28,4 @@ export const init = () => {
     inited = true;
 }
 
-Runtime.register_native_extension("encoding/shift_jis", init);
+await Runtime.register_native_extension("encoding/shift_jis", init);

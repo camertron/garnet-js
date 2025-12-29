@@ -1,9 +1,11 @@
 import {beforeAll, describe, expect, test} from '@jest/globals';
 import * as Garnet from "../garnet";
 import { evaluate } from '../test_helpers';
-import { RubyArray, Runtime, String, Object, Qtrue } from '../garnet';
+import { RubyArray, Runtime, String } from '../garnet';
 import { Hash } from '../runtime/hash';
 import { Integer } from '../runtime/integer';
+import { RubyString } from '../runtime/string';
+import { Symbol } from '../runtime/symbol';
 
 beforeAll(() => {
     return Garnet.init();
@@ -183,6 +185,31 @@ describe("Keyword arguments", () => {
         const arg4 = await kwargs.get(await Runtime.intern("arg4"));
         expect(arg4.klass).toBe(await String.klass());
         expect(arg4.get_data<string>()).toEqual("bit");
+    });
+
+    test("keyword args passed as last positional arg", async () => {
+        const code = `
+            def foo(arg1, arg2)
+                [arg1, arg2]
+            end
+
+            foo("bar", baz: :boo)
+        `;
+
+        const result = await evaluate(code);
+        expect(result.klass).toBe(await RubyArray.klass());
+
+        const elements = result.get_data<RubyArray>().elements;
+        expect(elements.length).toEqual(2);
+
+        expect(elements[0].klass).toBe(await RubyString.klass());
+        expect(elements[0].get_data<string>()).toEqual("bar");
+
+        expect(elements[1].klass).toBe(await Hash.klass());
+        const kwargs = elements[1].get_data<Hash>();
+
+        expect(kwargs.get_by_symbol("baz").klass).toBe(await Symbol.klass());
+        expect(kwargs.get_by_symbol("baz").get_data<string>()).toEqual("boo");
     });
 
     describe("method passed kwargs with non-symbol keys", () => {

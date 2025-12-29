@@ -1,10 +1,10 @@
 import { EncodingConverterNotFoundError, IndexError, NameError, NotImplementedError, RangeError } from "../errors";
 import { Class, Qnil, RValue, Runtime, Qtrue, Qfalse, ObjectClass } from "../runtime";
-import { hash_string } from "../util/string_utils";
+import { hash_string, is_alpha_num, strlen } from "../util/string_utils";
 import { Integer } from "./integer";
 import { MatchData, Regexp } from "./regexp";
 import { Range } from "./range";
-import { Object } from "./object";
+import { Object as RubyObject } from "./object";
 import { ExecutionContext } from "../execution_context";
 import { Encoding } from "./encoding";
 import { CharSelector, CharSelectors } from "./char-selector";
@@ -14,9 +14,10 @@ import { Numeric } from "./numeric";
 import { Float } from "./float";
 import { mix_shared_string_methods_into } from "./string-shared";
 import { left_pad, sprintf } from "./printf";
+import { Args } from "./arg-scanner";
 
 // 7-bit strings are implicitly valid.
-// If both the valid _and_ 7bit bits are set, the string is broken.e
+// If both the valid _and_ 7bit bits are set, the string is broken.
 export const CR_7BIT = 16;
 export const CR_VALID = 32;
 export const CR_UNKNOWN = 0;
@@ -26,17 +27,24 @@ export const CR_MASK = CR_7BIT | CR_VALID;
 type StringContext = {
     encoding_rval?: RValue;
     flags?: number;
+    forcedBinary?: boolean;
 }
 
-export class String {
+export class RubyString {
     private static klass_: RValue;
 
-    static async new(str: string): Promise<RValue> {
-        return new RValue(await this.klass(), str);
+    static async new(str: string, forcedBinary: boolean = false): Promise<RValue> {
+        const rval = new RValue(await this.klass(), str);
+
+        if (forcedBinary) {
+            this.get_context(rval).forcedBinary = true;
+        }
+
+        return rval;
     }
 
     static async klass(): Promise<RValue> {
-        const klass = await Object.find_constant("String");
+        const klass = await RubyObject.find_constant("String");
 
         if (klass) {
             this.klass_ = klass;
@@ -63,6 +71,26 @@ export class String {
 
     static set_encoding(str: RValue, encoding: RValue): void {
         this.get_context(str).encoding_rval = encoding;
+    }
+
+    static get_forced_binary(str: RValue): boolean {
+        if (str.has_context()) {
+            return Boolean(this.get_context(str).forcedBinary);
+        }
+
+        return false;
+    }
+
+    static set_forced_binary(str: RValue, forcedBinary: boolean) {
+        this.get_context(str).forcedBinary = forcedBinary;
+    }
+
+    static copy_context(from: RValue, to: RValue) {
+        if (from.has_context()) {
+            const to_context = to.get_context() as StringContext;
+            Object.assign(to_context, from.get_context());
+            to_context.flags = CR_UNKNOWN;
+        }
     }
 
     static get_code_range(str: RValue): number {
@@ -158,7 +186,7 @@ export const init = () => {
             const str = args[0];
 
             if (str) {
-                Runtime.assert_type(str, await String.klass());
+                await Runtime.assert_type(str, await RubyString.klass());
                 self.data = str.data;
             } else {
                 self.data = "";
@@ -169,12 +197,12 @@ export const init = () => {
 
         klass.define_native_method("+@", async (self: RValue): Promise<RValue> => {
             // return unfrozen string
-            return await String.new(self.get_data<string>());
+            return await RubyString.new(self.get_data<string>());
         });
 
         klass.define_native_method("-@", async (self: RValue): Promise<RValue> => {
             // return frozen string
-            const new_str = await String.new(self.get_data<string>());
+            const new_str = await RubyString.new(self.get_data<string>());
             new_str.freeze();
             return new_str;
         });
@@ -191,16 +219,24 @@ export const init = () => {
 
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const str = self.get_data<string>();
-            return await String.new(String.inspect(str));
+            return await RubyString.new(RubyString.inspect(str));
         });
 
         klass.define_native_method("*", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const multiplier = args[0];
-            Runtime.assert_type(multiplier, await Numeric.klass());  // @TODO: handle floats (yes, you can multiply strings by floats, oh ruby)
-            return String.new(self.get_data<string>().repeat(multiplier.get_data<number>()));
+            await Runtime.assert_type(multiplier, await Numeric.klass());  // @TODO: handle floats (yes, you can multiply strings by floats, oh ruby)
+            const str = await RubyString.new(self.get_data<string>().repeat(multiplier.get_data<number>()));
+            RubyString.copy_context(self, str);
+            return str;
         });
 
         klass.define_native_method("split", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const str = self.get_data<string>();
+
+            if (str.length === 0) {
+                return await RubyArray.new([]);
+            }
+
             let delim;
 
             if (args.length > 0) {
@@ -209,8 +245,7 @@ export const init = () => {
                 delim = " ";
             }
 
-            const str = self.get_data<string>();
-            const chunks = str.split(delim).map((elem) => String.new(elem));
+            const chunks = str.split(delim).map((elem) => RubyString.new(elem));
             return await RubyArray.new(await Promise.all(chunks));
         });
 
@@ -259,7 +294,7 @@ export const init = () => {
 
                 for (const [begin, end, match] of matches) {
                     chunks.push(str.slice(last_pos, begin));
-                    const replacement = await replacement_hash.get(await String.new(match))
+                    const replacement = await replacement_hash.get(await RubyString.new(match))
                     chunks.push(replacement.get_data<string>());
                     last_pos = end;
                 }
@@ -283,10 +318,12 @@ export const init = () => {
             const pattern = args[0].get_data<Regexp | string>();
             const replacements = args[1];
 
-            return String.new(await gsub(str, pattern, replacements));
+            return RubyString.new(await gsub(str, pattern, replacements));
         });
 
         klass.define_native_method("gsub!", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            await RubyObject.check_frozen(self);
+
             const str = self.get_data<string>();
             const pattern = args[0].get_data<Regexp | string>();
             const replacements = args[1];
@@ -305,10 +342,12 @@ export const init = () => {
             const pattern = args[0].get_data<Regexp | string>();
             const replacements = args[1];
 
-            return String.new(await gsub(str, pattern, replacements, 1));
+            return RubyString.new(await gsub(str, pattern, replacements, 1));
         });
 
         klass.define_native_method("sub!", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            await RubyObject.check_frozen(self);
+
             const str = self.get_data<string>();
             const pattern = args[0].get_data<Regexp | string>();
             const replacements = args[1];
@@ -344,7 +383,7 @@ export const init = () => {
             const data = self.get_data<string>();
             const pattern = args[0];
 
-            if (pattern.klass === await String.klass()) {
+            if (pattern.klass === await RubyString.klass()) {
                 // @TODO: data should be passed through Regexp.quote() for some reason,
                 // but we don't have an impl yet
                 const pattern_str = pattern.get_data<string>();
@@ -356,7 +395,7 @@ export const init = () => {
 
                     if (last_pos > -1) {
                         const str = data.slice(last_pos, last_pos + pattern_str.length);
-                        results.push(await String.new(str));
+                        results.push(await RubyString.new(str));
                         last_pos += pattern_str.length;
                     }
                 } while (last_pos > -1);
@@ -369,14 +408,14 @@ export const init = () => {
                     if (match_data.captures.length === 1) {
                         const capture = match_data.captures[0]
                         const str = data.slice(capture[0], capture[1]);
-                        results.push(await String.new(str));
+                        results.push(await RubyString.new(str));
                     } else {
                         const captures = [];
 
                         for (let i = 1; i < match_data.captures.length; i ++) {
                             const capture = match_data.captures[i];
                             const str = data.slice(capture[0], capture[1]);
-                            captures.push(await String.new(str));
+                            captures.push(await RubyString.new(str));
                         }
 
                         results.push(await RubyArray.new(captures));
@@ -406,12 +445,12 @@ export const init = () => {
         });
 
         klass.define_native_method("%", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            args = (await Object.send(self, "Array", args)).get_data<RubyArray>().elements;
+            args = (await RubyObject.send(self, "Array", args)).get_data<RubyArray>().elements;
             return sprintf(self, args);
         });
 
         klass.define_native_method("==", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            if (args[0].klass !== await String.klass()) {
+            if (args[0].klass !== await RubyString.klass()) {
                 return Qfalse;
             }
 
@@ -423,7 +462,7 @@ export const init = () => {
         });
 
         klass.define_native_method("!=", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            if (args[0].klass !== await String.klass()) {
+            if (args[0].klass !== await RubyString.klass()) {
                 return Qtrue;
             }
 
@@ -435,8 +474,8 @@ export const init = () => {
         });
 
         klass.define_native_method("+", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            Runtime.assert_type(args[0], await String.klass());
-            return String.new(self.get_data<string>() + args[0].get_data<string>());
+            await Runtime.assert_type(args[0], await RubyString.klass());
+            return RubyString.new(self.get_data<string>() + args[0].get_data<string>());
         });
 
         klass.define_native_method("empty?", (self: RValue): RValue => {
@@ -450,7 +489,7 @@ export const init = () => {
         await klass.alias_method("length", "size");
 
         klass.define_native_method("bytesize", async (self: RValue): Promise<RValue> => {
-            const encoding = (await String.get_encoding_rval(self)).get_data<Encoding>();
+            const encoding = (await RubyString.get_encoding_rval(self)).get_data<Encoding>();
             return await Integer.get(encoding.bytesize(self.get_data<string>()));
         });
 
@@ -459,11 +498,11 @@ export const init = () => {
             let replacement_pos = 1;
             let start_pos, end_pos
 
-            if (args[0].klass === (await Object.find_constant("Range"))!) {
+            if (args[0].klass === (await RubyObject.find_constant("Range"))!) {
                 const range = args[0].get_data<Range>();
 
-                Runtime.assert_type(range.begin, await Integer.klass());
-                Runtime.assert_type(range.end, await Integer.klass());
+                await Runtime.assert_type(range.begin, await Integer.klass());
+                await Runtime.assert_type(range.end, await Integer.klass());
 
                 start_pos = range.begin.get_data<number>();
 
@@ -484,7 +523,7 @@ export const init = () => {
                 if (!range.exclude_end) {
                     end_pos += 1
                 }
-            } else if (args[0].klass === await String.klass()) {
+            } else if (args[0].klass === await RubyString.klass()) {
                 const substring = args[0].get_data<string>();
                 const idx = data.indexOf(substring);
 
@@ -497,11 +536,11 @@ export const init = () => {
             } else if (args[0].klass === await Regexp.klass()) {
                 throw new NotImplementedError("String#[]=(Regexp) is not yet implemented");
             } else {
-                Runtime.assert_type(args[0], await Integer.klass());
+                await Runtime.assert_type(args[0], await Integer.klass());
                 start_pos = args[0].get_data<number>();
 
                 if (args.length > 2) {
-                    Runtime.assert_type(args[1], await Integer.klass());
+                    await Runtime.assert_type(args[1], await Integer.klass());
                     end_pos = args[1].get_data<number>();
                     replacement_pos = 2;
                 } else {
@@ -513,7 +552,7 @@ export const init = () => {
                 }
             }
 
-            Runtime.assert_type(args[replacement_pos], await String.klass());
+            await Runtime.assert_type(args[replacement_pos], await RubyString.klass());
             const replacement = args[replacement_pos].get_data<string>();
 
             self.data = `${data.slice(0, start_pos)}${replacement}${data.slice(end_pos)}`;
@@ -522,27 +561,27 @@ export const init = () => {
 
         klass.define_native_method("ljust", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const data = self.get_data<string>();
-            Runtime.assert_type(args[0], await Integer.klass());
+            await Runtime.assert_type(args[0], await Integer.klass());
             const size = args[0].get_data<number>();
 
             let pad_str;
 
             if (args.length > 1) {
-                Runtime.assert_type(await String.klass(), args[1]);
+                await Runtime.assert_type(await RubyString.klass(), args[1]);
                 pad_str = args[1].get_data<string>();
             } else {
                 pad_str = " ";
             }
 
-            return String.new(left_pad(data, pad_str, size));
+            return RubyString.new(left_pad(data, pad_str, size));
         });
 
         klass.define_native_method("dup", async (self: RValue): Promise<RValue> => {
-            return await String.new(self.get_data<string>());
+            return await RubyString.new(self.get_data<string>());
         });
 
         klass.define_native_method("replace", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            Runtime.assert_type(args[0], await String.klass());
+            await Runtime.assert_type(args[0], await RubyString.klass());
             self.data = args[0].get_data<string>();
             return self;
         });
@@ -556,7 +595,7 @@ export const init = () => {
                 const match = args[0].get_data<Regexp>().search(data);
                 return match && match.begin(0) === 0 ? Qtrue : Qfalse;
             } else {
-                Runtime.assert_type(args[0] || Qnil, await String.klass());
+                await Runtime.assert_type(args[0] || Qnil, await RubyString.klass());
                 const search_str = args[0].get_data<string>();
                 return data.startsWith(search_str) ? Qtrue : Qfalse;
             }
@@ -574,13 +613,13 @@ export const init = () => {
                     return Qnil;
                 }
             } else {
-                return await Object.send(args[0], "=~", [self]);
+                return await RubyObject.send(args[0], "=~", [self]);
             }
         });
 
         // this is designed to be used only by << and concat below
         const append_to = async (str: RValue, val: RValue): Promise<void> => {
-            const encoding = await String.get_encoding(str);
+            const encoding = await RubyString.get_encoding(str);
 
             if (val.klass === await Integer.klass()) {
                 const num = val.get_data<number>();
@@ -590,7 +629,7 @@ export const init = () => {
                 }
 
                 if (num >= 128 && num <= 255 && encoding.name === "US-ASCII") {
-                    String.set_encoding(str, Encoding.binary);
+                    RubyString.set_encoding(str, Encoding.binary);
                 }
 
                 str.data = str.get_data<string>() + encoding.codepoint_to_utf16(num);
@@ -600,13 +639,13 @@ export const init = () => {
         }
 
         klass.define_native_method("<<", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            await Object.check_frozen(self);
+            await RubyObject.check_frozen(self);
             await append_to(self, args[0]);
             return self;
         });
 
         klass.define_native_method("concat", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            await Object.check_frozen(self);
+            await RubyObject.check_frozen(self);
 
             const self_data = self.get_data<string>();
 
@@ -623,7 +662,7 @@ export const init = () => {
         });
 
         klass.define_native_method("include?", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            Runtime.assert_type(args[0], await String.klass());
+            await Runtime.assert_type(args[0], await RubyString.klass());
             return self.get_data<string>().indexOf(args[0].get_data<string>()) > -1 ? Qtrue : Qfalse;
         });
 
@@ -646,12 +685,12 @@ export const init = () => {
             const remove_re = chomp_re_map[line_sep_str];
 
             if (remove_re) {
-                return await String.new(data.replace(remove_re, ""));
+                return await RubyString.new(data.replace(remove_re, ""));
             } else {
                 if (data.endsWith(line_sep_str)) {
-                    return await String.new(data.slice(0, data.length - line_sep_str.length));
+                    return await RubyString.new(data.slice(0, data.length - line_sep_str.length));
                 } else {
-                    return await String.new(data);
+                    return await RubyString.new(data);
                 }
             }
         });
@@ -664,15 +703,17 @@ export const init = () => {
             const remove_chars = data.endsWith("\r\n") ? 2 : 1;
 
             if (remove_chars > data.length) {
-                return await String.new("");
+                return await RubyString.new("");
             } else {
-                return await String.new(data.slice(0, data.length - remove_chars));
+                return await RubyString.new(data.slice(0, data.length - remove_chars));
             }
         });
 
         // Like String#chop, but modifies self in place; returns nil if self is empty, self
         // otherwise.
-        klass.define_native_method("chomp!", (self: RValue): RValue => {
+        klass.define_native_method("chomp!", async (self: RValue): Promise<RValue> => {
+            await RubyObject.check_frozen(self);
+
             const data = self.get_data<string>();
             const remove_chars = data.endsWith("\r\n") ? 2 : 1;
 
@@ -696,10 +737,12 @@ export const init = () => {
         }
 
         klass.define_native_method("strip", async (self: RValue): Promise<RValue> => {
-            return await String.new(strip(self.get_data<string>()));
+            return await RubyString.new(strip(self.get_data<string>()));
         });
 
-        klass.define_native_method("strip!", (self: RValue): RValue => {
+        klass.define_native_method("strip!", async (self: RValue): Promise<RValue> => {
+            await RubyObject.check_frozen(self);
+
             const old_str = self.get_data<string>();
             const new_str = strip(old_str);
 
@@ -712,15 +755,15 @@ export const init = () => {
         });
 
         klass.define_native_method("upcase", async (self: RValue): Promise<RValue> => {
-            return await String.new(self.get_data<string>().toUpperCase());
+            return await RubyString.new(self.get_data<string>().toUpperCase());
         });
 
         klass.define_native_method("downcase", async (self: RValue): Promise<RValue> => {
-            return await String.new(self.get_data<string>().toLowerCase());
+            return await RubyString.new(self.get_data<string>().toLowerCase());
         });
 
         klass.define_native_method("encoding", async (self: RValue): Promise<RValue> => {
-            return await String.get_encoding_rval(self);
+            return await RubyString.get_encoding_rval(self);
         });
 
         klass.define_native_method("encode!", async (self: RValue, args: RValue[]): Promise<RValue> => {
@@ -730,12 +773,12 @@ export const init = () => {
                 const target_encoding = await Encoding.supported_conversion(self, encoding_arg);
 
                 if (target_encoding) {
-                    await String.set_encoding(self, target_encoding);
+                    await RubyString.set_encoding(self, target_encoding);
                     return self;
                 }
             }
 
-            const self_encoding = await String.get_encoding_rval(self);
+            const self_encoding = await RubyString.get_encoding_rval(self);
 
             throw new EncodingConverterNotFoundError(
                 `code converter not found (${self_encoding.get_data<Encoding>().name} to ${args[0].get_data<string>()})`
@@ -746,16 +789,14 @@ export const init = () => {
             const encoding_arg = await Encoding.coerce(args[0]);
 
             if (encoding_arg) {
-                const target_encoding = await Encoding.supported_conversion(self, encoding_arg);
-
-                if (target_encoding) {
-                    const new_str = await String.new(self.get_data<string>());
-                    String.set_encoding(new_str, target_encoding);
+                if (await Encoding.supported_conversion(self, encoding_arg)) {
+                    const new_str = await RubyString.new(self.get_data<string>());
+                    RubyString.set_encoding(new_str, encoding_arg);
                     return new_str;
                 }
             }
 
-            const self_encoding = await String.get_encoding_rval(self);
+            const self_encoding = await RubyString.get_encoding_rval(self);
 
             throw new EncodingConverterNotFoundError(
                 `code converter not found (${self_encoding.get_data<Encoding>().name} to ${args[0].get_data<string>()})`
@@ -784,35 +825,231 @@ export const init = () => {
                 }
             }
 
-            return String.new(chars.join(""));
+            return RubyString.new(chars.join(""));
         });
 
-        klass.define_native_method("delete", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            const selector_strings = await Promise.all(
-                args.map(async (arg) => {
-                    return (await Runtime.coerce_to_string(arg)).get_data<string>();
-                })
-            )
-
-            const data = self.get_data<string>();
+        const find_matches_in = async (str: RValue, patterns: RValue[]): Promise<[number, number][]> => {
+            const selector_strings = (await Runtime.coerce_all_to_string(patterns)).map(str => str.get_data<string>());
+            const data = str.get_data<string>();
             const selectors = CharSelectors.from(selector_strings);
-            const matches = selectors.matchAll(data);
+            return selectors.match_all(data);
+        };
+
+        const delete_matches_from = (str: string, matches: [number, number][]): string => {
             const chunks = [];
             let last_pos = 0;
 
             for (const [start, stop] of matches) {
-                chunks.push(data.substring(last_pos, start));
+                chunks.push(str.substring(last_pos, start));
                 last_pos = stop;
             }
 
-            chunks.push(data.substring(last_pos));
+            chunks.push(str.substring(last_pos));
 
-            return await String.new(chunks.join(""));
+            return chunks.join("");
+        }
+
+        klass.define_native_method("delete", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            Args.check_arity(args.length, 1, Infinity);
+            const data = self.get_data<string>();
+            const [patterns] = await Args.scan("*", args);
+            const matches = await find_matches_in(self, patterns);
+            const result = await RubyString.new(delete_matches_from(data, matches));
+            RubyString.set_encoding(result, await RubyString.get_encoding_rval(self));
+            return result;
+        });
+
+        klass.define_native_method("delete!", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            await RubyObject.check_frozen(self);
+            Args.check_arity(args.length, 1, Infinity);
+            const data = self.get_data<string>();
+            const [patterns] = await Args.scan("*", args);
+            const matches = await find_matches_in(self, patterns);
+
+            if (matches.length === 0) {
+                return Qnil;
+            }
+
+            self.data = delete_matches_from(data, matches);
+            return self;
         });
 
         klass.define_native_method("clear", (self: RValue): RValue => {
             self.data = "";
             return self;
+        });
+
+        klass.define_native_method("<=>", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            Args.check_arity(args.length, 1, 1);
+
+            const ours = self.get_data<string>();
+            const our_encoding = await RubyString.get_encoding(self);
+            const theirs_rval = await Runtime.coerce_to_string(args[0]);
+            const their_encoding = await RubyString.get_encoding(theirs_rval);
+            const theirs = theirs_rval.get_data<string>();
+
+            const our_len = strlen(ours);
+            const their_len = strlen(theirs);
+
+            for (let i = 0; i < Math.min(our_len, their_len); i ++) {
+                const our_cp = our_encoding.unicode_to_codepoint(ours.codePointAt(i)!);
+                const their_cp = their_encoding.unicode_to_codepoint(theirs.codePointAt(i)!);
+
+                if (their_cp > our_cp) {
+                    return await Integer.get(-1);
+                } else if (their_cp < our_cp) {
+                    return await Integer.get(1);
+                }
+            }
+
+            if (their_len > our_len) {
+                return await Integer.get(-1);
+            } else if (their_len < our_len) {
+                return await Integer.get(1);
+            }
+
+            return await Integer.get(0);
+        });
+
+        klass.define_native_method("rindex", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [string_or_re, offset_rval] = await Args.scan("11", args);
+            const data = self.get_data<string>();
+            const offset = offset_rval === Qnil ? undefined : offset_rval.get_data<number>();
+
+            switch (string_or_re.klass) {
+                case await Regexp.klass():
+                    const re = string_or_re.get_data<Regexp>();
+                    let last_match: MatchData | null = null;
+
+                    await re.scan(data, async (match: MatchData) => {
+                        last_match = match;
+                        return true;
+                    }, 0, offset);
+
+                    if (!last_match) return Qnil;
+
+                    return await Integer.get((last_match as MatchData).begin(0));
+
+                default:
+                    const str = (await Runtime.coerce_to_string(string_or_re)).get_data<string>();
+                    const index = data.lastIndexOf(str, offset);
+
+                    if (index === -1) {
+                        return Qnil;
+                    } else {
+                        return Integer.get(index);
+                    }
+            }
+        });
+
+        const carry_map: Map<number, [string, string]> = new Map();
+        carry_map.set(122, ["a", "a"]);  // z
+        carry_map.set(90, ["A", "A"]);   // Z
+        carry_map.set(57, ["0", "1"]);   // 9
+
+        const rightmost_alpha_num_index = (str: string): number | null => {
+            for (let i = str.length - 1; i >= 0; i --) {
+                if (is_alpha_num(str.charCodeAt(i))) return i;
+            }
+
+            return null;
+        }
+
+        const succ = (data: string, encoding: Encoding): string => {
+            const rightmost_idx = rightmost_alpha_num_index(data);
+            const start_idx = rightmost_idx === null ? data.length - 1 : rightmost_idx;
+            const result_chars: string[] = [data.substring(start_idx + 1)];
+
+            let idx;
+            let succ_char: string | undefined
+            let carry_char: string | undefined;
+            let last_alphanum_idx: number | undefined;
+
+            for (idx = start_idx; idx >= 0; idx --) {
+                const cp = data.codePointAt(idx)!;
+
+                // If a rightmost alphanum was found, that means we can skip over non-alphanums
+                // as we iterate. If no rightmost alphanum was found, that means the string is
+                // made up entirely of non-alphanums, meaning we succ the string starting at the
+                // very end and don't skip anything.
+                if (!is_alpha_num(cp) && rightmost_idx !== null) {
+                    result_chars.push(String.fromCodePoint(cp));
+                    continue;  // skip over non-alphanums
+                }
+
+                const carry = carry_map.get(cp);
+
+                if (carry) {
+                    [succ_char, carry_char] = carry;
+                } else {
+                    const code = encoding.unicode_to_codepoint(cp);
+
+                    if (encoding.codepoint_valid(code + 1)) {
+                        succ_char = encoding.codepoint_to_utf16(code + 1);
+                        carry_char = undefined;
+                    } else {
+                        // @TODO: is this correct??
+                        succ_char = encoding.codepoint_to_utf16(0);
+                        carry_char = encoding.codepoint_to_utf16(1);
+                    }
+                }
+
+                result_chars.push(succ_char);
+                last_alphanum_idx = result_chars.length;
+
+                if (carry_char === undefined) break;
+            }
+
+            // The carry character is inserted in front of the last alphanum
+            if (carry_char) {
+                if (last_alphanum_idx === undefined) {
+                    result_chars.push(carry_char);
+                } else {
+                    result_chars.splice(last_alphanum_idx, 0, carry_char);
+                }
+            }
+
+            result_chars.push(data.substring(0, idx));
+
+            return result_chars.reverse().join("");
+        }
+
+        klass.define_native_method("succ", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            Args.check_arity(args.length, 0, 0);
+
+            const data = self.get_data<string>();
+            const encoding = await RubyString.get_encoding(self);
+
+            const str = await RubyString.new(succ(data, encoding));
+            RubyString.copy_context(self, str);
+
+            return str;
+        });
+
+        await klass.alias_method("next", "succ");
+
+        klass.define_native_method("succ!", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            await RubyObject.check_frozen(self);
+            Args.check_arity(args.length, 0, 0);
+
+            const data = self.get_data<string>();
+            const encoding = await RubyString.get_encoding(self);
+
+            self.data = succ(data, encoding);
+
+            return self;
+        });
+
+        await klass.alias_method("next!", "succ!");
+
+        klass.define_native_method("bytes", async (self: RValue): Promise<RValue> => {
+            const data = self.get_data<string>();
+            const encoding = await RubyString.get_encoding(self);
+
+            const raw_bytes = Array.from(encoding.string_to_bytes(data));
+            const bytes = await Promise.all(raw_bytes.map(async (b) => await Integer.get(b)));
+
+            return await RubyArray.new(bytes);
         });
     });
 

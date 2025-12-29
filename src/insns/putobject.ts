@@ -3,10 +3,14 @@ import Instruction, { ValueType } from "../instruction";
 
 export default class PutObject extends Instruction {
     public object: ValueType;
+    public id: number;
+
+    private static next_id: number = 0;
 
     constructor(object: ValueType) {
         super();
         this.object = object;
+        this.id = PutObject.next_id ++;
     }
 
     async call(context: ExecutionContext): Promise<ExecutionResult> {

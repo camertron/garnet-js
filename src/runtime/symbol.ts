@@ -4,7 +4,7 @@ import { hash_string } from "../util/string_utils";
 import { Integer } from "./integer";
 import { Object } from "./object";
 import { Proc } from "./proc";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 import { Regexp } from "./regexp";
 import { NameError } from "../errors";
 import { mix_shared_string_methods_into } from "./string-shared";
@@ -55,7 +55,7 @@ export const init = () => {
             const quote = !/^\w+$/.test(str);
             const escaped_str = str.replace(/\"/g, "\\\"");
 
-            return await String.new(quote ? `:"${escaped_str}"` : `:${escaped_str}`);
+            return await RubyString.new(quote ? `:"${escaped_str}"` : `:${escaped_str}`);
         });
 
         klass.define_native_method("hash", async (self: RValue): Promise<RValue> => {
@@ -73,7 +73,7 @@ export const init = () => {
         });
 
         klass.define_native_method("to_s", async (self: RValue): Promise<RValue> => {
-            return await String.new(self.get_data<string>());
+            return await RubyString.new(self.get_data<string>());
         });
 
         await klass.alias_method("name", "to_s");

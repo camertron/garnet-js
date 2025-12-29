@@ -2,7 +2,7 @@ import { ArgumentError, NameError, RangeError } from "../errors";
 import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { obj_id_hash } from "../util/object_id";
 import { Encoding } from "./encoding";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 import { Object } from "../runtime/object";
 import { Rational } from "./rational";
 import { Numeric } from "./numeric";
@@ -55,11 +55,11 @@ export const init = async () => {
 
     Runtime.define_class("Integer", await Numeric.klass(), (klass: Class) => {
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
-            return await String.new(self.get_data<number>().toString());
+            return await RubyString.new(self.get_data<number>().toString());
         });
 
         klass.define_native_method("to_s", async (self: RValue): Promise<RValue> => {
-            return await String.new(self.get_data<number>().toString());
+            return await RubyString.new(self.get_data<number>().toString());
         });
 
         klass.define_native_method("hash", async (self: RValue): Promise<RValue> => {
@@ -70,7 +70,7 @@ export const init = async () => {
         // definition is here for the sake of completeness.
         klass.define_native_method("*", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const multiplier = args[0];
-            Runtime.assert_type(multiplier, await Numeric.klass());
+            await Runtime.assert_type(multiplier, await Numeric.klass());
 
             const self_num = self.get_data<number>();
 
@@ -92,7 +92,7 @@ export const init = async () => {
 
         klass.define_native_method("/", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const divisor = args[0];
-            Runtime.assert_type(divisor, await Numeric.klass());
+            await Runtime.assert_type(divisor, await Numeric.klass());
 
             const result = self.get_data<number>() / divisor.get_data<number>();
 
@@ -105,7 +105,7 @@ export const init = async () => {
 
         klass.define_native_method("+", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const term = args[0];
-            Runtime.assert_type(term, await Numeric.klass());
+            await Runtime.assert_type(term, await Numeric.klass());
 
             const self_num = self.get_data<number>();
 
@@ -127,7 +127,7 @@ export const init = async () => {
 
         klass.define_native_method("-", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const term = args[0];
-            Runtime.assert_type(term, await Numeric.klass());
+            await Runtime.assert_type(term, await Numeric.klass());
 
             const self_num = self.get_data<number>();
 
@@ -149,7 +149,7 @@ export const init = async () => {
 
         klass.define_native_method("%", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const divisor = args[0];
-            Runtime.assert_type(divisor, await Numeric.klass());
+            await Runtime.assert_type(divisor, await Numeric.klass());
 
             const result = self.get_data<number>() % divisor.get_data<number>();
 
@@ -162,7 +162,7 @@ export const init = async () => {
 
         klass.define_native_method("**", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const term = args[0];
-            Runtime.assert_type(term, await Numeric.klass());
+            await Runtime.assert_type(term, await Numeric.klass());
 
             const result = Math.pow(self.get_data<number>(), term.get_data<number>());
 
@@ -225,10 +225,13 @@ export const init = async () => {
 
         klass.define_native_method("chr", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const data = self.get_data<number>();
-            const encoding = (args[0] || Encoding.us_ascii).get_data<Encoding>();
+            const encoding_rval = args[0] || Encoding.us_ascii;
+            const encoding = encoding_rval.get_data<Encoding>();
 
             if (encoding.codepoint_valid(data)) {
-                return await String.new(encoding.codepoint_to_utf16(data));
+                const str = await RubyString.new(encoding.codepoint_to_utf16(data));
+                RubyString.set_encoding(str, encoding_rval);
+                return str;
             } else {
                 throw new RangeError(`${data} out of char range`);
             }

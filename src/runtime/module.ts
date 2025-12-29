@@ -6,7 +6,7 @@ import { Module, ModuleClass, RValue, Runtime, Visibility, Qnil, Class, Qtrue, Q
 import { Kernel } from "./kernel";
 import { Object } from "./object";
 import { Proc } from "./proc";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 import { RubyArray } from "../runtime/array";
 import { Symbol } from "../runtime/symbol";
 import { Integer } from "./integer";
@@ -35,7 +35,7 @@ export const init = async () => {
     });
 
     mod.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
-        return await String.new(self.get_data<Module>().full_name);
+        return await RubyString.new(self.get_data<Module>().full_name);
     });
 
     await mod.alias_method("to_s", "inspect");
@@ -53,7 +53,7 @@ export const init = async () => {
 
     mod.define_native_method("include", async (self: RValue, args: RValue[]): Promise<RValue> => {
         for (const module of args) {
-            Runtime.assert_type(module, ModuleClass);
+            await Runtime.assert_type(module, ModuleClass);
             self.get_data<Module>().include(module);
             await Object.send(module, "included", [self]);
         }
@@ -68,7 +68,7 @@ export const init = async () => {
 
     mod.define_native_method("prepend", async (self: RValue, args: RValue[]): Promise<RValue> => {
         for (const module of args) {
-            Runtime.assert_type(module, ModuleClass);
+            await Runtime.assert_type(module, ModuleClass);
             self.get_data<Module>().prepend(module);
             await Object.send(module, "prepended", [self]);
         }
@@ -85,7 +85,7 @@ export const init = async () => {
         if (args.length === 0) {
             self.get_data<Module>().default_visibility = Visibility.public;
         } else {
-            Runtime.assert_type(args[0], await Symbol.klass());
+            await Runtime.assert_type(args[0], await Symbol.klass());
             const mtd_name = args[0].get_data<string>();
             self.get_data<Module>().methods[mtd_name].visibility = Visibility.public;
         }
@@ -97,7 +97,7 @@ export const init = async () => {
         if (args.length === 0) {
             self.get_data<Module>().default_visibility = Visibility.private;
         } else {
-            Runtime.assert_type(args[0], await Symbol.klass());
+            await Runtime.assert_type(args[0], await Symbol.klass());
             const mtd_name = args[0].get_data<string>();
             self.get_data<Module>().methods[mtd_name].visibility = Visibility.private;
         }
@@ -109,7 +109,7 @@ export const init = async () => {
         if (args.length === 0) {
             self.get_data<Module>().default_visibility = Visibility.protected;
         } else {
-            Runtime.assert_type(args[0], await Symbol.klass());
+            await Runtime.assert_type(args[0], await Symbol.klass());
             const mtd_name = args[0].get_data<string>();
             self.get_data<Module>().methods[mtd_name].visibility = Visibility.private;
         }
@@ -118,8 +118,8 @@ export const init = async () => {
     });
 
     mod.define_native_method("const_defined?", async (self: RValue, args: RValue[]): Promise<RValue> => {
-        if (args[0].klass !== await String.klass() && args[0].klass !== await Symbol.klass()) {
-            Runtime.assert_type(args[0], await String.klass());
+        if (args[0].klass !== await RubyString.klass() && args[0].klass !== await Symbol.klass()) {
+            await Runtime.assert_type(args[0], await RubyString.klass());
         }
 
         const c = args[0].get_data<string>();
@@ -201,9 +201,9 @@ export const init = async () => {
         if (block) {
             const proc = block!.get_data<Proc>();
             const binding = proc.binding.with_self(self);
-            return proc.with_binding(binding).call(ExecutionContext.current, [self]);
+            return await proc.with_binding(binding).call(ExecutionContext.current, [self]);
         } else {
-            Runtime.assert_type(args[0], await String.klass());
+            await Runtime.assert_type(args[0], await RubyString.klass());
             const code = args[0].get_data<string>();
             const ec = ExecutionContext.current;
             let path, line_offset;
@@ -215,7 +215,7 @@ export const init = async () => {
             }
 
             if (args[2]) {
-                Runtime.assert_type(args[2], await Integer.klass());
+                await Runtime.assert_type(args[2], await Integer.klass());
                 line_offset = args[2].get_data<number>() - 1;  // convert line to offset
             } else {
                 line_offset = 0;
@@ -262,7 +262,7 @@ export const init = async () => {
              * instead of BlockCallData.
              */
 
-            const new_call_data = new MethodCallData(method_name, call_data!.argc, call_data!.flag, call_data!.kw_arg);
+            const new_call_data = MethodCallData.create(method_name, call_data?.argc || mtd_args.length, call_data?.flag, call_data?.kw_arg);
 
             try {
                 if (body instanceof Proc) {
@@ -324,11 +324,7 @@ export const init = async () => {
         let method_names: string[];
 
         if (args[0].klass === await RubyArray.klass()) {
-            method_names = await Promise.all(
-                args[0].get_data<RubyArray>().elements.map(async (method_name) => {
-                    return (await Runtime.coerce_to_string(method_name)).get_data<string>();
-                })
-            )
+            method_names = (await Runtime.coerce_all_to_string(args[0].get_data<RubyArray>().elements)).map(element => element.get_data<string>());
         } else {
             method_names = [(await Runtime.coerce_to_string(args[0])).get_data<string>()];
         }
@@ -507,7 +503,7 @@ const each_string = async (args: RValue[], callback: (arg: string) => Promise<vo
 }
 
 const coerce_to_string = async (obj: RValue): Promise<string> => {
-    if (obj.klass !== await String.klass() && obj.klass !== await Symbol.klass()) {
+    if (obj.klass !== await RubyString.klass() && obj.klass !== await Symbol.klass()) {
         const arg_s = (await Object.send(obj, "inspect")).get_data<string>();
         throw new TypeError(`${arg_s} is not a symbol nor a string`);
     }

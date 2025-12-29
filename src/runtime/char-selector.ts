@@ -2,30 +2,31 @@ import { ArgumentError } from "../errors";
 
 interface IPattern {
     length: number;
-    indexOf(search: string): number | null;
+    index_of(search: string): number | null;
     matches(search: string, offset: number): boolean
 }
 
 class Pattern implements IPattern {
-    private chars: string;
+    private chars: string[];
     private offset: number;
     public length: number;
 
     constructor(chars: string, offset: number) {
         // unescape
-        this.chars = chars.replace(/\\./, (match) => match.slice(1));
+        this.chars = chars.replace(/\\./, (match) => match.slice(1)).split("");
         this.offset = offset;
         this.length = this.chars.length;
     }
 
-    indexOf(search: string): number | null {
+    index_of(search: string): number | null {
         const idx = this.chars.indexOf(search);
         if (idx === -1) return null;
         return idx + this.offset;
     }
 
     matches(search: string, offset: number): boolean {
-        return search.indexOf(this.chars, offset) === offset;
+        const charAtOffset = search.charAt(offset);
+        return this.chars.some(char => char === charAtOffset);
     }
 }
 
@@ -42,9 +43,9 @@ class NegatedPattern implements IPattern {
         }
     }
 
-    indexOf(search: string): number | null {
+    index_of(search: string): number | null {
         for (const child_pattern of this.child_patterns) {
-            if (child_pattern.indexOf(search) !== null) {
+            if (child_pattern.index_of(search) !== null) {
                 return null;  // no match
             }
         }
@@ -77,7 +78,7 @@ class RangePattern implements IPattern {
         this.length = this.end_code_point - this.begin_code_point;
     }
 
-    indexOf(search: string): number | null {
+    index_of(search: string): number | null {
         const cp = search.codePointAt(0)!
 
         if (cp >= this.begin_code_point && cp <= this.end_code_point) {
@@ -109,15 +110,16 @@ class PatternParser {
     }
 
     parse(): IPattern[] {
-        this.index = 0;
+        this.index = -1;
         this.offset = 0;
         this.negated = false;
+
+        this.next();
 
         const patterns: IPattern[] = [];
 
         while (!this.eos()) {
-            const pattern = this.handle_pattern()
-            if (pattern) patterns.push(pattern);
+            patterns.push(this.handle_pattern());
         }
 
         if (this.negated) {
@@ -127,12 +129,8 @@ class PatternParser {
         }
     }
 
-    private handle_pattern(): IPattern | null {
-        const first_char = this.next();
-
-        if (first_char === "") {
-            return null;
-        }
+    private handle_pattern(): IPattern {
+        let first_char = this.current;
 
         if (this.eos()) {
             const pattern = new Pattern(first_char, this.offset);
@@ -140,21 +138,24 @@ class PatternParser {
             return pattern;
         }
 
-        if (first_char === "^") {
+        let second_char = this.next();
+
+        if (first_char === "^" && second_char !== "") {
+            first_char = second_char;
+            second_char = this.next();
             this.negated = true;
-            return this.handle_pattern();
         }
 
-        const second_char = this.next();
-        let pattern;
+        return this.handle_non_negated_pattern(first_char, second_char);
+    }
 
+    private handle_non_negated_pattern(first_char: string, second_char: string): IPattern {
         if (second_char === "-") {
-            pattern = this.handle_range_pattern(first_char);
+            return this.handle_range_pattern(first_char);
         } else {
-            pattern = this.handle_regular_pattern(first_char, second_char);
+            this.previous();
+            return this.handle_regular_pattern();
         }
-
-        return pattern;
     }
 
     private handle_range_pattern(first_char: string): IPattern {
@@ -169,40 +170,60 @@ class PatternParser {
         const pattern = new RangePattern(first_char, this.current, this.offset);
         this.offset += pattern.length;
 
+        // consume range end char
+        this.next();
+
         return pattern;
     }
 
-    private handle_regular_pattern(first_char: string, second_char: string): IPattern {
-        const start_pos = this.index;
+    private handle_regular_pattern(): IPattern {
+        let start_pos = this.index;
 
         while (!this.eos()) {
-            if (this.current === "-" || this.current === "^") {
+            if (this.current === "-" && this.has_next() && this.index > start_pos) {
+                this.previous();
                 break;
             }
 
             this.next();
         }
 
-        const pattern = new Pattern(first_char + second_char + this.pattern_str.slice(start_pos, this.index), this.offset);
+        const pattern = new Pattern(this.pattern_str.slice(start_pos, this.index), this.offset);
         this.offset += pattern.length;
 
         return pattern;
     }
 
     private next(): string {
-        this.current = this.pattern_str.charAt(this.index);
         this.index ++;
+        this.current = this.pattern_str.charAt(this.index);
 
         if (this.current === "\\") {
-            this.current += this.pattern_str.charAt(this.index);
             this.index ++;
+            this.current += this.pattern_str.charAt(this.index);
+        }
+
+        return this.current;
+    }
+
+    private previous(): string {
+        this.index -= 1;
+        this.current = this.pattern_str.charAt(this.index);
+
+        if (this.index > 0 && this.current === "\\") {
+            this.current = `\\${this.current}`;
+            this.index --;
         }
 
         return this.current;
     }
 
     private eos(): boolean {
-        return this.index > this.pattern_str.length;
+        return this.index >= this.pattern_str.length;
+    }
+
+    private has_next(): boolean {
+        return this.index < this.pattern_str.length - 1;
     }
 }
 
@@ -219,14 +240,14 @@ export class CharSelector {
 
     indexOf(search: string): number | null {
         for (const pattern of this.patterns) {
-            const index = pattern.indexOf(search);
+            const index = pattern.index_of(search);
             if (index != null) return index;
         }
 
         return null;
     }
 
-    matchAll(search: string): [number, number][] {
+    match_all(search: string): [number, number][] {
         const matches: [number, number][] = [];
         let start = 0;
         let stop = 0;
@@ -251,52 +272,43 @@ export class CharSelector {
     }
 }
 
-export class CharSelectors {
-    static from(pattern_strs: string[]): CharSelectors {
-        const patterns = pattern_strs.map(pattern_str => CharSelector.from(pattern_str));
-        return new CharSelectors(patterns);
+class RangeSet {
+    public ranges: [number, number][];
+
+    constructor(ranges: [number, number][]) {
+        this.ranges = ranges;
     }
 
-    private patterns: CharSelector[];
+    intersect(their_ranges: [number, number][]) {
+        const new_ranges = [];
 
-    constructor(patterns: CharSelector[]) {
-        this.patterns = patterns;
-    }
-
-    matchAll(search: string): [number, number][] {
-        const ranges = this.patterns.flatMap(pattern => pattern.matchAll(search));
-        return this.flatten(ranges);
-    }
-
-    private flatten(ranges: [number, number][]): [number, number][] {
-        if (ranges.length <= 1) return ranges;
-
-        const sorted_ranges = ranges.sort((a, b) => {
-            if (a[0] < b[0]) {
-                return -1;
-            } else if (a[0] > b[0]) {
-                return 1;
-            } else {
-                return 0;
-            }
-        });
-
-        const new_ranges = [sorted_ranges[0]];
-
-        for (const range of sorted_ranges) {
-            const previous_range = new_ranges.pop()!;
-
-            if (this.adjacent(previous_range, range) || this.overlap(previous_range, range)) {
-                new_ranges.push([
-                    Math.min(range[0], previous_range[0]), Math.max(range[1], previous_range[1])
-                ]);
-            } else {
-                new_ranges.push(previous_range);
-                new_ranges.push(range);
+        for (const their_range of their_ranges) {
+            for (const our_range of this.ranges) {
+                if (this.overlap(their_range, our_range)) {
+                    const intrsc = this.find_intersection(our_range, their_range);
+                    if (intrsc) {
+                        new_ranges.push(intrsc);
+                    }
+                }
             }
         }
 
-        return new_ranges;
+        this.ranges = new_ranges;
+    }
+
+    private find_intersection(range1: [number, number], range2: [number, number]): [number, number] | null {
+        // range2 entirely contains range1
+        if (this.fully_overlapped_by(range1, range2)) {
+            return range1;
+        } else if (this.front_overlap(range1, range2)) {
+            return [range2[0], range1[1]];
+        } else if (this.rear_overlap(range1, range2)) {
+            return [range1[0], range2[1]]
+        } else if (this.full_overlap(range1, range2)) {
+            return [Math.max(range1[0], range2[0]), Math.min(range1[1], range2[1])];
+        } else {
+            return null;
+        }
     }
 
     private overlap(range1: [number, number], range2: [number, number]): boolean {
@@ -328,5 +340,31 @@ export class CharSelectors {
     // returns true if range1 and range2 are within 1 of each other
     private adjacent(range1: [number, number], range2: [number, number]): boolean {
         return range1[1] == range2[0] - 1 || range2[0] == range1[1] + 1;
+    }
+}
+
+export class CharSelectors {
+    static from(pattern_strs: string[]): CharSelectors {
+        const patterns = pattern_strs.map(pattern_str => CharSelector.from(pattern_str));
+        return new CharSelectors(patterns);
+    }
+
+    private patterns: CharSelector[];
+
+    constructor(patterns: CharSelector[]) {
+        this.patterns = patterns;
+    }
+
+    match_all(search: string): [number, number][] {
+        const range_groups = this.patterns.map(pattern => pattern.match_all(search));
+        if (range_groups.length === 0) return [];
+
+        const range_set = new RangeSet(range_groups[0]);
+
+        for (let i = 1; i < range_groups.length; i ++) {
+            range_set.intersect(range_groups[i]);
+        }
+
+        return range_set.ranges;
     }
 }

@@ -3,22 +3,11 @@ import { FrozenError } from "../errors";
 import { ExecutionContext } from "../execution_context";
 import { Callable, Class, KernelModule, ObjectClass, RValue, Runtime, Qtrue, Qfalse, Module } from "../runtime";
 import { Symbol } from "./symbol";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 import { Hash } from "./hash";
 
 export class Object {
     static async send(receiver: RValue, call_data_: MethodCallData | string, args: RValue[] = [], kwargs?: Hash, block?: RValue): Promise<RValue> {
-        for (const arg of args) {
-            if (arg instanceof Promise) debugger;
-        }
-
-        if (block instanceof Promise) debugger;
-
-        await kwargs?.each(async (k: RValue, v: RValue) => {
-            if (k instanceof Promise) debugger;
-            if (v instanceof Promise) debugger;
-        })
-
         let method_name: string;
         let call_data: MethodCallData | undefined;
 
@@ -58,7 +47,7 @@ export class Object {
                 method_missing_call_data = MethodCallData.create("method_missing", args.length + 1, flags);
             }
 
-            return await Object.send(receiver, method_missing_call_data, [await String.new(method_name), ...args], kwargs, block);
+            return await Object.send(receiver, method_missing_call_data, [await RubyString.new(method_name), ...args], kwargs, block);
         }
     }
 
@@ -203,14 +192,14 @@ export const init = async () => {
         // NOTE: send should actually be defined by the Kernel module
         klass.define_native_singleton_method("send", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const method_name = args[0];
-            Runtime.assert_type(method_name, await String.klass());
+            await Runtime.assert_type(method_name, await RubyString.klass());
             return await Object.send(self.klass.get_data<Class>().get_singleton_class(), method_name.get_data<string>(), args);
         });
 
         klass.define_native_method("send", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData) => {
             const method_name = args[0];
 
-            if (method_name.klass === await String.klass() || method_name.klass === await Symbol.klass()) {
+            if (method_name.klass === await RubyString.klass() || method_name.klass === await Symbol.klass()) {
                 if (call_data) {
                     const new_call_data = MethodCallData.create(method_name.get_data<string>(), call_data.argc - 1, call_data.flag, call_data.kw_arg);
                     return Object.send(self, new_call_data, args.slice(1), kwargs, block);
@@ -234,7 +223,7 @@ export const init = async () => {
                 }
             }
 
-            return String.new(`#<${parts.join(" ")}>`)
+            return RubyString.new(`#<${parts.join(" ")}>`)
         });
 
         await klass.alias_method("to_s", "inspect");

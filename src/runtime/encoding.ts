@@ -1,7 +1,7 @@
 import { Class, ObjectClass, Qfalse, Qtrue, RValue, Runtime } from "../runtime";
 import { isLittlEndian } from "../util/endianness";
-import { CR_7BIT, CR_UNKNOWN, CR_VALID, String as RubyString } from "../runtime/string";
-import { EncodingCompatibilityError } from "../errors";
+import { CR_7BIT, CR_UNKNOWN, CR_VALID, RubyString as RubyString } from "../runtime/string";
+import { ArgumentError, EncodingCompatibilityError } from "../errors";
 import { Object } from "../runtime/object";
 
 export abstract class Encoding {
@@ -28,15 +28,22 @@ export abstract class Encoding {
     }
 
     static get us_ascii(): RValue {
-        return this.get("US_ASCII")!;
+        return this.get("us-ascii")!;
     }
 
     static get binary(): RValue {
-        return this.get("BINARY")!;
+        return this.get("binary")!;
     }
 
     static get(name: string): RValue | undefined {
-        return encoding_map.get(name);
+        return encoding_map.get(normalize_enc_name(name));
+    }
+
+    static get_or_throw(name: string): RValue {
+        const encoding = this.get(name);
+        if (encoding) return encoding;
+
+        throw new ArgumentError(`unknown encoding name - ${name}`);
     }
 
     // accepts an Encoding instance or an encoded string and returns an Encoding
@@ -221,7 +228,9 @@ export abstract class Encoding {
 
     abstract codepoint_valid(codepoint: number): boolean;
     abstract codepoint_to_utf16(codepoint: number): string;
+    abstract unicode_to_codepoint(unicode_cp: number): number;
     abstract bytesize(str: string): number;
+    abstract string_to_bytes(str: string): Uint8Array;
 
     abstract conversion_targets: string[];
 
@@ -238,7 +247,7 @@ export abstract class Encoding {
 
 export class USASCIIEncoding extends Encoding {
     public name: string = "US-ASCII";
-    public conversion_targets = ["BINARY", "US-ASCII", "UTF-8", "UTF-16LE", "UTF-16BE", "UTF-32"];
+    public conversion_targets = ["binary", "us-ascii", "utf-8", "utf-16le", "utf-16be", "utf-32"];
 
     constructor() {
         super(1, 1);
@@ -252,14 +261,29 @@ export class USASCIIEncoding extends Encoding {
         return String.fromCodePoint(codepoint);
     }
 
+    unicode_to_codepoint(unicode_cp: number): number {
+        return unicode_cp;
+    }
+
     bytesize(str: string): number {
         return str.length;
+    }
+
+    string_to_bytes(str: string): Uint8Array {
+        const result = new Uint8Array(this.bytesize(str));
+
+        for (let i = 0; i < result.length; i ++) {
+            // only pull out one byte per character by lopping off any high bits
+            result[i] = str.charCodeAt(i) & 0xFF;
+        }
+
+        return result;
     }
 }
 
-export class BinaryEncoding extends Encoding {
-    public name: string = "BINARY";
-    public conversion_targets = ["US-ASCII"];
+export class ASCII8BitEncoding extends Encoding {
+    public name: string = "ASCII-8BIT";
+    public conversion_targets = ["us-ascii", "ascii-8bit"];
 
     constructor() {
         super(1, 1);
@@ -273,13 +297,28 @@ export class BinaryEncoding extends Encoding {
         return String.fromCodePoint(codepoint);
     }
 
+    unicode_to_codepoint(unicode_cp: number): number {
+        return unicode_cp;
+    }
+
     bytesize(str: string): number {
         return str.length;
+    }
+
+    string_to_bytes(str: string): Uint8Array {
+        const result = new Uint8Array(this.bytesize(str));
+
+        for (let i = 0; i < result.length; i ++) {
+            // only pull out one byte per character by lopping off any high bits
+            result[i] = str.charCodeAt(i) & 0xFF;
+        }
+
+        return result;
     }
 }
 
 export abstract class UnicodeEncoding extends Encoding {
-    public conversion_targets = ["US-ASCII", "UTF-8", "UTF-16LE", "UTF-16BE", "UTF-32", "SHIFT-JIS", "EUC-JP"];
+    public conversion_targets = ["us-ascii", "utf-8", "utf-16le", "utf-16be", "utf-32", "shift-jis", "euc-jp"];
 
     codepoint_valid(codepoint: number): boolean {
         return codepoint >= 0 && codepoint < 0x110000
@@ -288,10 +327,15 @@ export abstract class UnicodeEncoding extends Encoding {
     codepoint_to_utf16(codepoint: number): string {
         return String.fromCodePoint(codepoint);
     }
+
+    unicode_to_codepoint(unicode_cp: number): number {
+        return unicode_cp;
+    }
 }
 
 export class UTF8Encoding extends UnicodeEncoding {
     public name: string = "UTF-8";
+    private _encoder: TextEncoder;
 
     constructor() {
         super(1, 4);
@@ -322,11 +366,23 @@ export class UTF8Encoding extends UnicodeEncoding {
             } else if (cp < 0x110000) {
                 size += 4;
             } else {
-                throw new RangeError(`invalid codepoint 0xd800 in UTF-8`)
+                throw new RangeError(`invalid codepoint 0xD800 in UTF-8`)
             }
         }
 
         return size;
+    }
+
+    string_to_bytes(str: string): Uint8Array {
+        return this.encoder.encode(str);
+    }
+
+    private get encoder() {
+        if (!this._encoder) {
+            this._encoder = new TextEncoder();
+        }
+
+        return this._encoder;
     }
 }
 
@@ -340,6 +396,18 @@ export class UTF16LEEncoding extends UnicodeEncoding {
     bytesize(str: string): number {
         return str.length * 2;
     }
+
+    string_to_bytes(str: string): Uint8Array {
+        const result = new Uint8Array(this.bytesize(str));
+
+        for (let i = 0, offset = 0; i < str.length; i++) {
+            const codeUnit = str.charCodeAt(i);
+            result[offset ++] = codeUnit & 0xFF;
+            result[offset ++] = codeUnit >> 8;
+        }
+
+        return result;
+    }
 }
 
 export class UTF16BEEncoding extends UnicodeEncoding {
@@ -352,6 +420,18 @@ export class UTF16BEEncoding extends UnicodeEncoding {
     bytesize(str: string): number {
         return str.length * 2;
     }
+
+    string_to_bytes(str: string): Uint8Array {
+        const result = new Uint8Array(this.bytesize(str));
+
+        for (let i = 0, offset = 0; i < str.length; i++) {
+            const codeUnit = str.charCodeAt(i);
+            result[offset ++] = codeUnit >> 8;
+            result[offset ++] = codeUnit & 0xFF;
+        }
+
+        return result;
+    }
 }
 
 export class UTF32Encoding extends UnicodeEncoding {
@@ -362,25 +442,83 @@ export class UTF32Encoding extends UnicodeEncoding {
     }
 
     bytesize(str: string): number {
-        return str.length * 4;
+        let length = 0;
+
+        for (let i = 0; i < str.length; i ++) {
+            const code_unit = str.charCodeAt(i);
+
+            if (code_unit >= 0xD800 && code_unit <= 0xDBFF) {
+                i ++; // Skip the low surrogate
+            }
+
+            length += 4;
+        }
+
+        return length;
+    }
+
+    string_to_bytes(str: string): Uint8Array {
+        // Create a Uint8Array to hold the UTF-32 encoded bytes
+        const result = new Uint8Array(this.bytesize(str));
+        let offset = 0;
+
+        for (let i = 0; i < str.length; i++) {
+            let code_point: number;
+            const code_unit = str.charCodeAt(i);
+
+            if (code_unit >= 0xD800 && code_unit <= 0xDBFF) {
+                // High surrogate
+                const high_surrogate = code_unit;
+                const low_surrogate = str.charCodeAt(++ i); // Get the low surrogate
+
+                if (low_surrogate >= 0xDC00 && low_surrogate <= 0xDFFF) {
+                    // Combine surrogate pair to get the actual code point
+                    code_point = 0x10000 + ((high_surrogate - 0xD800) << 10) + (low_surrogate - 0xDC00);
+                } else {
+                    throw new Error('Invalid surrogate pair');
+                }
+            } else {
+                // Single code unit
+                code_point = code_unit;
+            }
+
+            // Convert the code point to UTF-32 and store in the array
+            result[offset ++] = (code_point >> 24) & 0xFF;
+            result[offset ++] = (code_point >> 16) & 0xFF;
+            result[offset ++] = (code_point >> 8) & 0xFF;
+            result[offset ++] = code_point & 0xFF;
+        }
+
+        return result;
     }
 }
 
 const encoding_map: Map<string, RValue> = new Map();
 const encoding_conversions: Set<string> = new Set();
 
-export const register_encoding = async (const_name: string, other_names: string[], encoding: Encoding) => {
+const normalize_enc_name = (name: string): string => {
+    return name.replaceAll("_", "-").toLowerCase();
+}
+
+const normalize_enc_const_name = (name: string): string => {
+    return name.replaceAll("-", "_").toUpperCase();
+}
+
+export const register_encoding = async (name: string, other_names: string[], encoding: Encoding) => {
     const encoding_class = (await Object.find_constant("Encoding"))!;
     const encoding_rval = new RValue(encoding_class, encoding);
+    const const_name = normalize_enc_const_name(name)
     encoding_class.get_data<Class>().constants[const_name] = encoding_rval;
-    encoding_map.set(const_name, encoding_rval);
+    encoding_map.set(normalize_enc_name(name), encoding_rval);
 
-    for (const name of other_names) {
-        encoding_map.set(name, encoding_rval);
+    for (const other_name of other_names) {
+        const other_const_name = normalize_enc_const_name(other_name);
+        encoding_class.get_data<Class>().constants[other_const_name] = encoding_rval;
+        encoding_map.set(normalize_enc_name(other_name), encoding_rval);
     }
 
     for (const target of encoding.conversion_targets) {
-        encoding_conversions.add(`${encoding.name}:${target}`);
+        encoding_conversions.add(`${normalize_enc_name(encoding.name)}:${normalize_enc_name(target)}`);
     }
 }
 
@@ -389,13 +527,15 @@ let inited = false;
 export const init = async () => {
     if (inited) return false;
 
-    const EncodingClass = Runtime.define_class("Encoding", ObjectClass, (klass: Class) => {
+    const EncodingClass = Runtime.define_class("Encoding", ObjectClass, async (klass: Class) => {
         // making new Encoding instances cannot be done from Ruby land
         klass.get_singleton_class().get_data<Class>().undef_method("new");
 
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             return await RubyString.new(`#<Encoding:${self.get_data<Encoding>().name}>`);
         });
+
+        await klass.alias_method("to_s", "inspect");
 
         klass.define_native_method("compatible?", async (self: RValue, args: RValue[]): Promise<RValue> => {
             return await Encoding.are_compatible(self, args[0]) ? Qtrue : Qfalse;
@@ -411,12 +551,12 @@ export const init = async () => {
         });
     });
 
-    await register_encoding("US_ASCII", ["US-ASCII"], new USASCIIEncoding());
-    await register_encoding("BINARY", [], new BinaryEncoding());
-    await register_encoding("UTF_8", ["UTF-8"], new UTF8Encoding());
-    await register_encoding("UTF_16LE", ["UTF-16LE"], new UTF16LEEncoding());
-    await register_encoding("UTF_16BE", ["UTF-16BE"], new UTF16BEEncoding());
-    await register_encoding("UTF_32", ["UTF-32"], new UTF32Encoding());
+    await register_encoding("ascii", ["us-ascii"], new USASCIIEncoding());
+    await register_encoding("ascii-8bit", ["binary"], new ASCII8BitEncoding());
+    await register_encoding("utf-8", [], new UTF8Encoding());
+    await register_encoding("utf-16le", [], new UTF16LEEncoding());
+    await register_encoding("utf-16be", [], new UTF16BEEncoding());
+    await register_encoding("utf-32", [], new UTF32Encoding());
 
     Runtime.define_class_under(EncodingClass, "CompatibilityError", (await Object.find_constant("EncodingError"))!);
     Runtime.define_class_under(EncodingClass, "ConverterNotFoundError", (await Object.find_constant("EncodingError"))!);

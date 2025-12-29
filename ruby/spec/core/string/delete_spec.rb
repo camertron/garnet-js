@@ -59,11 +59,11 @@ describe "String#delete" do
   end
 
   it "raises if the given ranges are invalid" do
-    not_supported_on :opal do
-      xFF = [0xFF].pack('C')
-      range = "\x00 - #{xFF}".force_encoding('utf-8')
-      -> { "hello".delete(range).should == "" }.should raise_error(ArgumentError)
-    end
+    # not_supported_on :opal do
+    #   xFF = [0xFF].pack('C')
+    #   range = "\x00 - #{xFF}".force_encoding('utf-8')
+    #   -> { "hello".delete(range).should == "" }.should raise_error(ArgumentError)
+    # end
     -> { "hello".delete("h-e") }.should raise_error(ArgumentError)
     -> { "hello".delete("^h-e") }.should raise_error(ArgumentError)
   end

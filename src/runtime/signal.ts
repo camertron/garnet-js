@@ -4,7 +4,7 @@ import { Class, Qnil, RValue, Runtime } from "../runtime"
 import { Hash } from "./hash";
 import { Integer } from "./integer";
 import { Proc } from "./proc";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 
 let inited = false;
 
@@ -53,7 +53,7 @@ export const init = async () => {
 
     Object.keys(signal_list).forEach(async (signal_str) => {
         await signal_list_hash.set(
-            await String.new(signal_str),
+            await RubyString.new(signal_str),
             await Integer.get(signal_list[signal_str as keyof typeof signal_list])
         );
     });
@@ -69,7 +69,7 @@ export const init = async () => {
 
             const sig_no = args[0] || Qnil;
 
-            if (sig_no.klass === await String.klass()) {
+            if (sig_no.klass === await RubyString.klass()) {
                 let sig_str = sig_no.get_data<string>().toUpperCase();
                 if (sig_str.startsWith("SIG")) sig_str = sig_str.slice(3);
 

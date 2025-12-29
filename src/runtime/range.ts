@@ -1,5 +1,5 @@
 import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 import { spaceship_compare } from "./comparable";
 import { Object } from "../runtime/object";
 import { NameError } from "../errors";
@@ -77,7 +77,7 @@ export const init = () => {
             const end_str = (await Object.send(range.end, "inspect")).get_data<string>();
             const dots = range.exclude_end ? "..." : "..";
 
-            return String.new(`${begin_str}${dots}${end_str}`);
+            return RubyString.new(`${begin_str}${dots}${end_str}`);
         });
 
         await klass.alias_method("to_s", "inspect");

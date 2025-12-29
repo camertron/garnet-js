@@ -3,7 +3,7 @@ import { Class, ObjectClass, Qnil, RValue, Runtime } from "../runtime";
 import { Float } from "../runtime/float";
 import { Integer } from "../runtime/integer";
 import { Object } from "../runtime/object";
-import { String } from "../runtime/string";
+import { RubyString } from "../runtime/string";
 
 class RubyDate {
     private static klass_: RValue;
@@ -200,18 +200,18 @@ export const init = async () => {
             const pattern_str = (await Runtime.coerce_to_string(args[0])).get_data<string>();
             const pattern = parse_pattern(pattern_str);
 
-            return String.new(pattern.format(self.get_data<Date>()));
+            return RubyString.new(pattern.format(self.get_data<Date>()));
         });
 
         const inspect_pattern = parse_pattern("%Y-%m-%d")
 
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const date_str = inspect_pattern.format(self.get_data<Date>());
-            return await String.new(`#<Date ${date_str}>`);
+            return await RubyString.new(`#<Date ${date_str}>`);
         });
 
         klass.define_native_method("to_s", async (self: RValue): Promise<RValue> => {
-            return await String.new(inspect_pattern.format(self.get_data<Date>()));
+            return await RubyString.new(inspect_pattern.format(self.get_data<Date>()));
         });
     });
 

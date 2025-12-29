@@ -1,7 +1,7 @@
 import { IndexError, NameError, RuntimeError } from "../errors";
 import { ExecutionContext } from "../execution_context";
 import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
-import { String as RubyString } from "../runtime/string";
+import { RubyString as RubyString } from "../runtime/string";
 import * as WASM from "../wasm";
 import { Integer } from "./integer";
 import { Object } from "./object";
@@ -163,21 +163,21 @@ export const init = async () => {
 
         klass.define_native_method("begin", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const match_data = self.get_data<MatchData>();
-            Runtime.assert_type(args[0], await Integer.klass());
+            await Runtime.assert_type(args[0], await Integer.klass());
             const index = args[0].get_data<number>();
             return await Integer.get(match_data.begin(index));
         });
 
         klass.define_native_method("end", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const match_data = self.get_data<MatchData>();
-            Runtime.assert_type(args[0], await Integer.klass());
+            await Runtime.assert_type(args[0], await Integer.klass());
             const index = args[0].get_data<number>();
             return await Integer.get(match_data.end(index));
         });
 
         klass.define_native_method("match", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const match_data = self.get_data<MatchData>();
-            Runtime.assert_type(args[0], await Integer.klass());
+            await Runtime.assert_type(args[0], await Integer.klass());
             const index = args[0].get_data<number>();
             return RubyString.new(match_data.match(index));
         });
@@ -561,11 +561,11 @@ export class Regexp {
         };
     }
 
-    static compile(pat: string, flags: number = ONIG_OPTION_NONE): Regexp {
+    static compile(pat: string, flags: number = ONIG_OPTION_NONE, forcedBinary?: boolean): Regexp {
         const compile_info = CompileInfo.create(Regexp.make_compile_info(flags));
         const regexp_ptr = RegexpPtr.create();
         const errorinfo = ErrorInfo.create({enc: 0, par: 0, par_end: 0});
-        const pattern = UTF16String.create(pat);
+        const pattern = forcedBinary ? ASCIIString.create(pat) : UTF16String.create(pat);
 
         const error_code: ErrorCode = onigmo.exports.onig_new_deluxe(
             regexp_ptr.address, pattern.start, pattern.end, compile_info.address, errorinfo.address
@@ -621,8 +621,16 @@ export class Regexp {
         this.regexp = regexp;
     }
 
-    search(str: string, pos: number = 0): MatchData | null {
-        if (pos >= str.length) {
+    search(str: string, start: number = 0, end?: number): MatchData | null {
+        if (start < 0 || start >= str.length) {
+            return null;
+        }
+
+        if (end === undefined) {
+            end = str.length;
+        }
+
+        if (end < 0 || end > str.length) {
             return null;
         }
 
@@ -630,7 +638,7 @@ export class Regexp {
         const region = new Region(onigmo.exports.onig_region_new());
 
         const exit_code_or_position = onigmo.exports.onig_search(
-            this.regexp, str_ptr.start, str_ptr.end, str_ptr.start + (pos * 2), str_ptr.end, region.address, ONIG_OPTION_NONE
+            this.regexp, str_ptr.start, str_ptr.end, str_ptr.start + (start * 2), str_ptr.start + (end * 2), region.address, ONIG_OPTION_NONE
         );
 
         let result: MatchData | null = null;
@@ -650,14 +658,26 @@ export class Regexp {
         return result;
     }
 
-    async scan(str: string, callback: (match_data: MatchData) => Promise<boolean>) {
+    async scan(str: string, callback: (match_data: MatchData) => Promise<boolean>, start: number = 0, end?: number) {
+        if (start < 0 || start >= str.length) {
+            return null;
+        }
+
+        if (end === undefined) {
+            end = str.length;
+        }
+
+        if (end < 0 || end > str.length) {
+            return null;
+        }
+
         const str_ptr = UTF16String.create(str);
         const region = new Region(onigmo.exports.onig_region_new());
-        let last_pos = 0;
+        let last_pos = start * 2;
 
         while (true) {
             const exit_code_or_position = onigmo.exports.onig_search(
-                this.regexp, str_ptr.start, str_ptr.end, str_ptr.start + last_pos, str_ptr.end, region.address, ONIG_OPTION_NONE
+                this.regexp, str_ptr.start, str_ptr.end, str_ptr.start + last_pos, str_ptr.start + (end * 2), region.address, ONIG_OPTION_NONE
             );
 
             if (exit_code_or_position <= -2) {
