@@ -1,4 +1,4 @@
-import { EncodingConverterNotFoundError, IndexError, NameError, NotImplementedError, RangeError } from "../errors";
+import { ArgumentError, EncodingConverterNotFoundError, IndexError, NameError, NotImplementedError, RangeError } from "../errors";
 import { Class, Qnil, RValue, Runtime, Qtrue, Qfalse, ObjectClass } from "../runtime";
 import { hash_string, is_alpha_num, strlen } from "../util/string_utils";
 import { Integer } from "./integer";
