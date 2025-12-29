@@ -30,14 +30,14 @@ export async function init() {
         const prism_instance = await WASM.load_module("prism");
 
         Compiler.parse = (source) => {
-            const scope: ParseLocal[] = [];
+            const locals: string[] = [];
 
             // @TODO: this will need to be part of IRB or something
             ExecutionContext.current.top_locals.forEach((local) => {
-                scope.push({name: local.name});
+                locals.push(local.name);
             });
 
-            return parsePrism(prism_instance.exports, source, { scopes: [scope] });
+            return parsePrism(prism_instance.exports, source, { scopes: [locals] });
         }
     }
 }

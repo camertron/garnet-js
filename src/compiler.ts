@@ -539,7 +539,7 @@ export class Compiler extends Visitor {
     }
 
     override visitLocalVariableReadNode(node: LocalVariableReadNode) {
-        const lookup = this.find_local_or_throw(node.name, node.depth + this.local_depth);
+        const lookup = this.find_local_or_throw(node.name, node.depth);
 
         if (this.used) {
             this.iseq.getlocal(lookup.index, lookup.depth);
@@ -553,14 +553,14 @@ export class Compiler extends Visitor {
             this.iseq.dup();
         }
 
-        const lookup = this.find_local_or_throw(node.name, node.depth + this.local_depth);
+        const lookup = this.find_local_or_throw(node.name, node.depth);
         this.iseq.setlocal(lookup.index, lookup.depth);
     }
 
     override visitLocalVariableAndWriteNode(node: LocalVariableAndWriteNode) {
         const label = this.iseq.label();
 
-        const lookup = this.find_local_or_throw(node.name, node.depth + this.local_depth);
+        const lookup = this.find_local_or_throw(node.name, node.depth);
         this.iseq.getlocal(lookup.index, lookup.depth);
         if (this.used) this.iseq.dup();
         this.iseq.branchunless(label);
@@ -580,7 +580,7 @@ export class Compiler extends Visitor {
         this.iseq.putobject({type: "TrueClass", value: true});
         this.iseq.branchunless(defined_label);
 
-        const lookup = this.find_local_or_throw!(node.name, node.depth + this.local_depth);
+        const lookup = this.find_local_or_throw(node.name, node.depth);
         this.iseq.getlocal(lookup.index, lookup.depth);
         if (this.used) this.iseq.dup();
         this.iseq.branchif(done_label);
@@ -595,7 +595,7 @@ export class Compiler extends Visitor {
     }
 
     override visitLocalVariableOperatorWriteNode(node: LocalVariableOperatorWriteNode) {
-        const lookup = this.find_local_or_throw(node.name, node.depth + this.local_depth);
+        const lookup = this.find_local_or_throw(node.name, node.depth);
         this.iseq.getlocal(lookup.index, lookup.depth);
         this.with_used(true, () => this.visit(node.value));
         this.iseq.send(MethodCallData.create(node.binaryOperator, 1), null);
@@ -604,7 +604,7 @@ export class Compiler extends Visitor {
     }
 
     override visitLocalVariableTargetNode(node: LocalVariableTargetNode) {
-        const lookup = this.find_local_or_throw(node.name, node.depth + this.local_depth);
+        const lookup = this.find_local_or_throw(node.name, node.depth);
         this.iseq.setlocal(lookup.index, lookup.depth);
     }
 
@@ -2302,7 +2302,14 @@ export class Compiler extends Visitor {
             current_iseq = current_iseq.parent_iseq!;
         }
 
-        return current_iseq.local_table.find_or_throw(name, depth);
+        const lookup = current_iseq.local_table.find(name, depth);
+        if (lookup) return lookup;
+
+        for (let i = 0; i < this.local_depth; i ++) {
+            current_iseq = current_iseq.parent_iseq!;
+        }
+
+        return current_iseq.local_table.find_or_throw(name, depth + this.local_depth);
     }
 
     private start_line_for_loc(location: Location): number | null {
