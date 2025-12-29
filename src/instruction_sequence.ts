@@ -46,7 +46,7 @@ import SetLocalWC0 from "./insns/setlocal_wc_0";
 import SetLocalWC1 from "./insns/setlocal_wc_1";
 import SetN from "./insns/setn";
 import Swap from "./insns/swap";
-import Throw, { ThrowType } from "./insns/throw";
+import Throw from "./insns/throw";
 import TopN from "./insns/topn";
 import ToRegexp from "./insns/toregexp";
 import Instruction, { ValueType } from "./instruction";
@@ -64,6 +64,7 @@ import ConcatArray from "./insns/concatarray";
 import { ParameterMetadata } from "./runtime/parameter-meta";
 import { LexicalScope } from "./compiler";
 import { Encoding } from "./runtime/encoding";
+import { ThrowType } from "./execution_context";
 
 export class Node {
     public instruction: Instruction;
