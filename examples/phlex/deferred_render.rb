@@ -5,7 +5,7 @@ class List < Phlex::HTML
 		@items = []
 	end
 
-	def template
+	def view_template
 		if @header
 			h1(class: "header", &@header)
 		end
@@ -27,7 +27,7 @@ class List < Phlex::HTML
 end
 
 class ListExample < Phlex::HTML
-	def template
+	def view_template
 		render List.new do |list|
 			list.header do
 				"Header"

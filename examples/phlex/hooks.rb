@@ -4,7 +4,7 @@ class Example < Phlex::HTML
 		super
 	end
 
-	def template
+	def view_template
 		h2 { "Hello World!" }
 	end
 

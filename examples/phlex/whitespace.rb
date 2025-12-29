@@ -1,5 +1,5 @@
 class Links < Phlex::HTML
-	def template
+	def view_template
 		a(href: "/") { "Home" }
 		whitespace
 		a(href: "/about") { "About" }

@@ -1,5 +1,5 @@
 class Card < Phlex::HTML
-	def template
+	def view_template
 		article(class: "drop-shadow") {
 			yield
 		}
@@ -7,7 +7,7 @@ class Card < Phlex::HTML
 end
 
 class Example < Phlex::HTML
-	def template
+	def view_template
 		render(Card.new) {
 			h1 { "👋 Hello!" }
 		}

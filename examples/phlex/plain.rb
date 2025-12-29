@@ -1,5 +1,5 @@
 class Heading < Phlex::HTML
-	def template
+	def view_template
 		h1 do
 			strong { "Hello " }
 			plain "World!"

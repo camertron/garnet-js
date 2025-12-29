@@ -1,5 +1,5 @@
 class TemplateExample < Phlex::HTML
-	def template
+	def view_template
 		template_tag {
 			img src: "hidden.jpg", alt: "A hidden image."
 		}

@@ -5,7 +5,7 @@ class Link < Phlex::HTML
 		@active = active
 	end
 
-	def template
+	def view_template
 		a(href: @to, class: tokens("nav-item", active?: "active")) { @text }
 	end
 
@@ -15,7 +15,7 @@ class Link < Phlex::HTML
 end
 
 class TokensExample < Phlex::HTML
-	def template
+	def view_template
 		nav {
 			ul {
 				li { render Link.new("Home", to: "/", active: true) }

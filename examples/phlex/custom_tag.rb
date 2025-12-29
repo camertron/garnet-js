@@ -1,7 +1,7 @@
 class CustomTagExample < Phlex::HTML
 	register_element :trix_editor
 
-	def template
+	def view_template
 		trix_editor input: "content", autofocus: true
 	end
 end

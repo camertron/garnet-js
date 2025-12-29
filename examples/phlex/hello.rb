@@ -3,13 +3,13 @@ class Hello < Phlex::HTML
 		@name = name
 	end
 
-	def template
+	def view_template
 		h1 { "👋 Hello #{@name}!" }
 	end
 end
 
 class Example < Phlex::HTML
-	def template
+	def view_template
 		render Hello.new(name: "Joel")
 		render Hello.new(name: "Alexandre")
 	end

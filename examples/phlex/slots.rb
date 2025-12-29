@@ -13,7 +13,7 @@ class Card < Phlex::HTML
 end
 
 class CardExample < Phlex::HTML
-	def template
+	def view_template
 		render Card.new do |card|
 			card.title do
 				h1 { "Title" }

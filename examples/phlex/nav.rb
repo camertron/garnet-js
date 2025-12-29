@@ -1,5 +1,5 @@
 class Nav < Phlex::HTML
-  def template
+  def view_template
     nav(class: "main-nav") {
       ul {
         li { a(href: "/") { "Home" } }

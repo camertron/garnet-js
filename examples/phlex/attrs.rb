@@ -1,5 +1,5 @@
 class Greeting < Phlex::HTML
-	def template
+	def view_template
 		div(data: { controller: "hello" }) {
 			# ...
 		}
@@ -9,7 +9,7 @@ end
 puts Greeting.new.call
 
 class ChannelControls < Phlex::HTML
-	def template
+	def view_template
 		input(
 			value: "1",
 			name: "channel",
