@@ -766,6 +766,23 @@ export const init = () => {
             return await RubyString.get_encoding_rval(self);
         });
 
+        klass.define_native_method("b", async (self: RValue): Promise<RValue> => {
+            const new_str = await RubyString.new(self.get_data<string>());
+            RubyString.set_encoding(new_str, Encoding.binary);
+            return new_str;
+        });
+
+        klass.define_native_method("force_encoding", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const encoding_arg = await Encoding.coerce(args[0]);
+
+            if (encoding_arg) {
+                RubyString.set_encoding(self, encoding_arg);
+                return self;
+            }
+
+            throw new ArgumentError(`unknown encoding name - ${args[0].get_data<string>()}`);
+        });
+
         klass.define_native_method("encode!", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const encoding_arg = await Encoding.coerce(args[0]);
 

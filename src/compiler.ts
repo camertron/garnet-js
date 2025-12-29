@@ -532,10 +532,20 @@ export class Compiler extends Visitor {
 
         this.iseq.putstring(
             node.unescaped.value,
-            Encoding.get_or_throw(node.unescaped.encoding),
+            this.encoding_for_string_node(node),
             node.isFrozen(),
             node.isForcedBinaryEncoding()
         );
+    }
+
+    private encoding_for_string_node(node: StringNode | XStringNode): RValue {
+        if (node.isForcedBinaryEncoding() || !node.unescaped.validEncoding) {
+            return Encoding.binary;
+        } else if (node.isForcedUtf8Encoding()) {
+            return Encoding.get_or_throw("UTF-8");
+        } else {
+            return Encoding.get_or_throw(node.unescaped.encoding);
+        }
     }
 
     override visitLocalVariableReadNode(node: LocalVariableReadNode) {
@@ -2141,7 +2151,7 @@ export class Compiler extends Visitor {
 
         this.iseq.putstring(
             node.unescaped.value,
-            Encoding.get_or_throw(node.unescaped.encoding),
+            this.encoding_for_string_node(node),
             false,
             node.isForcedBinaryEncoding()
         );
@@ -2158,9 +2168,20 @@ export class Compiler extends Visitor {
 
     override visitSourceFileNode(node: SourceFileNode) {
         if (this.used) {
+            // Determine encoding using the same logic as visitStringNode
+            let encoding: RValue | undefined;
+
+            if (node.isForcedBinaryEncoding() || !node.filepath.validEncoding) {
+                encoding = Encoding.binary;
+            } else if (node.isForcedUtf8Encoding()) {
+                encoding = Encoding.get_or_throw("UTF-8");
+            } else {
+                encoding = Encoding.get_or_throw(node.filepath.encoding);
+            }
+
             this.iseq.putstring(
                 node.filepath.value,
-                Encoding.get_or_throw(node.filepath.encoding),
+                encoding,
                 node.isFrozen(),
                 node.isForcedBinaryEncoding()
             );

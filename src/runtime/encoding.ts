@@ -1,5 +1,4 @@
 import { Class, ObjectClass, Qfalse, Qtrue, RValue, Runtime } from "../runtime";
-import { isLittlEndian } from "../util/endianness";
 import { CR_7BIT, CR_UNKNOWN, CR_VALID, RubyString as RubyString } from "../runtime/string";
 import { ArgumentError, EncodingCompatibilityError } from "../errors";
 import { Object } from "../runtime/object";
@@ -18,12 +17,10 @@ export abstract class Encoding {
     }
 
     static async default(): Promise<RValue> {
-        if (isLittlEndian()) {
-            this.default_ = (await this.encoding_class()).constants["UTF_16LE"];
-        } else {
-            this.default_ = (await this.encoding_class()).constants["UTF_16BE"];
-        }
-
+        // Ruby's default encoding is UTF-8, and Garnet.js follows this convention.
+        // String literals from source files are typically UTF-8, and dynamically
+        // created strings should match this encoding for compatibility.
+        this.default_ = (await this.encoding_class()).constants["UTF_8"];
         return this.default_;
     }
 
