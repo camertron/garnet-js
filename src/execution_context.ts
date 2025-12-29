@@ -259,7 +259,16 @@ export class ExecutionContext {
                         //     }
                         // }
                     } catch (error) {
-                        if (error instanceof ReturnError) {
+                        if (error instanceof ThrowNoneError) {
+                            // ThrowNoneError is used to signal the end of a rescue or ensure block
+                            // when there's no exception to re-raise. Just treat it as normal completion.
+                            if (frame.iseq.type === "rescue" || frame.iseq.type === "ensure") {
+                                this.frame = previous || frame.parent;
+                                return error.value;
+                            }
+                            // If we're not in a rescue or ensure frame, this is unexpected
+                            throw new Error("ThrowNoneError thrown outside of rescue/ensure frame");
+                        } else if (error instanceof ReturnError) {
                             this.frame = previous || frame.parent;
                             throw error;
                         } else if (error instanceof BreakError) {
