@@ -44,8 +44,7 @@ export const init = () => {
 
         klass.define_native_singleton_method("glob", async (_self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
             const pattern_str = (await Runtime.coerce_to_string(args[0])).get_data<string>();
-            const base_path = kwargs && await kwargs.has_symbol("base") ? (await Runtime.coerce_to_string(kwargs.get_by_symbol("base")!)).get_data<string>() : "";
-            const sort = kwargs && await kwargs.has_symbol("sort") ? kwargs.get_by_symbol("sort")!.is_truthy() : Qtrue;
+            const base_path = kwargs && await kwargs.has_symbol("base") ? (await Runtime.coerce_to_string(kwargs.get_by_symbol("base")!)).get_data<string>() : Dir.getwd();
             let flags = 0;
 
             if (kwargs && await kwargs.has_symbol("flags")) {
