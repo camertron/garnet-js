@@ -1951,8 +1951,8 @@ export class Compiler extends Visitor {
         } else {
             let iseq = this.iseq;
 
-            // skip past rescue frames, which aren't actually frames
-            while (iseq.type === "rescue") {
+            // skip past rescue and ensure frames, which aren't actually frames
+            while (iseq.type === "rescue" || iseq.type === "ensure") {
                 if (iseq.parent_iseq) {
                     iseq = iseq.parent_iseq;
                 } else {
@@ -1988,8 +1988,19 @@ export class Compiler extends Visitor {
             this.iseq.jump(catch_entry.cont_label);
             return;
         } else {
+            let iseq = this.iseq;
+
+            // skip past rescue and ensure frames, which aren't actually frames
+            while (iseq.type === "rescue" || iseq.type === "ensure") {
+                if (iseq.parent_iseq) {
+                    iseq = iseq.parent_iseq;
+                } else {
+                    break;
+                }
+            }
+
             // throw if inside a block iseq
-            if (this.iseq.type === "block") {
+            if (iseq.type === "block") {
                 this.iseq.throw(ThrowType.BREAK);
                 return;
             }

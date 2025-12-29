@@ -263,6 +263,12 @@ export class ExecutionContext {
                             this.frame = previous || frame.parent;
                             throw error;
                         } else if (error instanceof BreakError) {
+                            // If we're in a rescue or ensure frame, propagate the error up to the parent frame
+                            if (frame.iseq.type === "rescue" || frame.iseq.type === "ensure") {
+                                this.frame = previous || frame.parent;
+                                throw error;
+                            }
+
                             if (frame.iseq.type != "block") {
                                 throw new Error(`Expected frame type to be 'block', was '${frame.iseq.type}' instead`);
                             }
@@ -270,7 +276,9 @@ export class ExecutionContext {
                             const catch_entry = this.find_catch_entry(frame, CatchBreak);
 
                             if (!catch_entry) {
-                                throw new Error("Could not find catch entry");
+                                // No catch entry in this block frame, so propagate the error up
+                                this.frame = previous || frame.parent;
+                                throw error;
                             }
 
                             this.stack.splice(frame.stack_index + frame.iseq.local_table.size() + catch_entry.restore_sp)
@@ -280,6 +288,12 @@ export class ExecutionContext {
                             result = error.value;
                             this.stack.push(new RValuePointer(result));
                         } else if (error instanceof NextError) {
+                            // If we're in a rescue or ensure frame, propagate the error up to the parent frame
+                            if (frame.iseq.type === "rescue" || frame.iseq.type === "ensure") {
+                                this.frame = previous || frame.parent;
+                                throw error;
+                            }
+
                             if (frame.iseq.type != "block") {
                                 throw new Error(`Expected frame type to be 'block', was '${frame.iseq.type}' instead`);
                             }
@@ -287,7 +301,9 @@ export class ExecutionContext {
                             const catch_entry = this.find_catch_entry(frame, CatchNext);
 
                             if (!catch_entry) {
-                                throw new Error("Could not find catch entry");
+                                // No catch entry in this block frame, so propagate the error up
+                                this.frame = previous || frame.parent;
+                                throw error;
                             }
 
                             this.stack.splice(frame.stack_index + frame.iseq.local_table.size() + catch_entry.restore_sp);
@@ -332,13 +348,52 @@ export class ExecutionContext {
                                 this.frame = frame;
 
                                 frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.cont_label);
-                                result = await this.run_rescue_frame(catch_entry.iseq!, frame, error_rval);
 
-                                if (ensure_entry) {
-                                    await this.run_ensure_frame(ensure_entry.iseq!, frame, Qnil);
+                                try {
+                                    result = await this.run_rescue_frame(catch_entry.iseq!, frame, error_rval);
+
+                                    if (ensure_entry) {
+                                        await this.run_ensure_frame(ensure_entry.iseq!, frame, Qnil);
+                                    }
+
+                                    this.stack.push(new RValuePointer(result));
+                                } catch (e) {
+                                    // If a NextError or BreakError is thrown from within the rescue frame,
+                                    // we need to handle it here in the context of the current frame (block frame)
+                                    if (e instanceof NextError) {
+                                        if (ensure_entry) {
+                                            await this.run_ensure_frame(ensure_entry.iseq!, frame, Qnil);
+                                        }
+
+                                        // Handle the next in the context of the current frame
+                                        if (frame.iseq.type != "block") {
+                                            throw new Error(`Expected frame type to be 'block', was '${frame.iseq.type}' instead`);
+                                        }
+
+                                        const next_catch_entry = this.find_catch_entry(frame, CatchNext);
+
+                                        if (!next_catch_entry) {
+                                            throw new Error("Could not find catch entry for next");
+                                        }
+
+                                        this.stack.splice(frame.stack_index + frame.iseq.local_table.size() + next_catch_entry.restore_sp);
+                                        this.frame = frame;
+
+                                        frame.pc = frame.iseq.compiled_insns.indexOf(next_catch_entry.cont_label);
+                                        result = e.value;
+                                        this.stack.push(new RValuePointer(result));
+                                    } else if (e instanceof BreakError) {
+                                        if (ensure_entry) {
+                                            await this.run_ensure_frame(ensure_entry.iseq!, frame, Qnil);
+                                        }
+
+                                        // Re-throw the BreakError so it can be handled by the outer catch block
+                                        // which will propagate it up to the parent frame
+                                        throw e;
+                                    } else {
+                                        throw e;
+                                    }
                                 }
-
-                                this.stack.push(new RValuePointer(result));
                             } else {
                                 // re-raise javascript errors
                                 if (error instanceof ThrowError || error instanceof RubyError || error instanceof NativeError) {
@@ -403,6 +458,11 @@ export class ExecutionContext {
     static print_backtrace(e: any) {
         const backtrace = e.backtrace;
         const stdout = STDOUT.get_data<IO>();
+
+        if (!backtrace || backtrace.length === 0) {
+            stdout.puts(`${e.message} (${e.constructor.name})`);
+            return;
+        }
 
         stdout.puts(`${backtrace[0]}: ${e.message} (${e.constructor.name})`);
 
