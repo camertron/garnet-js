@@ -1109,8 +1109,8 @@ export class Compiler extends Visitor {
         if (this.used) this.iseq.pop();
         this.iseq.push(else_label);
 
-        if (node.consequent) {
-            this.visit(node.consequent);
+        if (node.subsequent) {
+            this.visit(node.subsequent);
         } else {
             if (this.used) this.iseq.putnil();
         }
@@ -1129,8 +1129,8 @@ export class Compiler extends Visitor {
 
         this.iseq.push(else_label);
 
-        if (node.consequent) {
-            this.visit(node.consequent);
+        if (node.elseClause) {
+            this.visit(node.elseClause);
         } else {
             if (this.used) {
                 this.iseq.putnil();
@@ -1477,8 +1477,8 @@ export class Compiler extends Visitor {
 
         this.iseq.push(unhandled_label);
 
-        if (node.consequent) {
-            this.visitRescueNode(node.consequent);
+        if (node.subsequent) {
+            this.visitRescueNode(node.subsequent);
         }
 
         // nothing handled the error, so re-raise
@@ -1680,8 +1680,8 @@ export class Compiler extends Visitor {
 
         this.iseq.pop();
 
-        if (node.consequent) {
-            this.visit(node.consequent);
+        if (node.elseClause) {
+            this.visit(node.elseClause);
         } else {
             if (this.used) {
                 this.iseq.putnil();
