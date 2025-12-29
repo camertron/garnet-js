@@ -747,6 +747,9 @@ export class ExecutionContext {
 
                 elements.shift();
                 lead_num = 0;
+
+                // remove the destructured array from locals so it doesn't get assigned again
+                locals.shift();
             }
         }
 
