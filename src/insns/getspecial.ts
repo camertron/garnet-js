@@ -1,6 +1,7 @@
 import { NotImplementedError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
+import { Qnil } from "../runtime";
 
 export enum GetSpecialType {
     LASTLINE = 0,       // $_
@@ -25,11 +26,11 @@ export default class GetSpecial extends Instruction {
                 throw new NotImplementedError("getspecial LASTLINE");
 
             case GetSpecialType.BACKREF:
-                context.push(context.frame_svar()!.svars["$&"]);
+                context.push(context.frame_svar()!.svars["$&"] || Qnil);
                 break;
 
             case GetSpecialType.FLIPFLOP_START:
-                context.push(context.frame_svar()!.svars[GetSpecialType.FLIPFLOP_START]);
+                context.push(context.frame_svar()!.svars[GetSpecialType.FLIPFLOP_START] || Qnil);
                 break;
         }
 

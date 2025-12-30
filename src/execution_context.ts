@@ -4,7 +4,7 @@ import { BlockFrame, ClassFrame, EnsureFrame, Frame, IFrameWithOwner, MethodFram
 import Instruction from "./instruction";
 import { CatchBreak, CatchEnsure, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
 import { Local } from "./local_table";
-import { ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, Qtrue, Qfalse, Runtime, RValuePointer, Module } from "./runtime";
+import { ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, Qtrue, Qfalse, Runtime, RValuePointer, Module, ObjectClass } from "./runtime";
 import { Binding } from "./runtime/binding";
 import { Hash } from "./runtime/hash";
 import { Object } from "./runtime/object";
@@ -129,6 +129,9 @@ export class ExecutionContext {
     // global variables if they have not been overridden.
     public globals: {[key: string]: RValue};
 
+    // Maps global variable names to their canonical names for aliasing
+    public global_aliases: {[key: string]: string};
+
     // The current frame.
     public frame: Frame | null;
 
@@ -144,6 +147,7 @@ export class ExecutionContext {
     constructor() {
         this.stack = [];
         this.top_locals = new Map();
+        this.global_aliases = {};
         this.id = ExecutionContext.next_id ++;
     }
 
@@ -179,6 +183,24 @@ export class ExecutionContext {
 
     async push_onto_load_path(path: string) {
         this.globals["$:"].get_data<RubyArray>().elements.push(await RubyString.new(path));
+    }
+
+    // resolve global to canonical name, following aliases
+    resolve_global_alias(name: string): string {
+        let current = name;
+        const visited = new Set<string>();
+
+        while (this.global_aliases[current]) {
+            if (visited.has(current)) {
+                // circular alias detected, return current
+                return current;
+            }
+
+            visited.add(current);
+            current = this.global_aliases[current];
+        }
+
+        return current;
     }
 
     // This returns the instruction sequence object that is currently being

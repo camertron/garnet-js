@@ -12,7 +12,9 @@ export default class SetGlobal extends Instruction {
 
     async call(context: ExecutionContext): Promise<ExecutionResult> {
         const value = context.pop()!;
-        context.globals[this.name] = value;
+        // Resolve any aliases to get the canonical global variable name
+        const canonical_name = context.resolve_global_alias(this.name);
+        context.globals[canonical_name] = value;
         return null;
     }
 

@@ -574,6 +574,20 @@ export class Module {
         }
     }
 
+    async alias_variable(new_name: string, existing_name: string) {
+        const ec = ExecutionContext.current;
+
+        if (ec) {
+            const canonical_name = ec.resolve_global_alias(existing_name);
+            ec.global_aliases[new_name] = canonical_name;
+
+            // if new_name already had a value, we need to remove it since it's now an alias
+            if (ec.globals[new_name] !== undefined && new_name !== canonical_name) {
+                delete ec.globals[new_name];
+            }
+        }
+    }
+
     remove_method(name: string) {
         this.removed_methods.add(name);
     }
@@ -1087,8 +1101,12 @@ export const VMCoreClass = Runtime.define_class("VMCore", ObjectClass, (klass: C
         return Qnil;
     });
 
-    klass.define_native_method("set_variable_alias", (self: RValue, args: RValue[]): RValue => {
-        throw new NotImplementedError("set_variable_alias is not implemented yet");
+    klass.define_native_method("set_variable_alias", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const klass = args[0].get_data<Class>();
+        const new_name = args[1].get_data<string>();
+        const old_name = args[2].get_data<string>();
+        await klass.alias_variable(new_name, old_name);
+        return Qnil;
     });
 
     klass.define_native_method("set_postexe", (self: RValue, args: RValue[]): RValue => {

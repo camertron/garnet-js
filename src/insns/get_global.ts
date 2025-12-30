@@ -18,7 +18,9 @@ export default class GetGlobal extends Instruction {
             const frame_local = context.frame_svar()!.svars[this.name] || Qnil;
             context.push(frame_local);
         } else {
-            context.push(context.globals[this.name] || Qnil);
+            // Resolve any aliases to get the canonical global variable name
+            const canonical_name = context.resolve_global_alias(this.name);
+            context.push(context.globals[canonical_name] || Qnil);
         }
 
         return null;

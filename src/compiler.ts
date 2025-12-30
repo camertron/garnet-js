@@ -4,6 +4,7 @@ import { CatchBreak, InstructionSequence, Label, CatchTableStack, CatchNext, Sta
 import { CompilerOptions } from "./compiler_options";
 import { Node as InsnNode } from "./instruction_sequence"
 import {
+    AliasGlobalVariableNode,
     AliasMethodNode,
     AndNode,
     ArgumentsNode,
@@ -2394,6 +2395,15 @@ export class Compiler extends Visitor {
         this.with_used(true, () => this.visit(node.newName));
         this.with_used(true, () => this.visit(node.oldName));
         this.iseq.send(MethodCallData.create("set_method_alias", 3), null);
+        if (!this.used) this.iseq.pop();
+    }
+
+    override visitAliasGlobalVariableNode(node: AliasGlobalVariableNode): void {
+        this.iseq.putspecialobject(SpecialObjectType.VMCORE);
+        this.iseq.putspecialobject(SpecialObjectType.CBASE)
+        this.iseq.putstring((node.newName as GlobalVariableReadNode).name, Encoding.get_or_throw("UTF-8"), true);
+        this.iseq.putstring((node.oldName as GlobalVariableReadNode).name, Encoding.get_or_throw("UTF-8"), true);
+        this.iseq.send(MethodCallData.create("set_variable_alias", 3), null);
         if (!this.used) this.iseq.pop();
     }
 
