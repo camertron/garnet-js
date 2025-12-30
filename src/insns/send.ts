@@ -52,7 +52,9 @@ export default class Send extends Instruction {
 
     pops(): number {
         const argb = (this.call_data.has_flag(CallDataFlag.ARGS_BLOCKARG) ? 1 : 0);
-        return argb + this.call_data.argc + 1;
+        const kw_splat = (this.call_data.has_flag(CallDataFlag.KW_SPLAT) ? 1 : 0);
+        const kwarg = (this.call_data.has_flag(CallDataFlag.KWARG) && this.call_data.kw_arg ? this.call_data.kw_arg.length : 0);
+        return argb + kw_splat + kwarg + this.call_data.argc + 1;
     }
 
     pushes(): number {
