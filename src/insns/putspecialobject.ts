@@ -1,6 +1,6 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Class, ClassClass, ModuleClass, VMCore } from "../runtime";
+import { VMCore } from "../runtime";
 
 export enum SpecialObjectType {
     VMCORE = 1,
@@ -24,16 +24,16 @@ export default class PutSpecialObject extends Instruction {
                 break;
 
             case SpecialObjectType.CBASE:
-                let value = context.frame!.self;
-
-                if (value.klass != ClassClass && value.klass != ModuleClass) {
-                    value = value.get_data<Class>().get_singleton_class();
-                }
-
-                context.push(value);
+                // CBASE pushes the constant base for the current lexical scope,
+                // which is the last element in the nesting array.
+                // This is used for operations like alias that need to know
+                // which class/module they're being defined in.
+                context.push(context.const_base);
                 break;
 
             case SpecialObjectType.CONST_BASE:
+                // CONST_BASE is the same as CBASE but may skip eval frames.
+                // For now, we treat them the same.
                 context.push(context.const_base);
                 break;
         }
