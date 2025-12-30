@@ -1211,6 +1211,10 @@ export class Compiler extends Visitor {
         const class_iseq = this.iseq.class_child_iseq(node.name, this.start_line_for_loc(node.location)!, lexical_scope);
 
         this.with_child_iseq(class_iseq, () => {
+            node.locals.forEach((local) => {
+                this.iseq.local_table.plain(local)
+            });
+
             if (node.body) {
                 this.with_used(true, () => this.visit(node.body!));
             } else {
@@ -1260,6 +1264,10 @@ export class Compiler extends Visitor {
         const module_iseq = this.iseq.module_child_iseq(node.name, this.start_line_for_loc(node.location)!, lexical_scope);
 
         this.with_child_iseq(module_iseq, () => {
+            node.locals.forEach((local) => {
+                this.iseq.local_table.plain(local)
+            });
+
             if (node.body) {
                 this.with_used(true, () => this.visit(node.body!));
             } else {
@@ -1939,6 +1947,10 @@ export class Compiler extends Visitor {
         const singleton_iseq = this.iseq.singleton_class_child_iseq(this.start_line_for_loc(node.location)!, lexical_scope);
 
         this.with_child_iseq(singleton_iseq, () => {
+            node.locals.forEach((local) => {
+                this.iseq.local_table.plain(local)
+            });
+
             if (node.body) {
                 this.with_used(true, () => this.visit(node.body!));
             } else {
