@@ -6,7 +6,7 @@ import { RValue, Class, NativeMethod, ObjectClass, Runtime, Module } from "../ru
 import { Binding } from "./binding";
 import { Object } from "../runtime/object";
 import { Integer } from "./integer";
-import { NameError } from "../errors";
+import { ArgumentError, NameError } from "../errors";
 import { Hash } from "./hash";
 
 export abstract class Proc {
@@ -103,6 +103,14 @@ export const init = () => {
     if (inited) return;
 
     Runtime.define_class("Proc", ObjectClass, async (klass: Class) => {
+        klass.define_native_singleton_method("new", (_self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
+            if (!block) {
+                throw new ArgumentError("tried to create Proc object without a block");
+            }
+
+            return block;
+        });
+
         klass.define_native_method("call", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
             const ec = ExecutionContext.current
             return await self.get_data<Proc>().call(ec, args, kwargs, block, call_data || (ec.frame as BlockFrame).call_data);
