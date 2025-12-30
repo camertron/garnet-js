@@ -38,6 +38,7 @@ import {
     ForwardingSuperNode,
     GlobalVariableOrWriteNode,
     GlobalVariableReadNode,
+    GlobalVariableTargetNode,
     GlobalVariableWriteNode,
     HashNode,
     IfNode,
@@ -1731,6 +1732,10 @@ export class Compiler extends Visitor {
         this.iseq.setglobal(node.name);
 
         this.iseq.push(undefined_label);
+    }
+
+    override visitGlobalVariableTargetNode(node: GlobalVariableTargetNode) {
+        this.iseq.setglobal(node.name);
     }
 
     override visitCaseNode(node: CaseNode) {
