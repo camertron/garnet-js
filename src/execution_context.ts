@@ -1,6 +1,6 @@
 import { BlockCallData, CallData, CallDataFlag, MethodCallData } from "./call_data";
 import { ArgumentError, NativeError, RubyError } from "./errors";
-import { BlockFrame, ClassFrame, EnsureFrame, Frame, MethodFrame, RescueFrame, TopFrame } from "./frame";
+import { BlockFrame, ClassFrame, EnsureFrame, Frame, IFrameWithOwner, MethodFrame, RescueFrame, TopFrame } from "./frame";
 import Instruction from "./instruction";
 import { CatchBreak, CatchEnsure, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
 import { Local } from "./local_table";
@@ -562,6 +562,15 @@ export class ExecutionContext {
     // this is also used to call lambdas
     async run_block_frame(call_data: BlockCallData, calling_convention: CallingConvention, iseq: InstructionSequence, binding: Binding, args: RValue[], kwargs?: Hash, block?: RValue, owner?: Module, frame_callback?: (frame: BlockFrame) => void): Promise<RValue> {
         const original_stack = this.stack;
+
+        // if no owner is passsed, inherit it from the binding's parent
+        if (!owner && binding.parent_frame) {
+            const parent = binding.parent_frame as IFrameWithOwner;
+
+            if (parent.owner) {
+                owner = parent.owner;
+            }
+        }
 
         try {
             return await this.with_stack(binding.stack, async () => {
