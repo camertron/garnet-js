@@ -718,7 +718,15 @@ export class ExecutionContext {
     }
 
     get const_base() {
-        return this.frame!.nesting![this.frame!.nesting.length - 1];
+        const nesting = this.frame!.nesting!;
+
+        // if nesting is empty (e.g., in a top-level method), return ObjectClass
+        // since top-level methods are defined on Object
+        if (nesting.length === 0) {
+            return ObjectClass;
+        }
+
+        return nesting[nesting.length - 1];
     }
 
     // Ugh whyyy is this necessary? Can't we just use the indices in the local table?
