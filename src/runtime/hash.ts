@@ -165,8 +165,10 @@ export const init = () => {
     Runtime.define_class("Hash", ObjectClass, async (klass: Class) => {
         klass.include((await Object.find_constant("Enumerable"))!);
 
-        klass.define_native_singleton_method("new", async (_self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
-            return await Hash.new(args[0], block);
+        klass.define_native_singleton_method("new", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const val = new RValue(self, new Hash(args[0], block));
+            val.get_data<Hash>().self = val;
+            return val;
         });
 
         klass.define_native_method("default", (self: RValue): RValue => {
