@@ -80,7 +80,17 @@ export default class Defined extends Instruction {
 
             case DefinedType.CONST:
                 let klass2 = context.frame!.self;
-                if (klass2.klass !== ModuleClass) klass2 = klass2.get_data<Class>().get_singleton_class();
+
+                if (klass2.klass !== ModuleClass) {
+                    const klass2_class = klass2.get_data<Class>();
+
+                    if (klass2_class) {
+                        klass2 = klass2_class.get_singleton_class();
+                    } else {
+                        result = Qnil;
+                        break;
+                    }
+                }
 
                 if (await klass2.get_data<Class>().find_constant(this.name)) {
                     result = this.message;
