@@ -84,7 +84,7 @@ export const init = () => {
     const StopIterationClass = Runtime.define_class("StopIteration", IndexErrorClass);
     const RangeErrorClass = Runtime.define_class("RangeError", StandardErrorClass);
     const EncodingErrorClass = Runtime.define_class("EncodingError", StandardErrorClass);
-    const ThreadErrorClass = Runtime.define_class("ThreadErrorError", StandardErrorClass);
+    const ThreadErrorClass = Runtime.define_class("ThreadError", StandardErrorClass);
     const ZeroDivisionError = Runtime.define_class("ZeroDivisionError", StandardErrorClass);
     const KeyErrorClass = Runtime.define_class("KeyError", IndexErrorClass);
     const FrozenErrorClass = Runtime.define_class("FrozenError", RuntimeErrorClass);
