@@ -30,6 +30,7 @@ import {
     DefinedNode,
     ElseNode,
     EmbeddedStatementsNode,
+    EmbeddedVariableNode,
     EnsureNode,
     FalseNode,
     FloatNode,
@@ -1604,6 +1605,10 @@ export class Compiler extends Visitor {
         if (!this.used) {
             this.iseq.pop()
         }
+    }
+
+    override visitEmbeddedVariableNode(node: EmbeddedVariableNode) {
+        this.visit(node.variable);
     }
 
     override visitInterpolatedSymbolNode(node: InterpolatedSymbolNode) {
