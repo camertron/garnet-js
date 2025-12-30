@@ -84,6 +84,7 @@ import {
     RegularExpressionNode,
     RequiredKeywordParameterNode,
     RequiredParameterNode,
+    RescueModifierNode,
     RescueNode,
     RestParameterNode,
     ReturnNode,
@@ -1504,6 +1505,71 @@ export class Compiler extends Visitor {
         if (node.statements) {
             this.visit(node.statements);
         }
+    }
+
+    // Handles inline rescue modifier syntax: expression rescue rescue_expression
+    // e.g., a = 1/0 rescue 1
+    override visitRescueModifierNode(node: RescueModifierNode) {
+        const begin_label = this.iseq.label();
+        const end_label = this.iseq.label();
+        const cont_label = this.iseq.label();
+
+        this.iseq.push(begin_label);
+
+        // Execute the main expression
+        this.visit(node.expression);
+        this.iseq.jump(cont_label);
+
+        this.iseq.push(end_label);
+
+        // Rescue clauses execute in a "transparent" scope with increased local depth
+        this.local_depth ++;
+
+        // Create a rescue child iseq that handles StandardError by default
+        const rescue_iseq = this.iseq.rescue_child_iseq(
+            this.start_line_for_loc(node.location)!,
+            this.lexical_scope_stack.current()
+        );
+
+        this.with_child_iseq(rescue_iseq, () => {
+            const handled_label = rescue_iseq.label();
+            const unhandled_label = rescue_iseq.label();
+            const exit_label = rescue_iseq.label();
+
+            // Rescue modifier always rescues StandardError by default (no explicit exception types)
+            rescue_iseq.getlocal(0, 0);
+            rescue_iseq.putnil(); // scope to look up constant
+            rescue_iseq.putobject({type: "TrueClass", value: Qtrue}); // allow nil scope
+            rescue_iseq.getconstant("StandardError");
+            rescue_iseq.send(MethodCallData.create("is_a?", 1), null);
+            rescue_iseq.branchif(handled_label);
+            rescue_iseq.jump(unhandled_label);
+
+            rescue_iseq.push(handled_label);
+
+            // Execute the rescue expression
+            this.with_used(true, () => this.visit(node.rescueExpression));
+
+            rescue_iseq.jump(exit_label);
+
+            rescue_iseq.push(unhandled_label);
+
+            // Nothing handled the error, so re-raise
+            rescue_iseq.putself();
+            rescue_iseq.getlocal(0, 0);
+            rescue_iseq.send(MethodCallData.create("raise", 1), null);
+
+            rescue_iseq.push(exit_label);
+            rescue_iseq.leave();
+        });
+
+        this.iseq.catch_table.catch_rescue(
+            rescue_iseq, begin_label, end_label, cont_label, rescue_iseq.local_table.size()
+        );
+
+        this.local_depth --;
+
+        this.iseq.push(cont_label);
     }
 
     override visitNilNode(_node: NilNode) {
