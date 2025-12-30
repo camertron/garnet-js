@@ -375,14 +375,19 @@ export const init = async () => {
     mod.define_native_method("extend", async (self: RValue, args: RValue[]): Promise<RValue> => {
         for (const module of args) {
             await Runtime.assert_type(module, ModuleClass);
-            self.get_data<Module>().extend(module);
+
+            // we can't just call Module.extend here because self might not be a module (eg. in cases
+            // where we're extending an instance's singleton class), and only modules respond to extend()
+            const singleton_class = self.get_singleton_class();
+            singleton_class.get_data<Class>().include(module);
+
             await Object.send(module, "extended", [self]);
         }
 
         return self;
     });
 
-    // stub that does nothing
+    // stub that does nothing so we can call it without checking to see if it's defined
     mod.define_native_method("extended", (): RValue => {
         return Qnil;
     });
