@@ -13,7 +13,11 @@ import { BlockCallData, CallDataFlag, MethodCallData } from "../call_data";
 
 export class Hash {
     static async new(default_value?: RValue, default_proc?: RValue): Promise<RValue> {
-        const val = new RValue(await this.klass(), new Hash(default_value, default_proc));
+        return this.subclass_new(await this.klass(), default_value, default_proc);
+    }
+
+    static subclass_new(klass: RValue, default_value?: RValue, default_proc?: RValue): RValue {
+        const val = new RValue(klass, new Hash(default_value, default_proc));
         val.get_data<Hash>().self = val;
         return val;
     }
@@ -166,9 +170,7 @@ export const init = () => {
         klass.include((await Object.find_constant("Enumerable"))!);
 
         klass.define_native_singleton_method("new", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
-            const val = new RValue(self, new Hash(args[0], block));
-            val.get_data<Hash>().self = val;
-            return val;
+            return await Hash.subclass_new(self, args[0], block);
         });
 
         klass.define_native_method("default", (self: RValue): RValue => {

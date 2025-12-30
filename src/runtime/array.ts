@@ -17,8 +17,12 @@ import { Numeric } from "./numeric";
 export class RubyArray {
     private static klass_: RValue;
 
+    static subclass_new(klass: RValue, arr?: RValue[]): RValue {
+        return new RValue(klass, new RubyArray(arr || []));
+    }
+
     static async new(arr?: RValue[]): Promise<RValue> {
-        return new RValue(await this.klass(), new RubyArray(arr || []));
+        return this.subclass_new(await this.klass(), arr);
     }
 
     static async klass(): Promise<RValue> {
@@ -54,8 +58,8 @@ export const init = () => {
     Runtime.define_class("Array", ObjectClass, async (klass: Class) => {
         klass.include((await Object.find_constant("Enumerable"))!);
 
-        klass.define_native_singleton_method("[]", async (_self: RValue, args: RValue[]): Promise<RValue> => {
-            return await RubyArray.new(args);
+        klass.define_native_singleton_method("[]", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            return await RubyArray.subclass_new(self, args);
         });
 
         klass.define_native_method("initialize", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
