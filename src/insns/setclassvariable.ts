@@ -25,7 +25,7 @@ export default class SetClassVariable extends Instruction {
             let target = frame.owner.rval;
 
             // if the owner is a singleton class, set on the attached object
-            if (target.klass === ClassClass && target.get_data<Class>().is_singleton_class && target.get_data<Class>().attached_object) {
+            if (target.get_data<Class>().is_singleton_class && target.get_data<Class>().attached_object) {
                 target = target.get_data<Class>().attached_object!;
             }
 
@@ -39,7 +39,7 @@ export default class SetClassVariable extends Instruction {
         if (context.frame instanceof ClassFrame) {
             let target = context.frame.self;
 
-            if (target.klass === ClassClass && target.get_data<Class>().is_singleton_class && target.get_data<Class>().attached_object) {
+            if (target.get_data<Class>().is_singleton_class && target.get_data<Class>().attached_object) {
                 target = target.get_data<Class>().attached_object!;
             }
 
