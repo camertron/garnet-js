@@ -711,7 +711,8 @@ export class Module {
 
     get_singleton_class(): RValue {
         if (!this.singleton_class) {
-            const singleton_klass = new Class(`Class:${this.name}`, ModuleClass);
+            const singleton_klass = new Class(`Class:${this.name}`, ModuleClass, true);
+            singleton_klass.attached_object = this.rval;  // Store reference to the module this singleton is attached to
             this.singleton_class = new RValue(ClassClass.klass, singleton_klass);
             singleton_klass.rval = this.singleton_class;
         }
