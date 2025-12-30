@@ -136,6 +136,19 @@ export const init = async () => {
             return await RubyString.new(`/${pattern}/`);
         });
 
+        klass.define_native_method("match", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const pattern: Regexp = self.get_data<Regexp>();
+            const str = await Runtime.coerce_to_string(args[0]);
+            const result = pattern.search(str.get_data<string>());
+
+            if (result === null) {
+                return Qnil;
+            }
+
+            await Regexp.set_svars(result);
+            return await result.to_rval();
+        });
+
         klass.define_native_method("match?", async (self: RValue, args: RValue[]): Promise<RValue> => {
             let pattern: Regexp = self.get_data<Regexp>();
             const str = await Runtime.coerce_to_string(args[0]);
