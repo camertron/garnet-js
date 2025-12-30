@@ -75,6 +75,11 @@ export const init = () => {
         });
     });
 
+    const NoMemoryErrorClass = Runtime.define_class("NoMemoryError", ExceptionClass);
+
+    const SignalExceptionClass = Runtime.define_class("SignalException", ExceptionClass);
+    const InterruptClass = Runtime.define_class("Interrupt", SignalExceptionClass);
+
     const StandardErrorClass = Runtime.define_class("StandardError", ExceptionClass);
     const TypeErrorClass = Runtime.define_class("TypeError", StandardErrorClass);
     const NameErrorClass = Runtime.define_class("NameError", StandardErrorClass);
