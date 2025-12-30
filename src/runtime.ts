@@ -846,6 +846,55 @@ export class RValue {
         return this.ivars.has(name);
     }
 
+    async cvar_get(name: string): Promise<RValue> {
+        let result: RValue = Qnil;
+
+        await Runtime.each_unique_ancestor(this, true, async (ancestor: RValue): Promise<boolean> => {
+            if (ancestor.iv_exists(name)) {
+                result = ancestor.iv_get(name);
+                return false; // found it, stop searching
+            }
+
+            return true; // keep searching
+        });
+
+        return result;
+    }
+
+    async cvar_set(name: string, value: RValue): Promise<void> {
+        let found = false;
+
+        await Runtime.each_unique_ancestor(this, true, async (ancestor: RValue): Promise<boolean> => {
+            if (ancestor.iv_exists(name)) {
+                ancestor.iv_set(name, value);
+                found = true;
+                return false; // found it, stop searching
+            }
+
+            return true; // keep searching
+        });
+
+        // if not found on any ancestor, set it on self
+        if (!found) {
+            this.iv_set(name, value);
+        }
+    }
+
+    async cvar_exists(name: string): Promise<boolean> {
+        let exists = false;
+
+        await Runtime.each_unique_ancestor(this, true, async (ancestor: RValue): Promise<boolean> => {
+            if (ancestor.iv_exists(name)) {
+                exists = true;
+                return false; // found it, stop searching
+            }
+
+            return true; // keep searching
+        });
+
+        return exists;
+    }
+
     is_truthy() {
         return this != Qfalse && this.klass != NilClass;
     }
@@ -866,6 +915,7 @@ export class RValue {
         if (!this.singleton_class) {
             let name = `#<Class:${this.klass.get_data<Class>().full_name}:${Object.object_id_to_str(this.object_id)}>`
             const klass = new Class(name, this.klass, true);
+            klass.attached_object = this;  // Store reference to the object this singleton is attached to
             this.singleton_class = new RValue(ClassClass, klass);
             klass.rval = this.singleton_class;
         }
@@ -915,6 +965,7 @@ export class RValuePointer {
 export class Class extends Module {
     public superclass: RValue | null;
     public is_singleton_class: boolean;
+    public attached_object?: RValue;  // For singleton classes, the object they're attached to
 
     // name: can be null in the case of an anonymous class.
     // superclass: can be null in the case of BasicObject. Certain fundamental classes like Class and Object that are defined
@@ -939,6 +990,7 @@ export class Class extends Module {
             }
 
             const singleton_klass = new Class(`Class:${this.full_name}`, superclass_singleton, true);
+            singleton_klass.attached_object = this.rval;  // Store reference to the class this singleton is attached to
             this.singleton_class = new RValue(ClassClass, singleton_klass);
             singleton_klass.rval = this.singleton_class;
         }

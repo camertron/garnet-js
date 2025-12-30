@@ -72,7 +72,7 @@ export default class Defined extends Instruction {
                 let klass = context.frame!.self;
                 if (klass.klass !== ModuleClass) klass = klass.get_data<Class>().get_singleton_class();
 
-                if (klass.iv_exists(this.name)) {
+                if (await klass.cvar_exists(this.name)) {
                     result = this.message;
                 }
 

@@ -474,6 +474,36 @@ export const init = async () => {
         return Qfalse;
     });
 
+    mod.define_native_method("class_variable_get", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const first_arg = args[0] || Qnil;
+        const cvar_name = await coerce_to_string(first_arg)
+        const value = await self.cvar_get(cvar_name);
+
+        if (value === Qnil) {
+            throw new NameError(`uninitialized class variable ${cvar_name} in ${self.get_data<Module>().full_name}`);
+        }
+
+        return value;
+    });
+
+    mod.define_native_method("class_variable_set", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const first_arg = args[0] || Qnil;
+        const cvar_name = await coerce_to_string(first_arg)
+        const value = args[1] || Qnil;
+
+        await self.cvar_set(cvar_name, value);
+
+        return value;
+    });
+
+    mod.define_native_method("class_variable_defined?", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const first_arg = args[0] || Qnil;
+        const cvar_name = await coerce_to_string(first_arg)
+        const exists = await self.cvar_exists(cvar_name);
+
+        return exists ? Qtrue : Qfalse;
+    });
+
     inited = true;
 };
 
