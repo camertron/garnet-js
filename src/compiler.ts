@@ -2042,10 +2042,12 @@ export class Compiler extends Visitor {
     }
 
     override visitInterpolatedRegularExpressionNode(node: InterpolatedRegularExpressionNode) {
-        this.with_used(true, () => this.visitAll(node.parts));
-        this.iseq.dup();
-        this.iseq.objtostring(MethodCallData.create("to_s", 0, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE));
-        this.iseq.anytostring();
+        for (const part of node.parts) {
+            this.with_used(true, () => this.visit(part));
+            this.iseq.dup();
+            this.iseq.objtostring(MethodCallData.create("to_s", 0, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE));
+            this.iseq.anytostring();
+        }
 
         const flags = Regexp.build_flags(node.isIgnoreCase(), node.isMultiLine(), node.isExtended());
 

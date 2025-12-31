@@ -1,6 +1,5 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Runtime } from "../runtime";
 import { Regexp } from "../runtime/regexp";
 
 export default class ToRegexp extends Instruction {
@@ -15,7 +14,10 @@ export default class ToRegexp extends Instruction {
     }
 
     async call(context: ExecutionContext): Promise<ExecutionResult> {
-        const chunks: string[] = (await Runtime.coerce_all_to_string(context.popn(this.size))).map(element => element.get_data<string>());
+        // the compiler should ensure that all parts on the stack are already converted to strings
+        // via the objtostring and anytostring instructions, so it's safe to assume they are all
+        // strings here
+        const chunks: string[] = context.popn(this.size).map(element => element.get_data<string>());
         const pattern = chunks.join("");
         context.push(await Regexp.new(pattern, this.flags));
         return null;
