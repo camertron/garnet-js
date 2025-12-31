@@ -929,6 +929,40 @@ export const init = () => {
             return await Integer.get(0);
         });
 
+        klass.define_native_method("index", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [string_or_re, offset_rval] = await Args.scan("11", args);
+            const data = self.get_data<string>();
+            let offset = offset_rval === Qnil ? 0 : offset_rval.get_data<number>();
+
+            // handle negative offset by wrapping around
+            if (offset < 0) {
+                offset = data.length + offset;
+
+                if (offset < 0) {
+                    return Qnil;
+                }
+            }
+
+            switch (string_or_re.klass) {
+                case await Regexp.klass():
+                    const re = string_or_re.get_data<Regexp>();
+                    const first_match = re.search(data, offset);
+                    if (!first_match) return Qnil;
+
+                    return await Integer.get((first_match as MatchData).begin(0));
+
+                default:
+                    const str = (await Runtime.coerce_to_string(string_or_re)).get_data<string>();
+                    const index = data.indexOf(str, offset); // encodings?
+
+                    if (index === -1) {
+                        return Qnil;
+                    } else {
+                        return Integer.get(index);
+                    }
+            }
+        });
+
         klass.define_native_method("rindex", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const [string_or_re, offset_rval] = await Args.scan("11", args);
             const data = self.get_data<string>();
