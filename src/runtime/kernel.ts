@@ -614,6 +614,54 @@ export const init = async () => {
         throw new NameError(`undefined method \`${method_name}' for class ${self.klass.get_data<Class>().name}`);
     });
 
+    const methods_from = (mod: RValue): string[] => {
+        const results = [];
+        const mod_methods = mod.get_data<Module>().methods;
+
+        for (const method_name in mod_methods) {
+            const method = mod_methods[method_name];
+
+            switch (method.visibility) {
+                case Visibility.public:
+                case Visibility.protected:
+                    results.push(method_name);
+                    break;
+            }
+        }
+
+        return results;
+    }
+
+    mod.define_native_method("methods", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const include_super = (args[0] || Qtrue).is_truthy();
+        const method_names = [];
+
+        let start_mod: RValue;
+
+        if (self.has_singleton_class()) {
+            start_mod = self.get_singleton_class();
+        } else {
+            start_mod = self.klass;
+        }
+
+        if (include_super) {
+            await Runtime.each_unique_ancestor(start_mod, true, async (ancestor: RValue): Promise<boolean> => {
+                method_names.push(...await methods_from(ancestor));
+                return true;
+            });
+        } else {
+            method_names.push(...await methods_from(start_mod));
+        }
+
+        const results = [];
+
+        for (const method_name of method_names) {
+            results.push(await Runtime.intern(method_name));
+        }
+
+        return await RubyArray.new(results);
+    });
+
     mod.define_native_method("binding", async (self: RValue): Promise<RValue> => {
         return await Binding.from_binding(ExecutionContext.current.get_binding());
     });
