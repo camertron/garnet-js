@@ -1,7 +1,7 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
 import { FrozenError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Callable, Class, KernelModule, ObjectClass, RValue, Runtime, Qtrue, Qfalse, Module } from "../runtime";
+import { Callable, Class, KernelModule, ObjectClass, RValue, Runtime, Qtrue, Qfalse, Qnil, Module } from "../runtime";
 import { Symbol } from "./symbol";
 import { RubyString } from "../runtime/string";
 import { Hash } from "./hash";
@@ -257,6 +257,11 @@ export const init = async () => {
 
         klass.define_native_method("frozen?", (self: RValue): RValue => {
             return self.is_frozen() ? Qtrue : Qfalse;
+        });
+
+        // default method that returns nil (for objects that don't implement pattern matching)
+        klass.define_native_method("=~", (_self: RValue, _args: RValue[]): RValue => {
+            return Qnil;
         });
     });
 };
