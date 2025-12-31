@@ -419,7 +419,6 @@ export class Compiler extends Visitor {
 
         switch (node.block?.constructor.name) {
             case "BlockNode":
-                call_data.flag |= CallDataFlag.ARGS_BLOCKARG;
                 block_iseq = this.with_used(true, () => this.visitBlockNode(node.block as BlockNode));
                 break;
             case "BlockArgumentNode":
@@ -975,6 +974,7 @@ export class Compiler extends Visitor {
             if (!(node.keywordRest instanceof NoKeywordsParameterNode)) {
                 this.iseq.argument_options.keyword_rest_start = this.iseq.argument_size;
                 this.with_used(true, () => this.visit(node.keywordRest!));
+                this.iseq.argument_size ++;
             }
         }
 
@@ -986,6 +986,10 @@ export class Compiler extends Visitor {
     }
 
     override visitKeywordRestParameterNode(node: KeywordRestParameterNode): void {
+        // Add the keyword rest parameter to the local table if it has a name
+        if (node.name) {
+            this.iseq.local_table.plain(node.name);
+        }
     }
 
     override visitForwardingParameterNode(node: ForwardingParameterNode): void {

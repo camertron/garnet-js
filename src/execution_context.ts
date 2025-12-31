@@ -947,7 +947,8 @@ export class ExecutionContext {
                 }
 
                 if (kwargs) kwargs.delete_by_symbol(name);
-                local_index = this.inc_local_index(local_index, iseq);
+                // Note: local_index is NOT incremented here because keyword parameters
+                // are set by index i
             }
         }
 
