@@ -1199,8 +1199,9 @@ export class Compiler extends Visitor {
         if (this.used) this.iseq.dup();
         this.iseq.branchunless(label)
         if (this.used) this.iseq.pop();
-        this.visit(node.right);
+        this.with_used(true, () => this.visit(node.right));
         this.iseq.push(label);
+        if (!this.used) this.iseq.pop();
     }
 
     override visitOrNode(node: OrNode) {
@@ -1209,9 +1210,10 @@ export class Compiler extends Visitor {
         this.with_used(true, () => this.visit(node.left));
         if (this.used) this.iseq.dup();
         this.iseq.branchif(label);
-        if (this.used) this.iseq.pop()
-        this.visit(node.right);
+        if (this.used) this.iseq.pop();
+        this.with_used(true, () => this.visit(node.right));
         this.iseq.push(label);
+        if (!this.used) this.iseq.pop();
     }
 
     override visitClassNode(node: ClassNode) {
