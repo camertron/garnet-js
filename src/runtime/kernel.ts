@@ -121,40 +121,48 @@ export const init = async () => {
 
     mod.define_native_method("raise", async (_self: RValue, args: RValue[]): Promise<RValue> => {
         let instance: RValue;
+        let is_new_exception = false;
 
         if (args.length === 0) {
             instance = await new RuntimeError("").to_rvalue();
+            is_new_exception = true;
         } else {
             switch (args[0].klass) {
                 case ClassClass:
                     instance = await Object.send(args[0], "new", [args[1] || Qnil]);
+                    is_new_exception = true;
                     break;
 
                 case await RubyString.klass():
                     instance = await Object.send((await Object.find_constant("RuntimeError"))!, "new", [args[0]]);
+                    is_new_exception = true;
                     break;
 
                 default:
                     instance = args[0];
+                    is_new_exception = false;
             }
-        }
-
-        const backtrace = await ExecutionContext.current.create_backtrace_rvalue();
-        const locations: RValue[] = [];
-
-        for (const element of backtrace.get_data<RubyArray>().elements) {
-            // @TODO: avoid all this error-prone string processing
-            const [path, line_and_label] = element.get_data<string>().split(":");
-            const [line, label] = line_and_label.split(" in ");
-            locations.push(await BacktraceLocation.new(path, parseInt(line), label));
         }
 
         const ruby_error = instance.get_data<IRubyError>();
 
-        ruby_error.backtrace = backtrace.get_data<string[]>();
-        ruby_error.backtrace_rval = backtrace;
-        ruby_error.backtrace_locations = locations;
-        ruby_error.backtrace_locations_rval = await RubyArray.new(locations);
+        // Only set the backtrace if this is a new exception or if the exception doesn't have a backtrace yet
+        if (is_new_exception || !ruby_error.backtrace_rval) {
+            const backtrace = await ExecutionContext.current.create_backtrace_rvalue();
+            const locations: RValue[] = [];
+
+            for (const element of backtrace.get_data<RubyArray>().elements) {
+                // @TODO: avoid all this error-prone string processing
+                const [path, line_and_label] = element.get_data<string>().split(":");
+                const [line, label] = line_and_label.split(" in ");
+                locations.push(await BacktraceLocation.new(path, parseInt(line), label));
+            }
+
+            ruby_error.backtrace = backtrace.get_data<string[]>();
+            ruby_error.backtrace_rval = backtrace;
+            ruby_error.backtrace_locations = locations;
+            ruby_error.backtrace_locations_rval = await RubyArray.new(locations);
+        }
 
         throw instance;
     });
