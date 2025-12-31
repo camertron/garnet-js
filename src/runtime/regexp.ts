@@ -131,6 +131,25 @@ export const init = async () => {
             }
         });
 
+        klass.define_native_method("===", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            try {
+                const str = await Runtime.coerce_to_string(args[0]);
+                const str_data = str.get_data<string>();
+                const regexp = self.get_data<Regexp>();
+                const result = regexp.search(str_data);
+
+                if (result) {
+                    await Regexp.set_svars(result);
+                    return Qtrue;
+                } else {
+                    return Qfalse;
+                }
+            } catch (e) {
+                // If coercion fails (e.g., for nil, Regexp, etc.), return false
+                return Qfalse;
+            }
+        });
+
         klass.define_native_method("inspect", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const pattern = self.get_data<Regexp>().pattern;
             return await RubyString.new(`/${pattern}/`);
