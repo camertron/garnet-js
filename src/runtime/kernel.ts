@@ -282,8 +282,16 @@ export const init = async () => {
         let message = null;
 
         if (args.length > 0) {
-            await Runtime.assert_type(args[0], await Integer.klass());
-            status = args[0].get_data<number>();
+            const arg = args[0];
+
+            if (arg === Qtrue) {
+                status = 0;
+            } else if (arg === Qfalse) {
+                status = 1;
+            } else {
+                await Runtime.assert_type(arg, await Integer.klass());
+                status = arg.get_data<number>();
+            }
         }
 
         if (args.length > 1) {
