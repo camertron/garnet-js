@@ -21,6 +21,7 @@ import {
     CallNode,
     CaseNode,
     ClassNode,
+    ClassVariableOrWriteNode,
     ClassVariableReadNode,
     ClassVariableWriteNode,
     ConstantPathNode,
@@ -2395,6 +2396,28 @@ export class Compiler extends Visitor {
         if (this.used) {
             this.iseq.getclassvariable(node.name);
         }
+    }
+
+    override visitClassVariableOrWriteNode(node: ClassVariableOrWriteNode) {
+        const defined_label = this.iseq.label();
+        const undefined_label = this.iseq.label();
+
+        this.iseq.putnil();
+        this.iseq.defined(DefinedType.CVAR, node.name, Qtrue);
+        this.iseq.branchunless(defined_label);
+
+        this.iseq.getclassvariable(node.name)
+        if (this.used) this.iseq.dup;
+        this.iseq.branchif(undefined_label);
+
+        if (this.used) this.iseq.pop();
+        this.iseq.push(defined_label);
+
+        this.with_used(true, () => { this.visit(node.value) });
+
+        if (this.used) this.iseq.dup();
+        this.iseq.setclassvariable(node.name)
+        this.iseq.push(undefined_label);
     }
 
     override visitNumberedParametersNode(node: NumberedParametersNode) {
