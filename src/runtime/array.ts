@@ -264,6 +264,36 @@ export const init = () => {
             return Qnil;
         });
 
+        klass.define_native_method("delete_if", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const elements = self.get_data<RubyArray>().elements;
+            const result: RValue[] = [];
+
+            if (block) {
+                try {
+                    for (let i = 0; i < elements.length; i ++) {
+                        if (!(await Object.send(block, "call", [elements[i]])).is_truthy()) {
+                            result.push(elements[i]);
+                        }
+                    }
+                } catch (e) {
+                    if (e instanceof BreakError) {
+                        // return break value
+                        return e.value;
+                    } else {
+                        // an error occurred
+                        throw e;
+                    }
+                }
+            } else {
+                // @TODO: return an Enumerator
+            }
+
+            elements.splice(0);
+            elements.push(...result);
+
+            return self;
+        });
+
         klass.define_native_method("map!", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             if (block) {
                 try {
