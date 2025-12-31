@@ -695,6 +695,40 @@ export const init = () => {
             await sort(self.get_data<RubyArray>().elements, block?.get_data<Proc>());
             return self;
         });
+
+        klass.define_native_method("uniq", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const elements = self.get_data<RubyArray>().elements;
+            const seen = new Hash();
+            const result: RValue[] = [];
+
+            for (let i = 0; i < elements.length; i ++) {
+                if (block) {
+                    try {
+                        const elem = await Object.send(block, "call", [elements[i]]);
+
+                        if (!(await seen.has(elem))) {
+                            result.push(elem);
+                            await seen.set(elem, Qtrue);
+                        }
+                    } catch (e) {
+                        if (e instanceof BreakError) {
+                            // return break value
+                            return e.value;
+                        } else {
+                            // an error occurred
+                            throw e;
+                        }
+                    }
+                } else {
+                    if (!(await seen.has(elements[i]))) {
+                        result.push(elements[i]);
+                        await seen.set(elements[i], Qtrue);
+                    }
+                }
+            }
+
+            return await RubyArray.new(result);
+        });
     });
 
     inited = true;
