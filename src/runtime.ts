@@ -1331,7 +1331,7 @@ await (BasicObjectClass.get_data<Class>()).tap(async (klass: Class) => {
             );
         }
 
-        return Object.send(self, send_call_data, args, kwargs, block);
+        return Object.send(self, send_call_data, args.slice(1), kwargs, block);
     });
 });
 
