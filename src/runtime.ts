@@ -44,6 +44,7 @@ import { init as fiber_init } from "./runtime/fiber";
 import { init as net_http_init } from "./lib/net/http";
 import { init as uri_init } from "./lib/uri";
 import { init as etc_init } from "./lib/etc";
+import { init as pathname_init } from "./lib/pathname";
 import { obj_id_hash } from "./util/object_id";
 import { RubyString } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
@@ -385,6 +386,7 @@ Runtime.register_native_extension("date", date_init);
 Runtime.register_native_extension("uri", uri_init);
 Runtime.register_native_extension("net/http", net_http_init);
 Runtime.register_native_extension("etc", etc_init);
+Runtime.register_native_extension("pathname", pathname_init);
 
 export enum Visibility {
     public,
@@ -1460,7 +1462,7 @@ export const init = async () => {
     error_init();
     process_init();
     env_init();
-    file_init();
+    await file_init();
     dir_init();
     await kernel_init();
     await object_init();
@@ -1475,6 +1477,7 @@ export const init = async () => {
     struct_init();
     await method_init();
     await fiber_init();
+    await pathname_init();
 
     ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"] = await (async () => {
         if (is_node) {
