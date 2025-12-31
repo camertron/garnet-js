@@ -117,10 +117,10 @@ export const init = () => {
         await klass.alias_method("to_s", "inspect");
 
         klass.define_native_method("each", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const elements = self.get_data<RubyArray>().elements;
+
             if (block) {
                 try {
-                    const elements = self.get_data<RubyArray>().elements;
-
                     for (const element of elements) {
                         await Object.send(block, "call", [element]);
                     }
@@ -134,11 +134,37 @@ export const init = () => {
                     }
                 }
             } else {
-                const elements = self.get_data<RubyArray>().elements;
-
                 return await Enumerator.for_native_generator(async function* () {
                     for (const element of elements) {
                         yield element;
+                    }
+                });
+            }
+
+            return self;
+        });
+
+        klass.define_native_method("reverse_each", async (self: RValue, args?: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const elements = self.get_data<RubyArray>().elements;
+
+            if (block) {
+                try {
+                    for (let i = elements.length - 1; i >= 0; i --) {
+                        await Object.send(block, "call", [elements[i]]);
+                    }
+                } catch (e) {
+                    if (e instanceof BreakError) {
+                        // return break value
+                        return e.value;
+                    } else {
+                        // an error occurred
+                        throw e;
+                    }
+                }
+            } else {
+                return await Enumerator.for_native_generator(async function* () {
+                    for (let i = elements.length - 1; i >= 0; i --) {
+                        yield elements[i];
                     }
                 });
             }
