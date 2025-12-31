@@ -14,6 +14,7 @@ await Garnet.init();
 let code: string | null = null;
 let code_path: string = "<code>";
 let script_argv: string[] = [];
+let script_path_index: number | null = null;
 
 // current directory
 await ExecutionContext.current.push_onto_load_path(process.env.PWD!);
@@ -22,7 +23,8 @@ await ExecutionContext.current.push_onto_load_path(path.resolve(path.join(__dirn
 
 await Dir.setwd(process.env.PWD!);
 
-for (let i = 0; i < argv.length; i ++) {
+// skip the first two elements (node and script path)
+for (let i = 2; i < argv.length; i ++) {
     if (argv[i] == "-I") {
         const p = path.resolve(argv[i + 1])
         await ExecutionContext.current.push_onto_load_path(p);
@@ -54,8 +56,13 @@ for (let i = 0; i < argv.length; i ++) {
 
         i ++;
     } else if (argv[i] === "--") {
-        script_argv = argv.splice(i + 1);
-        argv.pop(); // remove "--"
+        // everything after "--" gets passed to the script in ARGV
+        script_argv = argv.slice(i + 1);
+        break;
+    } else if (!argv[i].startsWith("-")) {
+        // first non-option argument is the script path
+        script_path_index = i;
+        script_argv = argv.slice(i + 1);
         break;
     }
 }
@@ -73,8 +80,8 @@ let absolute_code_path;
 if (code) {
     code_path = "-e";
     absolute_code_path = "-e"
-} else {
-    code_path = argv[argv.length - 1];
+} else if (script_path_index !== null) {
+    code_path = argv[script_path_index];
     absolute_code_path = vmfs.real_path(code_path);
     ExecutionContext.current.globals["$0"] = await String.new(code_path);
 
