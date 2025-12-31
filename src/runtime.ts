@@ -1453,7 +1453,7 @@ export const init = async () => {
     await integer_init();
     await float_init();
     symbol_init();
-    enumerable_init();
+    await enumerable_init();
     await enumerator_init();
     hash_init();
     proc_init();
