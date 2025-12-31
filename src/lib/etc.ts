@@ -7,7 +7,7 @@ let inited = false;
 export const init = async () => {
     if (inited) return;
 
-    Runtime.define_module("Etc", async (mod: Module) => {
+    Runtime.define_module("Etc", (mod: Module) => {
         mod.define_native_singleton_method("nprocessors", async (): Promise<RValue> => {
           if (is_node) {
             const os = await import("os");
