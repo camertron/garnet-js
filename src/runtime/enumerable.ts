@@ -372,5 +372,26 @@ export const init = async () => {
 
     await mod.alias_method("index", "find_index");
 
+    mod.define_native_method("to_a", async (self: RValue): Promise<RValue> => {
+        const results: RValue[] = [];
+
+        try {
+            await Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, args: RValue[]): Promise<RValue> => {
+                results.push(args[0]);
+                return Qnil;
+            }));
+        } catch (e) {
+            if (e instanceof BreakError) {
+                return e.value;
+            } else {
+                throw e;
+            }
+        }
+
+        return await RubyArray.new(results);
+    });
+
+    await mod.alias_method("entries", "to_a");
+
     inited = true;
 };
