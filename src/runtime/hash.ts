@@ -695,6 +695,17 @@ export const init = () => {
 
             return Hash.from_hash(hash);
         });
+
+        klass.define_native_method("invert", async (self: RValue): Promise<RValue> => {
+            const hash = self.get_data<Hash>();
+            const inverted = new Hash();
+
+            await hash.each(async (k: RValue, v: RValue) => {
+                await inverted.set(v, k);
+            });
+
+            return Hash.from_hash(inverted);
+        });
     });
 
     inited = true;
