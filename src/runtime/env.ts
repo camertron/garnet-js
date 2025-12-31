@@ -1,5 +1,5 @@
 import { is_node } from "../env";
-import { Class, ObjectClass, Qnil, RValue, Runtime } from "../runtime"
+import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime"
 import { Hash } from "./hash";
 import { RubyString } from "../runtime/string";
 
@@ -34,6 +34,24 @@ export const init = () => {
         await Runtime.assert_type(args[1], await RubyString.klass());
         await env_hash.set(args[0], args[1]);
         return args[1];
+    });
+
+    env.get_singleton_class().get_data<Class>().define_native_method("include?", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+        await Runtime.assert_type(args[0], await RubyString.klass());
+
+        if (await env_hash.has(args[0])) {
+            return Qtrue;
+        }
+
+        if (is_node) {
+            const key = args[0].get_data<string>();
+
+            if (process.env[key] !== undefined) {
+                return Qtrue;
+            }
+        }
+
+        return Qfalse;
     });
 
     ObjectClass.get_data<Class>().constants["ENV"] = env
