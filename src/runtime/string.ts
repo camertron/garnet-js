@@ -16,6 +16,7 @@ import { mix_shared_string_methods_into } from "./string-shared";
 import { left_pad, sprintf } from "./printf";
 import { Args } from "./arg-scanner";
 import { Kernel } from "./kernel";
+import { Enumerator } from "./enumerator";
 
 // 7-bit strings are implicitly valid.
 // If both the valid _and_ 7bit bits are set, the string is broken.
@@ -1103,6 +1104,75 @@ export const init = () => {
 
             return await RubyArray.new(bytes);
         });
+
+        klass.define_native_method("each_line", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const data = self.get_data<string>();
+            let separator: string;
+
+            if (args.length > 0 && args[0] !== Qnil) {
+                separator = args[0].get_data<string>();
+            } else if (args.length > 0 && args[0] === Qnil) {
+                // separator is nil, yield the whole string
+                if (block) {
+                    await RubyObject.send(block, "call", [self]);
+                    return self;
+                } else {
+                    return await Enumerator.for_native_generator(async function* () {
+                        yield self;
+                    });
+                }
+            } else {
+                // Use default separator from $/
+                separator = ExecutionContext.current.globals["$/"].get_data<string>();
+            }
+
+            const lines: RValue[] = [];
+
+            if (separator === "") {
+                // paragraph mode: split by 2 or more newlines
+                const paragraphs = data.split(/\n{2,}/);
+
+                for (let i = 0; i < paragraphs.length; i ++) {
+                    if (paragraphs[i].length > 0) {
+                        // add back the double newline except for the last paragraph
+                        const line_str = i < paragraphs.length - 1 ? paragraphs[i] + "\n\n" : paragraphs[i];
+                        lines.push(await RubyString.new(line_str));
+                    }
+                }
+            } else {
+                // normal mode: split by separator
+                let pos = 0;
+
+                while (pos < data.length) {
+                    const next_sep = data.indexOf(separator, pos);
+
+                    if (next_sep === -1) {
+                        // no more separators, yield the rest
+                        lines.push(await RubyString.new(data.substring(pos)));
+                        break;
+                    } else {
+                        // yield the line (including the separator)
+                        lines.push(await RubyString.new(data.substring(pos, next_sep + separator.length)));
+                        pos = next_sep + separator.length;
+                    }
+                }
+            }
+
+            if (block) {
+                for (const line of lines) {
+                    await RubyObject.send(block, "call", [line]);
+                }
+                return self;
+            } else {
+                return await Enumerator.for_native_generator(async function* () {
+                    for (const line of lines) {
+                        yield line;
+                    }
+                });
+            }
+        });
+
+        await klass.alias_method("lines", "each_line");
 
         klass.define_native_singleton_method("try_convert", async (_self: RValue, args: RValue[]): Promise<RValue> => {
             const obj = args[0];
