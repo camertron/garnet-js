@@ -459,8 +459,11 @@ export const init = () => {
         klass.define_native_method("fetch", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             const hash = self.get_data<Hash>();
             const key = args[0];
-            const value = await hash.get(key);
-            if (value) return value;
+
+            // check if the key exists in the hash (don't use default value)
+            if (await hash.has(key)) {
+                return await hash.get(key);
+            }
 
             if (block) {
                 return await block.get_data<Proc>().call(ExecutionContext.current, [key]);
