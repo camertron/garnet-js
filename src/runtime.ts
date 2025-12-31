@@ -1395,17 +1395,40 @@ export class NodeIO implements IO {
 }
 
 export const IOClass = Runtime.define_class("IO", ObjectClass, async (klass: Class) => {
-    klass.define_native_method("puts", async (self: RValue, args: RValue[], _kwargs?: RubyHash, _block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
+    klass.define_native_method("puts", async (self: RValue, args: RValue[], _kwargs?: RubyHash, _block?: RValue, _call_data?: MethodCallData): Promise<RValue> => {
         const io = self.get_data<IO>();
 
         for (const arg of args) {
-            // this shouldn't be necessary anymore?
-            if (arg.klass === await RubyArray.klass() && call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
+            // Check if the argument is an array (or can be converted to one via to_ary);
+            // `puts` flattens arrays regardless of whether they were splatted.
+            if (arg.klass === await RubyArray.klass()) {
                 for (const elem of arg.get_data<RubyArray>().elements) {
                     io.puts((await Object.send(elem, "to_s")).get_data<string>());
                 }
             } else {
-                io.puts((await Object.send(arg, "to_s")).get_data<string>());
+                // Try to convert to array via to_ary. `puts` always tries to call to_ary,
+                // even if it's not defined (which will trigger a method_missing)
+                try {
+                    const ary = await Object.send(arg, "to_ary");
+
+                    if (ary.klass === await RubyArray.klass()) {
+                        for (const elem of ary.get_data<RubyArray>().elements) {
+                            io.puts((await Object.send(elem, "to_s")).get_data<string>());
+                        }
+                    } else {
+                        // to_ary didn't return an array :(
+                        const class_name = arg.klass.get_data<Class>().name;
+                        const ary_class_name = ary.klass.get_data<Class>().name;
+                        throw new TypeError(`can't convert ${class_name} to Array (${class_name}#to_ary gives ${ary_class_name})`);
+                    }
+                } catch (e) {
+                    // if to_ary raises a NoMethodError, just use to_s
+                    if (e instanceof NoMethodError) {
+                        io.puts((await Object.send(arg, "to_s")).get_data<string>());
+                    } else {
+                        throw e;
+                    }
+                }
             }
         }
 
