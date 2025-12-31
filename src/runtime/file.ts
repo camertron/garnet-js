@@ -1,9 +1,10 @@
 import { ErrnoENOENT } from "../errors";
-import { Class, IOClass, RValue, Runtime, Qtrue, Qfalse } from "../runtime"
+import { Class, IOClass, RValue, Runtime, Qtrue, Qfalse, Qnil } from "../runtime"
 import { vmfs } from "../vmfs";
 import { Dir } from "./dir";
 import { RubyString } from "../runtime/string";
 import { flatten_string_array } from "../util/array_utils";
+import { is_node } from "../env";
 
 const path_from_realpath_args = async (args: RValue[]): Promise<string> => {
     await Runtime.assert_type(args[0], await RubyString.klass());
@@ -24,8 +25,18 @@ export const FNM_PATHNAME = 2;
 export const FNM_DOTMATCH = 4;
 export const FNM_EXTGLOB = 16;
 
-export const init = () => {
-    Runtime.define_class("File", IOClass, (klass: Class): void => {
+export const init = async () => {
+    Runtime.define_class("File", IOClass, async (klass: Class): Promise<void> => {
+        klass.constants["SEPARATOR"] = await RubyString.new("/");
+        klass.constants["Separator"] = await RubyString.new("/");
+
+        // PATH_SEPARATOR is : on Unix-like systems, ; on Windows
+        const isWindows = is_node && process.platform === "win32";
+        klass.constants["PATH_SEPARATOR"] = await RubyString.new(isWindows ? ";" : ":");
+
+        // ALT_SEPARATOR is \ on Windows, nil on Unix-like systems
+        klass.constants["ALT_SEPARATOR"] = isWindows ? await RubyString.new("\\") : Qnil;
+
         /* Returns the real (absolute) pathname of pathname in the actual filesystem. The real pathname doesn’t contain
          * symlinks or useless dots.
          *
