@@ -972,9 +972,19 @@ export class Compiler extends Visitor {
 
         if (node.keywordRest) {
             if (!(node.keywordRest instanceof NoKeywordsParameterNode)) {
-                this.iseq.argument_options.keyword_rest_start = this.iseq.argument_size;
-                this.with_used(true, () => this.visit(node.keywordRest!));
-                this.iseq.argument_size ++;
+                const keywordRestNode = node.keywordRest as KeywordRestParameterNode;
+
+                // only mark start of kwargs if the kwrest parameter has a name
+                if (keywordRestNode.name) {
+                    this.iseq.argument_options.keyword_rest_start = this.iseq.argument_size;
+                    this.with_used(true, () => this.visit(node.keywordRest!));
+                    this.iseq.argument_size ++;
+                } else {
+                    // This branch handles anonymous kwrest args (i.e. **). We mark that we accept
+                    // kwargs but don't add to argument_size or local table. -2 is a special sentinel
+                    // value for anonymous kwrest args (see setup_arguments() execution-context.ts).
+                    this.iseq.argument_options.keyword_rest_start = -2;
+                }
             }
         }
 

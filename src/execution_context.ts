@@ -956,12 +956,16 @@ export class ExecutionContext {
             let kwargs_hash = kwargs || new Hash();
 
             if (iseq.argument_options.keyword_rest_start === -1) {
+                // forwarding parameters (...) - add kwargs to the rest args array
                 const lookup = iseq.local_table.find_or_throw("*");
 
                 // avoid mutating original args array
                 const old_args = this.local_get(lookup.index, lookup.depth).get_data<RubyArray>().elements;
                 this.local_set(lookup.index, lookup.depth, await RubyArray.new([...old_args, await Hash.from_hash(kwargs_hash)]));
+            } else if (iseq.argument_options.keyword_rest_start === -2) {
+                // anonymous kwrest (i.e. **) - but don't store them anywhere, and no need to set any local variables
             } else {
+                // named kwrest (eg. **rest) - store kwargs in local variable
                 this.local_set(local_index, 0, kwargs ? await Hash.from_hash(kwargs) : await Hash.new());
                 local_index = this.inc_local_index(local_index, iseq);
             }
@@ -976,7 +980,19 @@ export class ExecutionContext {
         }
 
         if (iseq.argument_options.block_start != null) {
-            this.local_set(local_index, 0, block ? block : Qnil);
+            // the block arg is the last non-special arg
+            let block_index = -1;
+
+            for (let i = iseq.local_table.locals.length - 1; i >= 0; i --) {
+                if (iseq.local_table.locals[i].name !== "keyword_bits") {
+                    block_index = i;
+                    break;
+                }
+            }
+
+            if (block_index !== -1) {
+                this.local_set(block_index, 0, block ? block : Qnil);
+            }
         }
 
         return start_label;
