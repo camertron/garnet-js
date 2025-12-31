@@ -103,6 +103,7 @@ import {
     SymbolNode,
     TrueNode,
     UnlessNode,
+    UntilNode,
     WhenNode,
     WhileNode,
     XStringNode,
@@ -1991,6 +1992,38 @@ export class Compiler extends Visitor {
             this.iseq.branchunless(done_label);
 
             this.iseq.jump(body_label);
+            this.iseq.push(done_label);
+
+            this.iseq.putnil();
+            if (!this.used) this.iseq.pop();
+        });
+    }
+
+    override visitUntilNode(node: UntilNode) {
+        const predicate_label = this.iseq.label();
+        const body_label = this.iseq.label();
+        const done_label = this.iseq.label();
+
+        this.local_catch_table_stack.with_catch_table(() => {
+            this.local_catch_table_stack.catch_break(null, body_label, done_label, done_label, 0);
+            this.local_catch_table_stack.catch_next(body_label, done_label, predicate_label, 0);
+            this.local_catch_table_stack.catch_redo(body_label, done_label, body_label, 0);
+            this.iseq.jump(predicate_label);
+            this.iseq.putnil();  // why is this here?
+            this.iseq.pop();
+            this.iseq.jump(predicate_label);
+
+            this.iseq.push(body_label);
+
+            if (node.statements) {
+                this.with_used(false, () => this.visit(node.statements!));
+            }
+
+            this.iseq.push(predicate_label);
+            this.with_used(true, () => this.visit(node.predicate));
+            this.iseq.branchunless(body_label);
+
+            this.iseq.jump(done_label);
             this.iseq.push(done_label);
 
             this.iseq.putnil();
