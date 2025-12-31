@@ -313,5 +313,64 @@ export const init = async () => {
         return await Lazy.new(self);
     });
 
+    mod.define_native_method("find_index", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+        let index = 0;
+
+        if (block) {
+            const proc = block.get_data<Proc>();
+
+            try {
+                await Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, each_args: RValue[]): Promise<RValue> => {
+                    if ((await proc.call(ExecutionContext.current, each_args)).is_truthy()) {
+                        throw new BreakError(await Integer.get(index));
+                    }
+
+                    index ++;
+                    return Qnil;
+                }));
+
+                // no match found
+                return Qnil;
+            } catch (e) {
+                if (e instanceof BreakError) {
+                    // match found, return index
+                    return e.value;
+                } else {
+                    // an error occurred
+                    throw e;
+                }
+            }
+        } else if (args.length > 0) {
+            const target = args[0];
+
+            try {
+                await Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, each_args: RValue[]): Promise<RValue> => {
+                    if ((await Object.send(each_args[0], "==", [target])).is_truthy()) {
+                        throw new BreakError(await Integer.get(index));
+                    }
+
+                    index++;
+                    return Qnil;
+                }));
+
+                // no match found
+                return Qnil;
+            } catch (e) {
+                if (e instanceof BreakError) {
+                    // match found, return index
+                    return e.value;
+                } else {
+                    // an error occurred
+                    throw e;
+                }
+            }
+        } else {
+            // @TODO: return an Enumerator
+            return Qnil;
+        }
+    });
+
+    await mod.alias_method("index", "find_index");
+
     inited = true;
 };
