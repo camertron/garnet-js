@@ -214,6 +214,7 @@ export const init = () => {
         });
 
         await klass.alias_method("key?", "include?");
+        await klass.alias_method("has_key?", "include?");
 
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const hash = self.get_data<Hash>();
