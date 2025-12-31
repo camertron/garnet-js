@@ -382,12 +382,14 @@ export const init = () => {
 
                 let start_pos = range.begin.get_data<number>();
 
+                // wraparound
                 if (start_pos < 0) {
                     start_pos = elements.length + start_pos;
                 }
 
                 let end_pos = range.end.get_data<number>();
 
+                // wraparound
                 if (end_pos < 0) {
                     end_pos = elements.length + end_pos;
                 }
@@ -403,14 +405,29 @@ export const init = () => {
                 }
             } else {
                 // floor here because you can pass a float to Array#[]
-                const index = Math.floor(args[0].get_data<number>());
+                let index = Math.floor(args[0].get_data<number>());
 
                 if (args.length > 1) {
                     await Runtime.assert_type(args[1], await Integer.klass());
                     const length = args[1].get_data<number>();
+
+                    // wraparound
+                    if (index < 0) {
+                        index = elements.length + index;
+                    }
+
                     return RubyArray.new(elements.slice(index, index + length));
                 } else {
-                    return elements[index] || Qnil;
+                    // wraparound
+                    if (index < 0) {
+                        index = elements.length + index;
+                    }
+
+                    if (index < 0 || index >= elements.length) {
+                        return Qnil;
+                    }
+
+                    return elements[index];
                 }
             }
         });
