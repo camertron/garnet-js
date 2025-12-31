@@ -7,7 +7,7 @@ import { Object } from "./object";
 import { RubyString } from "../runtime/string";
 import { Range } from "./range";
 import { Hash } from "./hash";
-import { ArgumentError, NameError, TypeError } from "../errors";
+import { ArgumentError, IndexError, NameError, TypeError } from "../errors";
 import { Proc } from "./proc";
 import { Enumerator } from "./enumerator";
 import { quick_sort } from "../util/array_utils";
@@ -423,6 +423,26 @@ export const init = () => {
 
             elements[index] = new_value;
             return new_value;
+        });
+
+        klass.define_native_method("fetch", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const elements = self.get_data<RubyArray>().elements;
+            const index = Math.floor(args[0].get_data<number>());
+
+            // wraparound for negative indices
+            const actual_index = index < 0 ? elements.length + index : index;
+
+            if (actual_index >= 0 && actual_index < elements.length) {
+                return elements[actual_index];
+            }
+
+            if (block) {
+                return await block.get_data<Proc>().call(ExecutionContext.current, [args[0]]);
+            } else if (args.length > 1) {
+                return args[1];
+            } else {
+                throw new IndexError(`index ${index} outside of array bounds: ${-elements.length}...${elements.length}`);
+            }
         });
 
         const stringify_and_flatten = async (elements: RValue[]): Promise<string[]> => {
