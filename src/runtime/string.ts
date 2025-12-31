@@ -1,4 +1,4 @@
-import { ArgumentError, EncodingConverterNotFoundError, IndexError, NameError, NotImplementedError, RangeError } from "../errors";
+import { ArgumentError, EncodingConverterNotFoundError, IndexError, NameError, NotImplementedError, RangeError, TypeError } from "../errors";
 import { Class, Qnil, RValue, Runtime, Qtrue, Qfalse, ObjectClass } from "../runtime";
 import { hash_string, is_alpha_num, strlen } from "../util/string_utils";
 import { Integer } from "./integer";
@@ -15,6 +15,7 @@ import { Float } from "./float";
 import { mix_shared_string_methods_into } from "./string-shared";
 import { left_pad, sprintf } from "./printf";
 import { Args } from "./arg-scanner";
+import { Kernel } from "./kernel";
 
 // 7-bit strings are implicitly valid.
 // If both the valid _and_ 7bit bits are set, the string is broken.
@@ -1067,6 +1068,32 @@ export const init = () => {
             const bytes = await Promise.all(raw_bytes.map(async (b) => await Integer.get(b)));
 
             return await RubyArray.new(bytes);
+        });
+
+        klass.define_native_singleton_method("try_convert", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+            const obj = args[0];
+
+            if (obj.klass === await RubyString.klass()) {
+                return obj;
+            }
+
+            if (await RubyObject.respond_to(obj, "to_str")) {
+                const result = await RubyObject.send(obj, "to_str");
+
+                if (result === Qnil) {
+                    return Qnil;
+                }
+
+                if (await Kernel.is_a(result, await RubyString.klass())) {
+                    return result;
+                } else {
+                    const obj_class_name = obj.klass.get_data<Class>().full_name;
+                    const result_class_name = result.klass.get_data<Class>().full_name;
+                    throw new TypeError(`can't convert ${obj_class_name} to String (${obj_class_name}#to_str gives ${result_class_name})`);
+                }
+            }
+
+            return Qnil;
         });
     });
 
