@@ -452,26 +452,100 @@ export const init = async () => {
         return self;
     });
 
-    mod.define_native_method("<", (self: RValue, args: RValue[]): RValue => {
+    const is_ancestor_of_or_equal_to = async (self: RValue, other: RValue): Promise<boolean> => {
+        if (self === other) {
+            return true;
+        }
+
+        let found = false;
+
+        await Runtime.each_unique_ancestor(other, true, async (ancestor: RValue): Promise<boolean> => {
+            if (self === ancestor) {
+                found = true;
+                return false;  // stop
+            }
+
+            return true;  // continue
+        });
+
+        return found;
+    };
+
+    // <=> operator: returns -1, 0, 1, or nil
+    mod.define_native_method("<=>", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        if (!args[0] || (args[0].klass != ModuleClass && args[0].klass != ClassClass)) {
+            return Qnil;
+        }
+
+        const other = args[0];
+
+        if (self === other) {
+            return await Integer.get(0);
+        }
+
+        // check if self is an ancestor of other
+        if (await is_ancestor_of_or_equal_to(self, other)) {
+            return await Integer.get(1);
+        }
+
+        // check if other is an ancestor of self
+        if (await is_ancestor_of_or_equal_to(other, self)) {
+            return await Integer.get(-1);
+        }
+
+        return Qnil;
+    });
+
+    // returns true if self is a subclass of or includes the given module
+    mod.define_native_method("<", async (self: RValue, args: RValue[]): Promise<RValue> => {
         if (!args[0] || (args[0].klass != ModuleClass && args[0].klass != ClassClass)) {
             throw new TypeError("compared with non class/module");
         }
 
         const other = args[0];
 
-        if (self.klass === ClassClass && other.klass === ClassClass) {
-            let current_superclass: RValue | null = self.get_data<Class>().superclass;
-
-            while (current_superclass) {
-                if (other === current_superclass) {
-                    return Qtrue;
-                }
-
-                current_superclass = current_superclass.get_data<Class>().superclass;
-            }
+        if (self === other) {
+            return Qfalse;
         }
 
-        return Qfalse;
+        return await is_ancestor_of_or_equal_to(other, self) ? Qtrue : Qfalse;
+    });
+
+    // returns true if self is a subclass of, the same as, or includes the given module
+    mod.define_native_method("<=", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        if (!args[0] || (args[0].klass != ModuleClass && args[0].klass != ClassClass)) {
+            throw new TypeError("compared with non class/module");
+        }
+
+        const other = args[0];
+
+        return await is_ancestor_of_or_equal_to(other, self) ? Qtrue : Qfalse;
+    });
+
+    // returns true if self is a superclass of or included by the given module
+    mod.define_native_method(">", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        if (!args[0] || (args[0].klass != ModuleClass && args[0].klass != ClassClass)) {
+            throw new TypeError("compared with non class/module");
+        }
+
+        const other = args[0];
+
+        if (self === other) {
+            return Qfalse;
+        }
+
+        return await is_ancestor_of_or_equal_to(self, other) ? Qtrue : Qfalse;
+    });
+
+    // returns true if self is a superclass of, the same as, or included by the given module
+    mod.define_native_method(">=", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        if (!args[0] || (args[0].klass != ModuleClass && args[0].klass != ClassClass)) {
+            throw new TypeError("compared with non class/module");
+        }
+
+        const other = args[0];
+
+        return await is_ancestor_of_or_equal_to(self, other) ? Qtrue : Qfalse;
     });
 
     mod.define_native_method("class_variable_get", async (self: RValue, args: RValue[]): Promise<RValue> => {
