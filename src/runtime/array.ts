@@ -594,6 +594,33 @@ export const init = () => {
             return await RubyArray.new(result);
         });
 
+        klass.define_native_method("|", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [ary_arg] = await Args.scan("1", args);
+            const elements = self.get_data<RubyArray>().elements;
+            const ary = await Runtime.coerce_to_array(ary_arg);
+            const other_elements = ary.get_data<RubyArray>().elements;
+            const seen = new Hash();
+            const result = [];
+
+            // add all unique elements from self
+            for (const element of elements) {
+                if (!(await seen.has(element))) {
+                    await seen.set(element, Qtrue);
+                    result.push(element);
+                }
+            }
+
+            // add all unique elements from other that haven't already been "seen"
+            for (const element of other_elements) {
+                if (!(await seen.has(element))) {
+                    await seen.set(element, Qtrue);
+                    result.push(element);
+                }
+            }
+
+            return await RubyArray.new(result);
+        });
+
         klass.define_native_method("<<", (self: RValue, args: RValue[]): RValue => {
             self.get_data<RubyArray>().elements.push(args[0]);
             return self;
