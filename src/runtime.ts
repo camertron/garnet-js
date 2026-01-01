@@ -184,7 +184,6 @@ export class Runtime {
         seen.add(mod);
 
         if (include_self) {
-            if (!mod) debugger
             for (const prepend of mod.get_data<Module>().prepends) {
                 if (!(await cb(prepend))) {
                     return false;
