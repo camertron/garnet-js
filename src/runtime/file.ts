@@ -5,6 +5,7 @@ import { Dir } from "./dir";
 import { RubyString } from "../runtime/string";
 import { flatten_string_array } from "../util/array_utils";
 import { is_node } from "../env";
+import { Args } from "./arg-scanner";
 
 const path_from_realpath_args = async (args: RValue[]): Promise<string> => {
     await Runtime.assert_type(args[0], await RubyString.klass());
@@ -164,6 +165,12 @@ export const init = async () => {
             await Runtime.assert_type(args[0], await RubyString.klass());
             const path = args[0].get_data<string>();
             return vmfs.is_executable(path) ? Qtrue : Qfalse;
+        });
+
+        klass.define_native_singleton_method("absolute_path?", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [path_arg] = await Args.scan("1", args);
+            await Runtime.assert_type(path_arg, await RubyString.klass());
+            return !vmfs.is_relative(path_arg.get_data<string>()) ? Qtrue : Qfalse;
         });
 
         klass.define_native_singleton_method("join", async (_self: RValue, args: RValue[]): Promise<RValue> => {
