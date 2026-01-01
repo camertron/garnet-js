@@ -23,6 +23,11 @@ class ReattachingDataView {
         return this.view.getUint32(byte_offset, little_endian);
     }
 
+    getInt32(byte_offset: number, little_endian?: boolean): number {
+        this.reattachIfNecessary();
+        return this.view.getInt32(byte_offset, little_endian);
+    }
+
     setUint32(byte_offset: number, value: number, little_endian?: boolean): void {
         this.reattachIfNecessary();
         this.view.setUint32(byte_offset, value, little_endian);
@@ -187,7 +192,12 @@ export const init = async () => {
 
             for (let i = 1; i < match_data.captures.length; i ++) {
                 const [begin, end] = match_data.captures[i];
-                captures.push(await RubyString.new(match_data.str.slice(begin, end)));
+
+                if (begin === -1 || end === -1) {
+                    captures.push(Qnil);
+                } else {
+                    captures.push(await RubyString.new(match_data.str.slice(begin, end)));
+                }
             }
 
             return await RubyArray.new(captures);
@@ -211,15 +221,23 @@ export const init = async () => {
             const match_data = self.get_data<MatchData>();
             await Runtime.assert_type(args[0], await Integer.klass());
             const index = args[0].get_data<number>();
-            return RubyString.new(match_data.match(index));
+            const matched = match_data.match(index);
+            return matched === null ? Qnil : await RubyString.new(matched);
         });
 
         klass.define_native_method("inspect", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const match_data = self.get_data<MatchData>();
-            const fragments = [`#<MatchData ${RubyString.inspect(match_data.match(0))}`];
+            const first_match = match_data.match(0);
+            const fragments = [`#<MatchData ${RubyString.inspect(first_match || "")}`];
 
             for (let i = 1; i < match_data.captures.length; i ++) {
-                fragments.push(`${i}:${RubyString.inspect(match_data.match(i))}`);
+                const match = match_data.match(i);
+
+                if (match === null) {
+                    fragments.push(`${i}:nil`);
+                } else {
+                    fragments.push(`${i}:${RubyString.inspect(match)}`);
+                }
             }
 
             return await RubyString.new(`${fragments.join(" ")}>`);
@@ -346,12 +364,12 @@ class Region {
 
     beg_at(index: number): number {
         const addr = this.beg + (index * 4);
-        return onigmo.exports.memory.getUint32(addr, true);
+        return onigmo.exports.memory.getInt32(addr, true);
     }
 
     end_at(index: number): number {
         const addr = this.end + (index * 4);
-        return onigmo.exports.memory.getUint32(addr, true);
+        return onigmo.exports.memory.getInt32(addr, true);
     }
 }
 
@@ -500,7 +518,15 @@ export class MatchData {
         const captures: [number, number][] = [];
 
         for (let i = 0; i < region.num_regs; i ++) {
-            captures.push([region.beg_at(i) / 2, region.end_at(i) / 2]);
+            const beg = region.beg_at(i);
+            const end = region.end_at(i);
+
+            // onigmo returns -1 for unmatched capture groups
+            if (beg === -1 || end === -1) {
+                captures.push([-1, -1]);
+            } else {
+                captures.push([beg / 2, end / 2]);
+            }
         }
 
         return new MatchData(str, captures);
@@ -553,12 +579,17 @@ export class MatchData {
         return this.captures[index][1];
     }
 
-    match(index: number): string {
+    match(index: number): string | null {
         if (index >= this.captures.length) {
             throw new IndexError(`index ${index} out of matches`);
         }
 
         const [begin, end] = this.captures[index];
+
+        if (begin === -1 || end === -1) {
+            return null;
+        }
+
         return this.str.slice(begin, end);
     }
 }
@@ -634,7 +665,11 @@ export class Regexp {
     static async set_svars(match_data: MatchData) {
         const ec = ExecutionContext.current;
         ec.frame_svar()!.svars["$~"] = await match_data.to_rval();
-        ec.frame_svar()!.svars["$&"] = await RubyString.new(match_data.match(0));
+
+        const first_match = match_data.match(0);
+        const svar = first_match === null ? Qnil : await RubyString.new(first_match);
+
+        ec.frame_svar()!.svars["$&"] = svar;
     }
 
     static build_flags(ignore_case: boolean = false, multi_line: boolean = false, extend: boolean = false): number {
