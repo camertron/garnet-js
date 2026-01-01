@@ -1,5 +1,5 @@
 import { BreakError, ExecutionContext } from "../execution_context";
-import { Module, Qnil, RValue, Runtime, Qfalse, Qtrue } from "../runtime"
+import { Module, Qnil, RValue, Runtime, Qfalse, Qtrue, Class } from "../runtime"
 import { Integer } from "./integer";
 import { Object } from "./object";
 import { Proc } from "./proc";
@@ -392,6 +392,44 @@ export const init = async () => {
     });
 
     await mod.alias_method("entries", "to_a");
+
+    mod.define_native_method("max", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+        let max_elem: RValue | null = null;
+        const proc = block?.get_data<Proc>();
+
+        await Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, args: RValue[]): Promise<RValue> => {
+            const elem = args[0];
+
+            if (max_elem === null) {
+                max_elem = elem;
+            } else {
+                let cmp_result;
+                let cmp_value;
+
+                if (proc) {
+                    cmp_result = await proc.call(ExecutionContext.current, [elem, max_elem]);
+                    cmp_value = cmp_result.get_data<number>();
+                } else {
+                    cmp_result = await Object.send(elem, "<=>", [max_elem]);
+                    cmp_value = cmp_result.get_data<number>();
+                }
+
+                const result_is_int = await Object.send(cmp_result, "is_a?", [await Integer.klass()]);
+
+                if (!result_is_int.is_truthy()) {
+                    throw new ArgumentError(`comparision of ${cmp_result.klass.get_data<Class>().name} with 0 failed`);
+                }
+
+                if (cmp_value > 0) {
+                    max_elem = elem;
+                }
+            }
+
+            return Qnil;
+        }));
+
+        return max_elem || Qnil;
+    });
 
     inited = true;
 };
