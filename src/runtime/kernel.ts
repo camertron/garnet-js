@@ -147,7 +147,7 @@ export const init = async () => {
         const ruby_error = instance.get_data<IRubyError>();
 
         // Only set the backtrace if this is a new exception or if the exception doesn't have a backtrace yet
-        if (is_new_exception || !ruby_error.backtrace_rval) {
+        if (ruby_error && (is_new_exception || !ruby_error.backtrace_rval)) {
             const backtrace = await ExecutionContext.current.create_backtrace_rvalue();
             const locations: RValue[] = [];
 
