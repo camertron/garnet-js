@@ -123,6 +123,7 @@ import { ParameterMetadata, ParametersMetadataBuilder } from "./runtime/paramete
 import Instruction from "./instruction";
 import { Encoding } from "./runtime/encoding";
 import { ThrowType } from "./execution_context";
+import { CheckMatchType } from "./insns/checkmatch";
 
 export type ParseLocal = {
     name: string
@@ -1782,10 +1783,28 @@ export class Compiler extends Visitor {
             const label = this.iseq.label();
 
             clause.conditions.forEach((condition) => {
-                this.with_used(true, () => this.visit(condition));
-                this.iseq.topn(1);
-                this.iseq.send(MethodCallData.create("===", 1, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE), null);
-                this.iseq.branchif(label);
+                if (condition instanceof SplatNode) {
+                    // splatted array case, eg. `when *foo`
+
+                    // stack before: [target]
+                    // we need: [target, target, array] before checkmatch
+                    this.iseq.dup();
+
+                    if (condition.expression) {
+                        this.with_used(true, () => this.visit(condition.expression!));
+                        this.iseq.splatarray(false);
+                    }
+
+                    // stack: [target, target, array]
+                    this.iseq.checkmatch(CheckMatchType.TYPE_CASE | CheckMatchType.ARRAY_SPLAT);
+                    this.iseq.branchif(label);
+                } else {
+                    // normal case, i.e. `when "foo"`
+                    this.with_used(true, () => this.visit(condition));
+                    this.iseq.topn(1);
+                    this.iseq.send(MethodCallData.create("===", 1, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE), null);
+                    this.iseq.branchif(label);
+                }
             });
 
             labels.push(label);

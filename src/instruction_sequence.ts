@@ -56,6 +56,7 @@ import { Module, ObjectClass, RValue } from "./runtime";
 import { Object } from "./runtime/object";
 import { RubyString as RubyString } from "./runtime/string";
 import CheckKeyword from "./insns/checkkeyword";
+import CheckMatch from "./insns/checkmatch";
 import SetClassVariable from "./insns/setclassvariable";
 import GetClassVariable from "./insns/getclassvariable";
 import SplatArray from "./insns/splatarray";
@@ -556,6 +557,10 @@ export class InstructionSequence {
 
     checkkeyword(keyword_bits_index: number, keyword_index: number) {
         this.push(new CheckKeyword(keyword_bits_index, keyword_index));
+    }
+
+    checkmatch(flag: number) {
+        this.push(new CheckMatch(flag));
     }
 
     dup() {
