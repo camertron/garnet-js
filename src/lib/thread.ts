@@ -258,6 +258,32 @@ export const init = () => {
             const loc = self.get_data<BacktraceLocation>();
             return await RubyString.new(`${loc.path}:${loc.lineno} in ${loc.label}`);
         });
+
+        klass.define_native_method("absolute_path", async (self: RValue): Promise<RValue> => {
+            const loc = self.get_data<BacktraceLocation>();
+            const path = loc.path;
+
+            // if the path starts with eg. '<internal:', return nil
+            if (path.startsWith("<")) {
+                return Qnil;
+            }
+
+            // otherwise, return the absolute path
+            const file_class = await Object.find_constant("File");
+
+            if (!file_class) {
+                throw new Error("File class not found");
+            }
+
+            const path_str = await RubyString.new(path);
+
+            try {
+                return await Object.send(file_class, "realpath", [path_str]);
+            } catch (e) {
+                // if realpath errors (e.g., file doesn't exist), just return the path as-is
+                return path_str;
+            }
+        });
     });
 
     inited = true;
