@@ -822,11 +822,8 @@ export const init = () => {
             );
         });
 
-        klass.define_native_method("tr", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            const selector_str = (await Runtime.coerce_to_string(args[0])).get_data<string>();
-            const replacements = (await Runtime.coerce_to_string(args[1])).get_data<string>();
+        const tr = async (data: string, selector_str: string, replacements: string): Promise<string> => {
             const selector = CharSelector.from(selector_str);
-            const data = self.get_data<string>();
             const chars = [];
 
             for (let i = 0; i < data.length; i ++) {
@@ -844,7 +841,32 @@ export const init = () => {
                 }
             }
 
-            return RubyString.new(chars.join(""));
+            return chars.join("");
+        }
+
+        klass.define_native_method("tr", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [selector_rval, replacements_rval] = await Args.scan("2", args);
+            const selector_str = selector_rval.get_data<string>();
+            const replacements = replacements_rval.get_data<string>();
+            const result = await tr(self.get_data<string>(), selector_str, replacements);
+
+            return RubyString.new(result);
+        });
+
+        klass.define_native_method("tr!", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [selector_rval, replacements_rval] = await Args.scan("2", args);
+            const selector_str = selector_rval.get_data<string>();
+            const replacements = replacements_rval.get_data<string>();
+            const data = self.get_data<string>();
+            const result = await tr(data, selector_str, replacements);
+
+            self.data = result;
+
+            if (result === data) {
+                return Qnil;
+            } else {
+                return self;
+            }
         });
 
         const find_matches_in = async (str: RValue, patterns: RValue[]): Promise<[number, number][]> => {
