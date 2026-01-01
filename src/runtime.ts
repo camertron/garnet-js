@@ -274,6 +274,25 @@ export class Runtime {
         return result;
     }
 
+    static async coerce_to_array(obj: RValue): Promise<RValue> {
+        if (await Object.respond_to(obj, "to_ary")) {
+            const ary = await Object.send(obj, "to_ary");
+            const is_array = await Object.send(ary, "is_a?", [await RubyArray.klass()])
+
+            if (is_array.is_truthy()) {
+                return ary;
+            }
+
+            // to_ary didn't return an array :(
+            const class_name = obj.klass.get_data<Class>().name;
+            const ary_class_name = ary.klass.get_data<Class>().name;
+            throw new TypeError(`can't convert ${class_name} to Array (${class_name}#to_ary gives ${ary_class_name})`);
+        }
+
+        const class_name = obj.klass.get_data<Class>().name;
+        throw new TypeError(`no implicit conversion of ${class_name} into Array`);
+    }
+
     static async require(require_path: string): Promise<boolean> {
         require_path = vmfs.normalize_path(require_path);
 
@@ -1117,11 +1136,6 @@ export const VMCoreClass = Runtime.define_class("VMCore", ObjectClass, (klass: C
     klass.define_native_method("undef_method", (self: RValue, args: RValue[]): RValue => {
         throw new NotImplementedError("undef_method is not implemented yet");
     });
-
-    klass.define_native_method("lambda", (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue): RValue => {
-        block!.get_data<Proc>().calling_convention = CallingConvention.METHOD_LAMBDA;
-        return block!;
-    });
 });
 
 export const VMCore = new RValue(VMCoreClass);
@@ -1408,21 +1422,14 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, async (klass: Cla
                 // Try to convert to array via to_ary. `puts` always tries to call to_ary,
                 // even if it's not defined (which will trigger a method_missing)
                 try {
-                    const ary = await Object.send(arg, "to_ary");
+                    const ary = await Runtime.coerce_to_array(arg);
 
-                    if (ary.klass === await RubyArray.klass()) {
-                        for (const elem of ary.get_data<RubyArray>().elements) {
-                            io.puts((await Object.send(elem, "to_s")).get_data<string>());
-                        }
-                    } else {
-                        // to_ary didn't return an array :(
-                        const class_name = arg.klass.get_data<Class>().name;
-                        const ary_class_name = ary.klass.get_data<Class>().name;
-                        throw new TypeError(`can't convert ${class_name} to Array (${class_name}#to_ary gives ${ary_class_name})`);
+                    for (const elem of ary.get_data<RubyArray>().elements) {
+                        io.puts((await Object.send(elem, "to_s")).get_data<string>());
                     }
                 } catch (e) {
-                    // if to_ary raises a NoMethodError, just use to_s
-                    if (e instanceof NoMethodError) {
+                    // if to_ary raises a TypeError, just use to_s
+                    if (e instanceof TypeError) {
                         io.puts((await Object.send(arg, "to_s")).get_data<string>());
                     } else {
                         throw e;
