@@ -723,6 +723,29 @@ export const init = () => {
             return await RubyArray.new(result);
         });
 
+        klass.define_native_method("compact!", (self: RValue): RValue => {
+            const elements = self.get_data<RubyArray>().elements;
+            const result: RValue[] = [];
+            let modified = false;
+
+            for (const element of elements) {
+                if (element === Qnil) {
+                    modified = true;
+                } else {
+                    result.push(element);
+                }
+            }
+
+            elements.splice(0);
+            elements.push(...result);
+
+            if (modified) {
+                return self;
+            } else {
+                return Qnil;
+            }
+        });
+
         klass.define_native_method("dup", async (self: RValue): Promise<RValue> => {
             return await RubyArray.new([...self.get_data<RubyArray>().elements]);
         });
