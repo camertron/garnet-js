@@ -2,7 +2,7 @@ import { BlockCallData, MethodCallData } from "../call_data";
 import { CallingConvention, ExecutionContext } from "../execution_context";
 import { BlockFrame } from "../frame";
 import { InstructionSequence } from "../instruction_sequence";
-import { RValue, Class, NativeMethod, ObjectClass, Runtime, Module } from "../runtime";
+import { RValue, Class, NativeMethod, ObjectClass, Runtime, Module, Qtrue, Qfalse } from "../runtime";
 import { Binding } from "./binding";
 import { Object } from "../runtime/object";
 import { Integer } from "./integer";
@@ -124,6 +124,11 @@ export const init = () => {
 
         klass.define_native_method("to_proc", (self: RValue): RValue => {
             return self;
+        });
+
+        klass.define_native_method("lambda?", (self: RValue): RValue => {
+            const proc = self.get_data<Proc>();
+            return proc.calling_convention === CallingConvention.METHOD_LAMBDA ? Qtrue : Qfalse;
         });
     });
 
