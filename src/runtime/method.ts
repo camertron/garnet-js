@@ -6,6 +6,7 @@ import { ExecutionContext, Qnil } from "../garnet";
 import { Proc } from "./proc";
 import { MethodCallData } from "../call_data";
 import { Hash } from "./hash";
+import { Integer } from "./integer";
 
 export class Method {
     private static klass_: RValue;
@@ -125,6 +126,59 @@ export const init = async () => {
                     mtd_call_data
                 );
             });
+        });
+
+        klass.define_native_method("arity", async (self: RValue): Promise<RValue> => {
+            const callable = self.get_data<Method>().callable;
+
+            if (callable instanceof InterpretedCallable) {
+                const arg_opts = callable.iseq.argument_options;
+                let arity = 0;
+
+                // required positional arguments
+                if (arg_opts.lead_num !== null) {
+                    arity += arg_opts.lead_num;
+                }
+
+                // required post args
+                if (arg_opts.post_num !== null) {
+                    arity += arg_opts.post_num;
+                }
+
+                // check if there are any required kwargs
+                let has_required_kwargs = false;
+                let has_optional_kwargs = false;
+
+                if (arg_opts.keyword !== null) {
+                    for (const [_name, default_value] of arg_opts.keyword) {
+                        if (default_value === null) {
+                            has_required_kwargs = true;
+                        } else {
+                            has_optional_kwargs = true;
+                        }
+                    }
+                }
+
+                if (has_required_kwargs) {
+                    arity += 1;
+                }
+
+                // If there are optional positional args, rest args, or optional kwargs,
+                // return negative arity. Note: keyword rest (**kwargs) alone doesn't make
+                // it negative - only if combined with optional args.
+                if (arg_opts.opt.length > 0 ||
+                    arg_opts.rest_start !== null ||
+                    has_optional_kwargs) {
+                    // From the Ruby docs: For Ruby methods that take a variable number of arguments,
+                    // returns -n-1, where n is the number of required arguments.
+                    return await Integer.get(-(arity + 1));
+                }
+
+                return await Integer.get(arity);
+            } else {
+                // can't really get arity for native methods, so return -1 to indicate variable arity
+                return await Integer.get(-1);
+            }
         });
     });
 
