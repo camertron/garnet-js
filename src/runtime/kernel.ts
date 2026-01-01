@@ -1,6 +1,6 @@
 import { is_node } from "../env";
 import { ArgumentError, IRubyError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
-import { BreakError, ExecutionContext, ThrowError } from "../execution_context";
+import { BreakError, CallingConvention, ExecutionContext, ThrowError } from "../execution_context";
 import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, Visibility, Callable, ObjectClass, InterpretedCallable, NativeCallable, STDERR, IO } from "../runtime";
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
@@ -253,6 +253,7 @@ export const init = async () => {
             throw new ArgumentError("tried to create a Proc object without a block");
         }
 
+        block.get_data<Proc>().calling_convention = CallingConvention.METHOD_LAMBDA;
         return block;
     });
 
