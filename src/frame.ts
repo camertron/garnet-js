@@ -1,7 +1,7 @@
 import { BlockCallData, MethodCallData } from "./call_data";
 import { CallingConvention, ExecutionContext } from "./execution_context";
 import { InstructionSequence } from "./instruction_sequence";
-import { RValue, ObjectClass, Main, RValuePointer, Module } from "./runtime";
+import { RValue, ObjectClass, Main, RValuePointer, Module, Qnil } from "./runtime";
 import { Binding } from "./runtime/binding";
 import { Hash } from "./runtime/hash";
 
@@ -46,7 +46,16 @@ export class Frame implements IFrame {
     }
 
     local_get(context: ExecutionContext, index: number, depth: number): RValue {
-        return context.stack[this.frame_at(context.frame!, depth)!.stack_index + index].rval;
+        const stack_index = this.frame_at(context.frame!, depth)!.stack_index + index;
+        const stack_entry = context.stack[stack_index];
+
+        if (!stack_entry) {
+            // initialize empty stack entries with nil
+            context.stack[stack_index] = new RValuePointer(Qnil);
+            return Qnil;
+        }
+
+        return stack_entry.rval;
     }
 
     local_set(context: ExecutionContext, index: number, depth: number, value: RValue) {
