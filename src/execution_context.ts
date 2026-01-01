@@ -679,6 +679,7 @@ export class ExecutionContext {
     async run_rescue_frame(iseq: InstructionSequence, frame: Frame, error: RValue): Promise<RValue> {
         return await this.run_frame(new RescueFrame(iseq, frame, this.stack.length), () => {
             this.local_set(0, 0, error);
+            this.globals["$!"] = error;
             return Promise.resolve(null);
         });
     }
@@ -840,18 +841,23 @@ export class ExecutionContext {
         }
 
         // If there is a splat argument, then we'll set that up here. It will
-        // grab up all of the remaining positional arguments.
+        // slurp up all of the remaining positional arguments.
         if (iseq.argument_options.rest_start != null) {
-            if (iseq.argument_options.post_start != null) {
-                const length = locals.length - (iseq.argument_options.post_num || 0);
-                this.local_set(local_index, 0, await RubyArray.new(locals.splice(0, length)));
-                // locals = locals.slice(length);
+            // Only store the splat array if there's a local variable for it (i.e., it's not an anonymous splat)
+            if (local_index >= 0) {
+                if (iseq.argument_options.post_start != null) {
+                    const length = locals.length - (iseq.argument_options.post_num || 0);
+                    this.local_set(local_index, 0, await RubyArray.new(locals.splice(0, length)));
+                } else {
+                    this.local_set(local_index, 0, await RubyArray.new([...locals]))
+                    locals.length = 0;
+                }
+
+                local_index = this.inc_local_index(local_index, iseq);
             } else {
-                this.local_set(local_index, 0, await RubyArray.new([...locals]))
+                // anonymous splat, discard remaining arguments
                 locals.length = 0;
             }
-
-            local_index = this.inc_local_index(local_index, iseq);
         }
 
         // Next, set up any post arguments. These are positional arguments that
