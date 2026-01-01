@@ -24,8 +24,10 @@ export default class Send extends Instruction {
         if (this.block_iseq) {
             block = await Proc.from_iseq(context, this.block_iseq);
         } else if (this.call_data.has_flag(CallDataFlag.ARGS_BLOCKARG)) {
-            block = context.pop()!;
-            if (block !== Qnil) block = await Object.send(block, "to_proc");
+            const block_arg = context.pop()!;
+            if (block_arg !== Qnil) {
+                block = await Object.send(block_arg, "to_proc");
+            }
         }
 
         let kwargs: Hash | undefined = undefined;
