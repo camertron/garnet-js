@@ -257,7 +257,7 @@ export const init = () => {
 
             if (pattern instanceof Regexp) {
                 await pattern.scan(str, async (match_data: MatchData): Promise<boolean> => {
-                    matches.push([match_data.begin(0), match_data.end(0), match_data.match(0)]);
+                    matches.push([match_data.begin(0), match_data.end(0), match_data.match(0) || ""]);
                     await Regexp.set_svars(match_data);
 
                     if (count > 0 && matches.length === count) {
