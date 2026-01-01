@@ -573,6 +573,27 @@ export const init = () => {
             return await RubyArray.new(self.get_data<RubyArray>().elements.concat(args[0].get_data<RubyArray>().elements));
         });
 
+        klass.define_native_method("-", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [ary_arg] = await Args.scan("1", args);
+            const elements = self.get_data<RubyArray>().elements;
+            const ary = await Runtime.coerce_to_array(ary_arg);
+            const to_remove = ary.get_data<RubyArray>().elements;
+            const to_remove_set = new Hash();
+            const result = [];
+
+            for (const element of to_remove) {
+                await to_remove_set.set(element, Qtrue);
+            }
+
+            for (const element of elements) {
+                if (!(await to_remove_set.has(element))) {
+                    result.push(element);
+                }
+            }
+
+            return await RubyArray.new(result);
+        });
+
         klass.define_native_method("<<", (self: RValue, args: RValue[]): RValue => {
             self.get_data<RubyArray>().elements.push(args[0]);
             return self;
