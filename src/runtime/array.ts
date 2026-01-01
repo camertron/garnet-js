@@ -201,6 +201,8 @@ export const init = () => {
             }
         });
 
+        await klass.alias_method("find_all", "select");
+
         klass.define_native_method("reject", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             const elements = self.get_data<RubyArray>().elements;
 
