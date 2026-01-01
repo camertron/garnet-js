@@ -231,6 +231,14 @@ export const init = async () => {
         }
     });
 
+    mod.define_native_method("Pathname", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const pathname_class = await Object.find_constant("Pathname");
+        if (!pathname_class) {
+            throw new NameError("uninitialized constant Pathname");
+        }
+        return await Object.send(pathname_class, "new", args);
+    });
+
     mod.define_native_method("Rational", async (self: RValue, args: RValue[]): Promise<RValue> => {
         return await Object.send((await Object.find_constant("Rational"))!, "new", args);
     });
