@@ -692,6 +692,10 @@ export const init = () => {
             }
         }
 
+        klass.define_native_method("to_ary", (self: RValue): RValue => {
+            return self;
+        });
+
         klass.define_native_method("to_h", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             const hash = new Hash();
             const elements = self.get_data<RubyArray>().elements;
