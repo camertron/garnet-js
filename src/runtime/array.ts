@@ -738,7 +738,7 @@ export const init = () => {
             const array = self.get_data<RubyArray>().elements;
             const other_array = args[0];
 
-            if (!Object.respond_to(other_array, "size")) {
+            if (!(await Object.respond_to(other_array, "size"))) {
                 return Qfalse;
             }
 
