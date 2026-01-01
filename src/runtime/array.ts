@@ -497,7 +497,7 @@ export const init = () => {
 
         klass.define_native_method("include?", async (self: RValue, args: RValue[]): Promise<RValue> => {
             for (const elem of self.get_data<RubyArray>().elements) {
-                if ((await Object.send(elem, "==", args)).is_truthy()) {
+                if ((await Object.send(elem, "==", [args[0]])).is_truthy()) {
                     return Qtrue;
                 }
             }
