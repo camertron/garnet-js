@@ -13,6 +13,7 @@ import { Enumerator } from "./enumerator";
 import { quick_sort } from "../util/array_utils";
 import { spaceship_compare } from "./comparable";
 import { Numeric } from "./numeric";
+import { Args } from "./arg-scanner";
 
 export class RubyArray {
     private static klass_: RValue;
@@ -371,6 +372,28 @@ export const init = () => {
             }
 
             return Qnil;
+        });
+
+        klass.define_native_method("delete_at", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const elements = self.get_data<RubyArray>().elements;
+            const [index_arg] = await Args.scan("1", args);
+
+            await Runtime.assert_type(index_arg, await Integer.klass());
+            let index = index_arg.get_data<number>();
+
+            // wraparound
+            if (index < 0) {
+                index = elements.length + index;
+            }
+
+            if (index < 0 || index >= elements.length) {
+                return Qnil;
+            }
+
+            const deleted_element = elements[index];
+            elements.splice(index, 1);
+
+            return deleted_element;
         });
 
         klass.define_native_method("[]", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
