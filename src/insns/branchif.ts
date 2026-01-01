@@ -33,7 +33,7 @@ export default class BranchIf extends Instruction {
         return true;
       }
 
-    reads(): number {
+    pops(): number {
         return 1;
     }
 }
