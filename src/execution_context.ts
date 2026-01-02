@@ -986,19 +986,11 @@ export class ExecutionContext {
         }
 
         if (iseq.argument_options.block_start != null) {
-            // the block arg is the last non-special arg
-            let block_index = -1;
-
-            for (let i = iseq.local_table.locals.length - 1; i >= 0; i --) {
-                if (iseq.local_table.locals[i].name !== "keyword_bits") {
-                    block_index = i;
-                    break;
-                }
-            }
-
-            if (block_index !== -1) {
-                this.local_set(block_index, 0, block ? block : Qnil);
-            }
+            // The block_start is the index in the argument list, which corresponds
+            // to the index in the local table (since parameters are added to the
+            // local table in order before any other local variables)
+            const block_index = iseq.argument_options.block_start;
+            this.local_set(block_index, 0, block ? block : Qnil);
         }
 
         return start_label;
