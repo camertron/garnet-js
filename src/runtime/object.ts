@@ -5,6 +5,7 @@ import { Callable, Class, KernelModule, ObjectClass, RValue, Runtime, Qtrue, Qfa
 import { Symbol } from "./symbol";
 import { RubyString } from "../runtime/string";
 import { Hash } from "./hash";
+import { RubyArray } from "./array";
 
 export class Object {
     static async send(receiver: RValue, call_data_: MethodCallData | string, args: RValue[] = [], kwargs?: Hash, block?: RValue): Promise<RValue> {
@@ -262,6 +263,17 @@ export const init = async () => {
         // default method that returns nil (for objects that don't implement pattern matching)
         klass.define_native_method("=~", (_self: RValue, _args: RValue[]): RValue => {
             return Qnil;
+        });
+
+        klass.define_native_method("instance_variables", async (self: RValue): Promise<RValue> => {
+            const ivar_names = self.ivars.keys();
+            const ivar_rvals = [];
+
+            for (const ivar_name of ivar_names) {
+                ivar_rvals.push(await Runtime.intern(ivar_name));
+            }
+
+            return await RubyArray.new(ivar_rvals);
         });
     });
 };
