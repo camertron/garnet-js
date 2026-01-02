@@ -1,4 +1,4 @@
-import { Class, RValue, Runtime, Qnil, ObjectClass } from "../runtime";
+import { Class, RValue, Runtime, Qnil, ObjectClass, Qtrue, Qfalse } from "../runtime";
 import { RubyString } from "../runtime/string";
 import { Object } from "../runtime/object";
 import { Integer } from "./integer";
@@ -107,6 +107,11 @@ export const init = async () => {
             const f = self.get_data<number>();
             const r = args[0].get_data<number>();
             return await Float.new(f % r);
+        });
+
+        klass.define_native_method("zero?", (self: RValue): RValue => {
+            const f = self.get_data<number>();
+            return f === 0 ? Qtrue : Qfalse;
         });
     });
 
