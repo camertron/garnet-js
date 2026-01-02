@@ -124,8 +124,16 @@ export const init = async () => {
         let is_new_exception = false;
 
         if (args.length === 0) {
-            instance = await new RuntimeError("").to_rvalue();
-            is_new_exception = true;
+            // re-raise the current exception when raise is called without args
+            const current_exception = ExecutionContext.current.globals["$!"];
+
+            if (current_exception && current_exception !== Qnil) {
+                instance = current_exception;
+                is_new_exception = false;
+            } else {
+                instance = await new RuntimeError("unhandled exception").to_rvalue();
+                is_new_exception = true;
+            }
         } else {
             switch (args[0].klass) {
                 case ClassClass:
