@@ -184,12 +184,11 @@ export class Runtime {
         seen.add(mod);
 
         if (include_self) {
-            for (const prepend of mod.get_data<Module>().prepends) {
-                if (!(await cb(prepend))) {
-                    return false;
-                }
+            // prepends are processed in reverse order (last prepended is first in ancestor chain)
+            const prepends = mod.get_data<Module>().prepends;
 
-                if (!(await this.each_unique_ancestor_helper(prepend, seen, true, cb))) {
+            for (let i = prepends.length - 1; i >= 0; i --) {
+                if (!(await this.each_unique_ancestor_helper(prepends[i], seen, true, cb))) {
                     return false;
                 }
             }
@@ -198,12 +197,11 @@ export class Runtime {
                 return false;
             }
 
-            for (const include of mod.get_data<Module>().includes) {
-                if (!(await cb(include))) {
-                    return false;
-                }
+            // includes are processed in reverse order (last included is first in ancestor chain)
+            const includes = mod.get_data<Module>().includes;
 
-                if (!(await this.each_unique_ancestor_helper(include, seen, true, cb))) {
+            for (let i = includes.length - 1; i >= 0; i --) {
+                if (!(await this.each_unique_ancestor_helper(includes[i], seen, true, cb))) {
                     return false;
                 }
             }
@@ -213,10 +211,6 @@ export class Runtime {
             const superclass = mod.get_data<Class>().superclass;
 
             if (superclass) {
-                if (!(await cb(superclass))) {
-                    return false;
-                }
-
                 if (!(await this.each_unique_ancestor_helper(superclass, seen, true, cb))) {
                     return false;
                 }
