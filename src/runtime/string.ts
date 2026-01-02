@@ -1241,6 +1241,45 @@ export const init = () => {
 
             return Qnil;
         });
+
+        const hex_digits = new Set([
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+            "a", "b", "c", "d", "e", "f"
+        ]);
+
+        klass.define_native_method("hex", async (self: RValue): Promise<RValue> => {
+            const data = self.get_data<string>();
+            let value = data.trim().toLowerCase();
+            let multiplier = 1;
+
+            switch (value[0]) {
+                case "-":
+                    value = data.substring(1);
+                    multiplier = -1;
+                case "+":
+                    value = data.substring(1);
+                default:
+                    if (value.startsWith("0x")) {
+                        value = value.substring(2);
+                    }
+            }
+
+            let i;
+
+            for (i = 0; i < value.length; i ++) {
+                if (!hex_digits.has(value[i])) {
+                    break;
+                }
+            }
+
+            value = value.substring(0, i);
+
+            if (value.length === 0) {
+                return await Integer.get(0);
+            }
+
+            return await Integer.get(parseInt(value, 16) * multiplier);
+        });
     });
 
     inited = true;
