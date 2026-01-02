@@ -63,6 +63,11 @@ for (let i = 2; i < argv.length; i ++) {
         // first non-option argument is the script path
         script_path_index = i;
         script_argv = argv.slice(i + 1);
+
+        if (script_argv.length > 0 && script_argv[0] === "--") {
+            script_argv = script_argv.slice(1);
+        }
+
         break;
     }
 }
