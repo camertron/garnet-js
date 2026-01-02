@@ -252,7 +252,7 @@ export const init = () => {
         });
 
         // a count of 0 means replace all matches, > 0 means only replace max n times
-        const gsub = async (str: string, pattern: Regexp | string, replacements: RValue, count: number = 0): Promise<string> => {
+        const gsub = async (str: string, pattern: Regexp | string, replacements: RValue | undefined, count: number = 0): Promise<string> => {
             const matches: [number, number, string][] = [];
 
             if (pattern instanceof Regexp) {
@@ -291,7 +291,7 @@ export const init = () => {
             const chunks = [];
             let last_pos = 0;
 
-            if (replacements.klass === await Hash.klass()) {
+            if (replacements && replacements.klass === await Hash.klass()) {
                 const replacement_hash = replacements.get_data<Hash>();
 
                 for (const [begin, end, match] of matches) {
@@ -300,7 +300,7 @@ export const init = () => {
                     chunks.push(replacement.get_data<string>());
                     last_pos = end;
                 }
-            } else {
+            } else if (replacements) {
                 const replacement = replacements.get_data<string>();
 
                 for (const [begin, end, _] of matches) {
