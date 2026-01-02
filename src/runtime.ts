@@ -677,6 +677,7 @@ export class Module {
         const ec = ExecutionContext.current;
         if (!ec || !ec.frame) return null;
 
+        // check direct constants of each nesting module
         for (let i = ec.frame.nesting.length - 1; i >= 0; i --) {
             const current_mod_rval = ec.frame.nesting[i];
             const current_mod = current_mod_rval.get_data<Module>();
@@ -684,6 +685,15 @@ export class Module {
             if (constant) return constant;
 
             constant = await this.maybe_autoload_constant(name, current_mod);
+            if (constant) return constant;
+        }
+
+        // Search the ancestors of the innermost module in the nesting. This should search up
+        // the ancestor chain by virtue of the fact we're calling find_constant_in_ancestors.
+        if (ec.frame.nesting.length > 0) {
+            const innermost_mod_rval = ec.frame.nesting[ec.frame.nesting.length - 1];
+            const innermost_mod = innermost_mod_rval.get_data<Module>();
+            const constant = await innermost_mod.find_constant_in_ancestors(name);
             if (constant) return constant;
         }
 
@@ -711,11 +721,11 @@ export class Module {
         return null;
     }
 
-    private async find_constant_in_ancestors(name: string): Promise<RValue | null> {
+    async find_constant_in_ancestors(name: string): Promise<RValue | null> {
         let constant: RValue | null = null;
         let parent_mod: Module | null = null;
 
-        await Runtime.each_unique_ancestor(this.rval, false, async (ancestor: RValue): Promise<boolean> => {
+        await Runtime.each_unique_ancestor(this.rval, true, async (ancestor: RValue): Promise<boolean> => {
             if (ancestor.get_data<Module>().name === name) {
                 constant = ancestor;
                 return false;
