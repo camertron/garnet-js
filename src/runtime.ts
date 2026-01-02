@@ -485,6 +485,7 @@ export class Module {
     public singleton_class?: RValue;
     public nesting_parent?: RValue;
     public default_visibility: Visibility = Visibility.public;
+    public module_function_all: boolean = false;
 
     private temporary_name_: string | null;
     private constants_: {[key: string]: RValue};
@@ -568,7 +569,13 @@ export class Module {
     }
 
     define_method(name: string, body: InstructionSequence, parameters_meta: ParameterMetadata[], lexical_scope: LexicalScope) {
-        this.methods[name] = new InterpretedCallable(name, body, this.default_visibility, ExecutionContext.current.frame!.nesting, parameters_meta, lexical_scope, this);
+        const callable = new InterpretedCallable(name, body, this.default_visibility, ExecutionContext.current.frame!.nesting, parameters_meta, lexical_scope, this);
+        this.methods[name] = callable;
+
+        // When module_function_all is set, also define the method on the singleton class
+        if (this.module_function_all) {
+            this.get_singleton_class().get_data<Module>().methods[name] = callable;
+        }
     }
 
     define_native_method(name: string, body: NativeMethod, visibility?: Visibility) {
