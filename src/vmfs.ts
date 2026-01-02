@@ -34,8 +34,27 @@ abstract class FileSystem {
     }
 
     dirname(path: string): string {
-        const segments = this.split_path(path);
-        return this.join_paths(...segments.slice(0, segments.length - 1));
+        // strip trailing separators
+        let segments = this.split_path(path);
+
+        // remove trailing empty segments i.e. the ones from trailing slashes
+        while (segments.length > 0 && segments[segments.length - 1] === '') {
+            segments.pop();
+        }
+
+        // remove the last component, i.e. what dirname is supposed to do
+        if (segments.length > 0) {
+            segments.pop();
+        }
+
+        // if empty, return current directory for relative paths and root for absolute paths
+        if (segments.length === 0) {
+            return ".";
+        } else if (segments.length === 1 && segments[0] === '') {
+            return this.root_path();
+        }
+
+        return this.join_paths(...segments);
     }
 
     basename(path: string): string {
@@ -54,13 +73,28 @@ abstract class FileSystem {
     normalize_path(path: string): string {
         const orig_segments = this.split_path(path);
         const segments: string[] = [];
+        const is_absolute = path.startsWith(this.separator);
 
         for (let segment of orig_segments) {
             if (segment == "..") {
-                segments.pop();
+                // don't pop past the root for absolute paths
+                if (segments.length > 0 && !(is_absolute && segments.length === 1 && segments[0] === '')) {
+                    segments.pop();
+                }
+
+                // For absolute paths that try to go above root, we stay at root;
+                // For relative paths, we keep the '..' if we can't go up further
+                else if (!is_absolute) {
+                    segments.push(segment);
+                }
             } else if (segment != ".") {
                 segments.push(segment);
             }
+        }
+
+        // ensure absolute paths still have their leading separator
+        if (is_absolute && (segments.length === 0 || segments[0] !== '')) {
+            segments.unshift('');
         }
 
         return this.join_paths(...segments);

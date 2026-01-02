@@ -91,40 +91,49 @@ export const init = async () => {
          */
         klass.define_native_singleton_method("expand_path", async (_self: RValue, args: RValue[]): Promise<RValue> => {
             await Runtime.assert_type(args[0], await RubyString.klass());
-            const path = args[0].get_data<string>();
+            let path = args[0].get_data<string>();
+            let dir: string;
 
-            // already an absolute path, so return it
-            if (!vmfs.is_relative(path)) {
-                return args[0];
-            }
+            // if path is relative, we need to join it with the base directory
+            if (vmfs.is_relative(path)) {
+                if (args.length > 1) {
+                    await Runtime.assert_type(args[1], await RubyString.klass());
+                    dir = args[1].get_data<string>();
+                } else {
+                    dir = Dir.getwd()
+                }
 
-            let dir;
-            if (args.length > 1) {
-                await Runtime.assert_type(args[1], await RubyString.klass());
-                dir = args[1].get_data<string>();
+                // ensure dir is absolute
+                if (vmfs.is_relative(dir)) {
+                    dir = vmfs.join_paths(Dir.getwd(), dir);
+                }
             } else {
-                dir = Dir.getwd()
-            }
-
-            // ensure dir is absolute
-            if (vmfs.is_relative(dir)) {
-                dir = vmfs.join_paths(Dir.getwd(), dir);
+                // path is already absolute, use root as the base
+                dir = vmfs.root_path();
             }
 
             const path_parts = vmfs.split_path(path);
-            const dir_parts = vmfs.split_path(dir);
+            let dir_parts = vmfs.split_path(dir);
+
+            // when dir is "/", split gives ["", ""], but we want just [""]
+            if (dir === "/" && dir_parts.length === 2 && dir_parts[0] === "" && dir_parts[1] === "") {
+                dir_parts = [""];
+            }
 
             for (const path_part of path_parts) {
                 if (path_part === "..") {
-                    dir_parts.pop();
+                    // don't pop past the root
+                    if (dir_parts.length > 1 || (dir_parts.length === 1 && dir_parts[0] !== '')) {
+                        dir_parts.pop();
+                    }
                 } else {
-                    if (path_part != ".") {
+                    if (path_part != "." && path_part != "") {
                         dir_parts.push(path_part);
                     }
                 }
             }
 
-            if (dir_parts.length == 0) {
+            if (dir_parts.length == 0 || (dir_parts.length === 1 && dir_parts[0] === '')) {
                 return RubyString.new("/");
             } else {
                 return RubyString.new(vmfs.join_paths(...dir_parts));
@@ -191,13 +200,10 @@ export const init = async () => {
          */
         klass.define_native_singleton_method("dirname", async (_self: RValue, args: RValue[]): Promise<RValue> => {
             await Runtime.assert_type(args[0], await RubyString.klass());
-            const parts = vmfs.split_path(args[0].get_data<string>());
+            const path_str = args[0].get_data<string>();
 
-            while (parts.length > 0 && parts[parts.length - 1].length === 0) {
-                parts.pop();
-            }
-
-            return RubyString.new(vmfs.join_paths(...parts));
+            // Use vmfs.dirname which correctly implements dirname logic
+            return RubyString.new(vmfs.dirname(path_str));
         });
 
         klass.define_native_singleton_method("read", async (_self: RValue, args: RValue[]): Promise<RValue> => {
