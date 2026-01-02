@@ -315,7 +315,12 @@ export const init = () => {
             return chunks.join("");
         }
 
-        klass.define_native_method("gsub", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        klass.define_native_method("gsub", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            // no replacement and no block, return an Enumerator
+            if (args.length < 2 && !block) {
+                return await Enumerator.for_method(self, "gsub", args);
+            }
+
             const str = self.get_data<string>();
             const pattern = args[0].get_data<Regexp | string>();
             const replacements = args[1];
@@ -323,8 +328,13 @@ export const init = () => {
             return RubyString.new(await gsub(str, pattern, replacements));
         });
 
-        klass.define_native_method("gsub!", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        klass.define_native_method("gsub!", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             await RubyObject.check_frozen(self);
+
+            // no replacement and no block, return an Enumerator
+            if (args.length < 2 && !block) {
+                return await Enumerator.for_method(self, "gsub!", args);
+            }
 
             const str = self.get_data<string>();
             const pattern = args[0].get_data<Regexp | string>();
@@ -339,7 +349,12 @@ export const init = () => {
             }
         });
 
-        klass.define_native_method("sub", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        klass.define_native_method("sub", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            // no replacement and no block, return an Enumerator
+            if (args.length < 2 && !block) {
+                return await Enumerator.for_method(self, "sub", args);
+            }
+
             const str = self.get_data<string>();
             const pattern = args[0].get_data<Regexp | string>();
             const replacements = args[1];
@@ -347,8 +362,13 @@ export const init = () => {
             return RubyString.new(await gsub(str, pattern, replacements, 1));
         });
 
-        klass.define_native_method("sub!", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        klass.define_native_method("sub!", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             await RubyObject.check_frozen(self);
+
+            // no replacement and no block, return an Enumerator
+            if (args.length < 2 && !block) {
+                return await Enumerator.for_method(self, "sub!", args);
+            }
 
             const str = self.get_data<string>();
             const pattern = args[0].get_data<Regexp | string>();
