@@ -7,7 +7,7 @@ const printf_pattern = (
     "(?!\\\\)" +                  // string does not start with an escape character
     "%" +                         // literal percent sign
     "((?:[ #+-0*]|\\d+\\$)+)?" +  // Flag. Any of space, #, +, -, 0, *, or n$ meaning nth argument.
-    "(-?\\d+)?" +                 // Width. Possibly negative integer.
+    "([^.]-?\\d+)?" +             // Width. Possibly negative integer.
     "(\\.\\d)?" +                 // Precision. A dot followed by a non-negative integer.
     "([bBdiuoxXaAeEfgGcps])"      // Type specifier.
 );
@@ -87,7 +87,7 @@ export const sprintf = async (pattern: RValue, objects: RValue[]): Promise<RValu
         }
 
         const [_, flags_field, width, precision_field, type] = match;
-        const precision = precision_field && precision_field.length > 0 ? parseInt(precision_field.slice(1)) : 0;
+        let precision = precision_field && precision_field.length > 0 ? parseInt(precision_field.slice(1)) : 0;
         const flags = flags_field || "";
 
         switch (type) {
@@ -112,6 +112,35 @@ export const sprintf = async (pattern: RValue, objects: RValue[]): Promise<RValu
             case "p":
                 chunks.push((await Object.send(objects[idx], "inspect")).get_data<string>());
                 idx ++;
+                break;
+
+            case "g":
+            case "G":
+                // From the Ruby docs: With no precision specifier, defaults to 6 significant digits.
+                precision ||= 6;
+
+                const num = objects[idx].get_data<number>();
+                const exponent = Math.floor(Math.log10(Math.abs(num)));
+
+                // From the Ruby docs: Format argument using exponential form (e/E specifier)
+                // if the exponent is less than -4 or greater than or equal to the precision.
+                // Otherwise format argument using floating-point form (f specifier).
+                if (exponent < -4 || exponent >= precision) {
+                    // exponential form
+                    let result_num = num / Math.pow(10, exponent);
+                    const rounding_multiplier = Math.pow(10, precision - 1);
+                    result_num = Math.round(result_num * rounding_multiplier) / rounding_multiplier;
+
+                    const exponent_str = Math.abs(exponent).toString().padStart(2, "0");
+                    const exponent_sign = exponent < 0 ? "-" : "";
+                    const e = type === "g" ? "e" : "E";
+
+                    chunks.push(`${result_num.toString()}${e}${exponent_sign}${exponent_str}`);
+                } else {
+                    // float form
+                    chunks.push(num.toString()); // as above, this needs to be fleshed out
+                }
+
                 break;
 
             case "%":
