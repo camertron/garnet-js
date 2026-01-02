@@ -2351,7 +2351,7 @@ export class Compiler extends Visitor {
             }
 
             this.iseq.putstring(
-                node.filepath.value,
+                this.absolute_path,
                 encoding,
                 node.isFrozen(),
                 node.isForcedBinaryEncoding()
