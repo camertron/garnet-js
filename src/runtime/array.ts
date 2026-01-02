@@ -819,6 +819,64 @@ export const init = () => {
             return Hash.from_hash(hash);
         });
 
+        const flatten = async (elements: RValue[], max_depth: number): Promise<[RValue[], boolean]> => {
+            return await flatten_helper(elements, max_depth, 0);
+        }
+
+        const flatten_helper = async (elements: RValue[], max_depth: number, depth: number): Promise<[RValue[], boolean]> => {
+            const result = [];
+            const is_a_args = [await RubyArray.klass()];
+            let modified = false;
+
+            for (const element of elements) {
+                const is_arr = await Object.send(element, "is_a?", is_a_args);
+
+                if (is_arr.is_truthy() && (max_depth < 0 || depth < max_depth)) {
+                    const [child_elements, child_modified] = await flatten_helper(
+                        element.get_data<RubyArray>().elements, max_depth, depth + 1
+                    );
+
+                    result.push(...child_elements);
+                    modified ||= child_modified;
+                } else {
+                    result.push(element);
+                }
+            }
+
+            return [result, modified];
+        }
+
+        klass.define_native_method("flatten", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            let max_depth = -1;
+
+            if (args.length > 0) {
+                await Runtime.assert_type(args[0], await Integer.klass());
+                max_depth = args[0].get_data<number>();
+            }
+
+            const [flattened, _] = await flatten(self.get_data<RubyArray>().elements, max_depth);
+            return await RubyArray.new(flattened);
+        });
+
+        klass.define_native_method("flatten!", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            let max_depth = -1;
+
+            if (args.length > 0) {
+                await Runtime.assert_type(args[0], await Integer.klass());
+                max_depth = args[0].get_data<number>();
+            }
+
+            const [flattened, modified] = await flatten(self.get_data<RubyArray>().elements, max_depth);
+
+            self.get_data<RubyArray>().elements = flattened;
+
+            if (modified) {
+                return self;
+            }
+
+            return Qnil;
+        });
+
         klass.define_native_method("reverse", async (self: RValue): Promise<RValue> => {
             return await RubyArray.new([...self.get_data<RubyArray>().elements].reverse());
         });
