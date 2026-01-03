@@ -45,6 +45,7 @@ import { init as net_http_init } from "./lib/net/http";
 import { init as uri_init } from "./lib/uri";
 import { init as etc_init } from "./lib/etc";
 import { init as pathname_init } from "./lib/pathname";
+import { init as ruby_vm_init } from "./runtime/ruby-vm";
 import { obj_id_hash } from "./util/object_id";
 import { RubyString } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
@@ -1005,15 +1006,13 @@ export class RValuePointer {
     constructor(rval: RValue) {
         this.rval = rval;
         this.id = RValuePointer.next_id ++;
-
-        // if (this.id === 21224 || this.id === 21225) debugger;
     }
 }
 
 export class Class extends Module {
     public superclass: RValue | null;
     public is_singleton_class: boolean;
-    public attached_object?: RValue;  // For singleton classes, the object they're attached to
+    public attached_object?: RValue;  // for singleton classes, the object they're attached to
 
     // name: can be null in the case of an anonymous class.
     // superclass: can be null in the case of BasicObject. Certain fundamental classes like Class and Object that are defined
@@ -1518,6 +1517,7 @@ export const init = async () => {
     await method_init();
     await fiber_init();
     await pathname_init();
+    ruby_vm_init();
 
     ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"] = await (async () => {
         if (is_node) {
