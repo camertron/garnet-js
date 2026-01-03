@@ -17,6 +17,7 @@ export const init = () => {
         struct_class.define_native_singleton_method("new", async (self: RValue, args: RValue[]): Promise<RValue> => {
             let new_class;
             const field_names: string[] = [];
+            let field_start_index = 0;
 
             // If the first argument is a string, it is used as the struct's class name and
             // added as a constant on Struct::, eg: Struct.new("Foo")  # => Struct::Foo
@@ -24,6 +25,7 @@ export const init = () => {
                 const class_name = args[0].get_data<string>();
                 new_class = new Class(class_name, struct_class.rval);
                 struct_class.constants[class_name] = new_class.rval;
+                field_start_index = 1;
 
                 for (let i = 1; i < args.length; i ++) {
                     const field_name = await Runtime.coerce_to_string(args[i]);
@@ -60,12 +62,12 @@ export const init = () => {
                 return new_instance;
             });
 
-            for (let i = 0; i < args.length; i ++) {
+            for (let i = field_start_index; i < args.length; i ++) {
                 if (args[i].klass !== await Symbol.klass()) {
                     throw new TypeError(`${(await Object.send(args[i], "inspect")).get_data<string>()} is not a symbol`);
                 }
 
-                const field = field_names[i];
+                const field = field_names[i - field_start_index];
 
                 new_class.define_native_method(field, (self: RValue): RValue => {
                     const context = self.get_context<StructContext>();
