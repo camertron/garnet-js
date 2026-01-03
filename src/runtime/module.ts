@@ -494,6 +494,37 @@ export const init = async () => {
         return await RubyArray.new(results);
     });
 
+    const private_instance_methods_from = async (mod: RValue): Promise<RValue[]> => {
+        const results = [];
+        const mod_methods = mod.get_data<Module>().methods;
+
+        for (const method_name in mod_methods) {
+            const method = mod_methods[method_name];
+
+            if (method.visibility === Visibility.private) {
+                results.push(await Runtime.intern(method_name));
+            }
+        }
+
+        return results;
+    }
+
+    mod.define_native_method("private_instance_methods", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const include_super = (args[0] || Qtrue).is_truthy();
+        const results = [];
+
+        if (include_super) {
+            await Runtime.each_unique_ancestor(self, true, async (ancestor: RValue): Promise<boolean> => {
+                results.push(...await private_instance_methods_from(ancestor));
+                return true;
+            });
+        } else {
+            results.push(...await private_instance_methods_from(self));
+        }
+
+        return await RubyArray.new(results);
+    });
+
     mod.define_native_method("set_temporary_name", async (self: RValue, args: RValue[]): Promise<RValue> => {
         const temp_name = (await Runtime.coerce_to_string(args[0] || Qnil)).get_data<string>();
         self.get_data<Module>().temporary_name = temp_name;
