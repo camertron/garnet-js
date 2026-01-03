@@ -182,6 +182,7 @@ export const init = () => {
     if (inited) return;
 
     Runtime.define_class("String", ObjectClass, async (klass: Class) => {
+        klass.include((await RubyObject.find_constant("Comparable"))!);
         await mix_shared_string_methods_into(klass);
 
         klass.define_native_method("initialize", async (self: RValue, args: RValue[]): Promise<RValue> => {
