@@ -84,18 +84,9 @@ export const init = async () => {
         return await Runtime.load(path.get_data<string>(), path.get_data<string>()) ? Qtrue : Qfalse;
     });
 
-    mod.define_native_method("===", (self: RValue, args: RValue[]): RValue => {
-        const obj = args[0];
-
-        if (obj.klass == ClassClass || obj.klass == ModuleClass) {
-            if (self.klass.get_data<Class>() == obj.get_data<Class>()) {
-                return Qtrue;
-            } else {
-                return Qfalse;
-            }
-        } else {
-            return Qfalse;
-        }
+    mod.define_native_method("===", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        // default implementation
+        return await Object.send(self, "==", args);
     });
 
     mod.define_native_method("<=>", (_self: RValue, _args: RValue[]): RValue => {
