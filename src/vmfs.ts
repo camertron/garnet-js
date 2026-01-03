@@ -65,7 +65,7 @@ abstract class FileSystem {
     abstract get separator(): string;
 
     // operations
-    abstract each_child_path(base_path: string, cb: (child_path: string) => Promise<void>): void;
+    abstract each_child_path(base_path: string, cb: (child_path: string) => Promise<void>): Promise<void>;
     abstract open(path: string): IFileHandle;
     abstract read(path: string): Uint8Array;
     abstract write(path: string, bytes: Uint8Array): void;
@@ -219,7 +219,7 @@ class VirtualFileSystem extends FileSystem {
         return !path.startsWith(VirtualFileSystem.SEPARATOR);
     }
 
-    each_child_path(base_path: string, cb: (child_path: string) => Promise<void>) {
+    async each_child_path(base_path: string, cb: (child_path: string) => Promise<void>) {
         throw new Error("Method not implemented.");
     }
 

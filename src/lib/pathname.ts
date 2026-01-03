@@ -3,6 +3,7 @@ import { RubyString } from "../runtime/string";
 import { Object } from "../runtime/object";
 import { Args } from "../runtime/arg-scanner";
 import { vmfs } from "../vmfs";
+import { RubyArray } from "../runtime/array";
 
 export class Pathname {
     private static klass_: RValue;
@@ -125,6 +126,32 @@ export const init = async () => {
         klass.define_native_method("dirname", async (self: RValue): Promise<RValue> => {
             const path = self.get_data<Pathname>().path;
             return await Pathname.new(vmfs.dirname(path));
+        });
+
+        klass.define_native_method("basename", async (self: RValue): Promise<RValue> => {
+            const path = self.get_data<Pathname>().path;
+            return await Pathname.new(vmfs.basename(path));
+        });
+
+        klass.define_native_method("children", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const base_path = self.get_data<Pathname>().path;
+            let with_directory = true;
+
+            if (args.length > 0) {
+                with_directory = args[0].is_truthy();
+            }
+
+            const result: RValue[] = [];
+
+            await vmfs.each_child_path(base_path, async (child_path: string) => {
+                if (with_directory) {
+                    result.push(await Pathname.new(vmfs.join_paths(base_path, child_path)));
+                } else {
+                    result.push(await Pathname.new(child_path));
+                }
+            });
+
+            return await RubyArray.new(result);
         });
     });
 
