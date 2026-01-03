@@ -91,6 +91,7 @@ import {
     RescueModifierNode,
     RescueNode,
     RestParameterNode,
+    RetryNode,
     ReturnNode,
     SelfNode,
     SingletonClassNode,
@@ -2167,6 +2168,18 @@ export class Compiler extends Visitor {
         }
 
         throw new SyntaxError("Invalid break");
+    }
+
+    override visitRetryNode(_node: RetryNode) {
+        let iseq = this.iseq;
+
+        // retry is only valid inside a rescue block
+        if (iseq.type === "rescue") {
+            this.iseq.throw(ThrowType.RETRY);
+            return;
+        }
+
+        throw new SyntaxError("Invalid retry");
     }
 
     override visitLambdaNode(node: LambdaNode) {

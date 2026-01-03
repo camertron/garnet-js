@@ -1,5 +1,5 @@
 import { LocalJumpError, NotImplementedError } from "../errors";
-import { BreakError, ExecutionContext, ExecutionResult, NextError, ReturnError, ThrowNoneError, ThrowType } from "../execution_context";
+import { BreakError, ExecutionContext, ExecutionResult, NextError, RetryError, ReturnError, ThrowNoneError, ThrowType } from "../execution_context";
 import { NilClass, Qnil } from "../runtime";
 import Instruction from "../instruction";
 import { Object } from "../runtime/object";
@@ -44,6 +44,9 @@ export default class Throw extends Instruction {
 
             case ThrowType.NEXT:
                 throw new NextError(value);
+
+            case ThrowType.RETRY:
+                throw new RetryError(value);
 
             case ThrowType.RAISE:
                 throw value;

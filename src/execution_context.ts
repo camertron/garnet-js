@@ -1,5 +1,5 @@
 import { BlockCallData, CallData, CallDataFlag, MethodCallData } from "./call_data";
-import { ArgumentError, NativeError, RubyError } from "./errors";
+import { ArgumentError, LocalJumpError, NativeError, RubyError } from "./errors";
 import { BlockFrame, ClassFrame, EnsureFrame, Frame, IFrameWithOwner, MethodFrame, RescueFrame, TopFrame } from "./frame";
 import Instruction from "./instruction";
 import { CatchBreak, CatchEnsure, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
@@ -86,6 +86,12 @@ export class BreakError extends ThrownError {
 export class NextError extends ThrownError {
     override get type(): number {
         return ThrowType.NEXT;
+    }
+}
+
+export class RetryError extends ThrownError {
+    override get type(): number {
+        return ThrowType.RETRY;
     }
 }
 
@@ -343,6 +349,15 @@ export class ExecutionContext {
                             frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.cont_label);
                             result = error.value
                             this.stack.push(new RValuePointer(result));
+                        } else if (error instanceof RetryError) {
+                            // if we're in a rescue or ensure frame, propagate the error up to the parent frame
+                            if (frame.iseq.type === "rescue" || frame.iseq.type === "ensure") {
+                                this.frame = previous || frame.parent;
+                                throw error;
+                            }
+
+                            // `retry` should only be used from within a rescue block
+                            throw new LocalJumpError("Invalid retry");
                         } else if (error instanceof PauseError) {
                             frame.pc += 1;
                             this.stack.splice(frame.stack_index);
@@ -389,9 +404,17 @@ export class ExecutionContext {
 
                                     this.stack.push(new RValuePointer(result));
                                 } catch (e) {
-                                    // If a NextError or BreakError is thrown from within the rescue frame,
+                                    // If a NextError, BreakError, or RetryError is thrown from within the rescue frame,
                                     // we need to handle it here in the context of the current frame (block frame)
-                                    if (e instanceof NextError) {
+                                    if (e instanceof RetryError) {
+                                        // `retry` should jump back to the beginning of the begin block
+                                        this.stack.splice(frame.stack_index + frame.iseq.local_table.size() + catch_entry.restore_sp);
+                                        this.frame = frame;
+
+                                        frame.pc = frame.iseq.compiled_insns.indexOf(catch_entry.begin_label);
+                                        result = Qnil;
+                                        // don't push anything - we're jumping back to re-execute
+                                    } else if (e instanceof NextError) {
                                         if (ensure_entry) {
                                             await this.run_ensure_frame(ensure_entry.iseq!, frame, Qnil);
                                         }
