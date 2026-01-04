@@ -678,6 +678,41 @@ export const init = async () => {
         return await RubyArray.new(results);
     });
 
+    mod.define_native_method("singleton_methods", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        if (!self.has_singleton_class()) {
+            return await RubyArray.new([]);
+        }
+
+        const all = (args[0] || Qtrue).is_truthy();
+        const method_names: Set<string> = new Set();
+
+        await Runtime.each_unique_ancestor(self.get_singleton_class(), true, async (ancestor: RValue) => {
+            if ((ancestor.klass === ClassClass && ancestor.get_data<Class>().is_singleton_class) || ancestor.klass === ModuleClass) {
+                for (const method_name of methods_from(ancestor)) {
+                    method_names.add(method_name);
+                }
+            } else {
+                // we've reached the end of the singleton class ancestor chain, i.e. we've gathered
+                // methods for self's singleton class, any singleton classes self inherits from, and
+                // any modules any of these singleton classes include (er, extend I guess technically)
+                return false;
+            }
+
+            // The first time the callback is called, we're looking at self's singleton class. We use
+            // the value of all here to determine whether or not to keep going. If all is true, then
+            // we want to keep going. If all is false, we've looked at self so we can stop looking.
+            return all;
+        });
+
+        return await RubyArray.new(
+            await Promise.all(
+                [...method_names].map((method_name) => {
+                    return Runtime.intern(method_name);
+                })
+            )
+        );
+    });
+
     mod.define_native_method("binding", async (self: RValue): Promise<RValue> => {
         return await Binding.from_binding(ExecutionContext.current.get_binding());
     });
