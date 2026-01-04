@@ -210,8 +210,10 @@ export const init = async () => {
         klass.define_native_method("dup", (self: RValue): RValue => {
             const copy = new RValue(self.klass);
 
-            for (const [key, value] of self.ivars) {
-                copy.iv_set(key, value);
+            if (self.ivars) {
+                for (const [key, value] of self.ivars) {
+                    copy.iv_set(key, value);
+                }
             }
 
             return copy;
@@ -244,11 +246,14 @@ export const init = async () => {
         });
 
         klass.define_native_method("instance_variables", async (self: RValue): Promise<RValue> => {
-            const ivar_names = self.ivars.keys();
             const ivar_rvals = [];
 
-            for (const ivar_name of ivar_names) {
-                ivar_rvals.push(await Runtime.intern(ivar_name));
+            if (self.ivars) {
+                const ivar_names = self.ivars.keys();
+
+                for (const ivar_name of ivar_names) {
+                    ivar_rvals.push(await Runtime.intern(ivar_name));
+                }
             }
 
             return await RubyArray.new(ivar_rvals);
