@@ -81,50 +81,61 @@ export const init = async () => {
         return Qnil;
     });
 
-    mod.define_native_method("public", async (self: RValue, args: RValue[]): Promise<RValue> => {
-        const mod = self.get_data<Module>();
+    const set_visibility = async (module: RValue, visibility: Visibility, method_name?: string) => {
+        if (method_name) {
+            const mtd = await Object.find_instance_method_under(module, method_name);
 
-        if (args.length === 0) {
-            mod.default_visibility = Visibility.public;
+            if (!mtd) {
+                const type = module.get_data() instanceof Class ? "class" : "module";
+                const mod_name = module.get_data<Module>().name;
+                throw new NameError(`undefined method \`${method_name}' for ${type} \`${mod_name}'`);
+            }
+
+            mtd.visibility = Visibility.public;
+        } else {
+            const mod = module.get_data<Module>();
+
+            mod.default_visibility = visibility;
             // undo module_function behavior per Ruby spec
             mod.module_function_all = false;
-        } else {
-            await Runtime.assert_type(args[0], await Symbol.klass());
-            const mtd_name = args[0].get_data<string>();
-            mod.methods[mtd_name].visibility = Visibility.public;
         }
+    }
+
+    mod.define_native_method("public", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        let method_name: string | undefined = undefined;
+
+        if (args.length > 0) {
+            await Runtime.assert_type(args[0], await Symbol.klass());
+            method_name = args[0].get_data<string>();
+        }
+
+        await set_visibility(self, Visibility.public, method_name);
 
         return Qnil;
     });
 
     mod.define_native_method("private", async (self: RValue, args: RValue[]): Promise<RValue> => {
-        const mod = self.get_data<Module>();
+        let method_name: string | undefined = undefined;
 
-        if (args.length === 0) {
-            mod.default_visibility = Visibility.private;
-            // undo module_function behavior per Ruby spec
-            mod.module_function_all = false;
-        } else {
+        if (args.length > 0) {
             await Runtime.assert_type(args[0], await Symbol.klass());
-            const mtd_name = args[0].get_data<string>();
-            mod.methods[mtd_name].visibility = Visibility.private;
+            method_name = args[0].get_data<string>();
         }
+
+        await set_visibility(self, Visibility.private, method_name);
 
         return Qnil;
     });
 
     mod.define_native_method("protected", async (self: RValue, args: RValue[]): Promise<RValue> => {
-        const mod = self.get_data<Module>();
+        let method_name: string | undefined = undefined;
 
-        if (args.length === 0) {
-            mod.default_visibility = Visibility.protected;
-            // undo module_function behavior per Ruby spec
-            mod.module_function_all = false;
-        } else {
+        if (args.length > 0) {
             await Runtime.assert_type(args[0], await Symbol.klass());
-            const mtd_name = args[0].get_data<string>();
-            mod.methods[mtd_name].visibility = Visibility.private;
+            method_name = args[0].get_data<string>();
         }
+
+        await set_visibility(self, Visibility.protected, method_name);
 
         return Qnil;
     });
