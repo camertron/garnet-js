@@ -1,7 +1,7 @@
 import { InstructionSequence } from "./instruction_sequence";
 import { Compiler, LexicalScope } from "./compiler";
 import { LoadError, TypeError, NoMethodError, NotImplementedError, NameError } from "./errors";
-import { CallingConvention, ExecutionContext } from "./execution_context";
+import { ExecutionContext } from "./execution_context";
 import { init as array_init } from "./runtime/array";
 import { Integer, init as integer_init } from "./runtime/integer";
 import { Object } from "./runtime/object";
@@ -46,6 +46,8 @@ import { init as uri_init } from "./lib/uri";
 import { init as etc_init } from "./lib/etc";
 import { init as pathname_init } from "./lib/pathname";
 import { init as ruby_vm_init } from "./runtime/ruby-vm";
+import { init as objspace_init } from "./lib/objspace";
+import { init as objectspace_init} from "./runtime/object-space";
 import { obj_id_hash } from "./util/object_id";
 import { RubyString } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
@@ -400,6 +402,7 @@ Runtime.register_native_extension("uri", uri_init);
 Runtime.register_native_extension("net/http", net_http_init);
 Runtime.register_native_extension("etc", etc_init);
 Runtime.register_native_extension("pathname", pathname_init);
+Runtime.register_native_extension("objspace", objspace_init);
 
 export enum Visibility {
     public,
@@ -1518,6 +1521,7 @@ export const init = async () => {
     await fiber_init();
     await pathname_init();
     ruby_vm_init();
+    objectspace_init();
 
     ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"] = await (async () => {
         if (is_node) {
