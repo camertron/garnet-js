@@ -207,7 +207,7 @@ export const init = async () => {
 
         await klass.alias_method("to_s", "inspect");
 
-        klass.define_native_method("dup", (self: RValue): RValue => {
+        klass.define_native_method("dup", async (self: RValue): Promise<RValue> => {
             const copy = new RValue(self.klass);
 
             if (self.ivars) {
@@ -215,6 +215,8 @@ export const init = async () => {
                     copy.iv_set(key, value);
                 }
             }
+
+            await Object.send(copy, "initialize_copy", [self]);
 
             return copy;
         });

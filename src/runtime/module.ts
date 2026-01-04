@@ -42,6 +42,72 @@ export const init = async () => {
 
     await mod.alias_method("to_s", "inspect");
 
+    mod.define_native_method("initialize_copy", (self: RValue, args: RValue[]): RValue => {
+        const original = args[0];
+
+        if (self === original) {
+            return self;
+        }
+
+        const original_mod = original.get_data<Module>();
+        const copy_mod = new Module(null);
+
+        for (const method_name in original_mod.methods) {
+            copy_mod.methods[method_name] = original_mod.methods[method_name];
+        }
+
+        for (const const_name in original_mod.constants) {
+            copy_mod.constants[const_name] = original_mod.constants[const_name];
+        }
+
+        for (const include of original_mod.includes) {
+            copy_mod.includes.push(include);
+        }
+
+        for (const prepend of original_mod.prepends) {
+            copy_mod.prepends.push(prepend);
+        }
+
+        copy_mod.default_visibility = original_mod.default_visibility;
+        copy_mod.module_function_all = original_mod.module_function_all;
+
+        for (const method_name of original_mod.removed_methods) {
+            copy_mod.removed_methods.add(method_name);
+        }
+
+        for (const method_name of original_mod.undefined_methods) {
+            copy_mod.undefined_methods.add(method_name);
+        }
+
+        original_mod.autoloads.forEach((file, constant) => {
+            copy_mod.autoloads.set(constant, file);
+        });
+
+        self.data = copy_mod;
+        copy_mod.rval = self;
+
+        if (original.has_singleton_class()) {
+            const original_singleton = original.get_singleton_class();
+            const copy_singleton = self.get_singleton_class();
+            const original_singleton_mod = original_singleton.get_data<Module>();
+            const copy_singleton_mod = copy_singleton.get_data<Module>();
+
+            for (const method_name in original_singleton_mod.methods) {
+                copy_singleton_mod.methods[method_name] = original_singleton_mod.methods[method_name];
+            }
+
+            for (const include of original_singleton_mod.includes) {
+                copy_singleton_mod.includes.push(include);
+            }
+
+            for (const prepend of original_singleton_mod.prepends) {
+                copy_singleton_mod.prepends.push(prepend);
+            }
+        }
+
+        return self;
+    });
+
     mod.define_native_method("ancestors", async (self: RValue): Promise<RValue> => {
         const result: RValue[] = [];
 
