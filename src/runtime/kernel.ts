@@ -694,4 +694,27 @@ export const init = async () => {
 
         return Qnil;
     });
+
+    mod.define_native_method("send", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData) => {
+        const method_name = args[0];
+
+        if (method_name.klass === await RubyString.klass() || method_name.klass === await Symbol.klass()) {
+            if (call_data) {
+                const new_call_data = MethodCallData.create(
+                    method_name.get_data<string>(),
+                    call_data.argc - 1,
+                    call_data.flag,
+                    call_data.kw_arg
+                );
+
+                return Object.send(self, new_call_data, args.slice(1), kwargs, block);
+            } else {
+                return Object.send(self, method_name.get_data<string>(), args.slice(1), kwargs, block);
+            }
+        } else {
+            throw new TypeError(
+                `${(await Object.send(method_name, "inspect")).get_data<string>()} is not a symbol nor a string`
+            );
+        }
+    });
 };

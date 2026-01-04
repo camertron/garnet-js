@@ -190,28 +190,6 @@ export const init = async () => {
     await (ObjectClass.get_data<Class>()).tap(async (klass: Class) => {
         klass.include(KernelModule);
 
-        // NOTE: send should actually be defined by the Kernel module
-        klass.define_native_singleton_method("send", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            const method_name = args[0];
-            await Runtime.assert_type(method_name, await RubyString.klass());
-            return await Object.send(self.klass.get_data<Class>().get_singleton_class(), method_name.get_data<string>(), args);
-        });
-
-        klass.define_native_method("send", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData) => {
-            const method_name = args[0];
-
-            if (method_name.klass === await RubyString.klass() || method_name.klass === await Symbol.klass()) {
-                if (call_data) {
-                    const new_call_data = MethodCallData.create(method_name.get_data<string>(), call_data.argc - 1, call_data.flag, call_data.kw_arg);
-                    return Object.send(self, new_call_data, args.slice(1), kwargs, block);
-                } else {
-                    return Object.send(self, method_name.get_data<string>(), args.slice(1), kwargs, block);
-                }
-            } else {
-                throw new TypeError(`${(await Object.send(method_name, "inspect")).get_data<string>()} is not a symbol nor a string`);
-            }
-        });
-
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const name = self.klass.get_data<Class>().full_name;
             let parts = [`${name}:${Object.object_id_to_str(self.object_id)}`];
