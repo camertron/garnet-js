@@ -27,7 +27,9 @@ export const init = async () => {
 
         if (block) {
             const proc = block!.get_data<Proc>();
-            const binding = proc.binding.with_self(mod_rval);
+            // nesting should include the class being evaluated
+            const new_nesting = [...proc.binding.nesting, mod_rval];
+            const binding = proc.binding.with_self_and_nesting(mod_rval, new_nesting);
             await proc.with_binding(binding).call(ExecutionContext.current, [mod_rval]);
         }
 
@@ -223,7 +225,9 @@ export const init = async () => {
     mod.define_native_method("module_eval", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
         if (block) {
             const proc = block!.get_data<Proc>();
-            const binding = proc.binding.with_self(self);
+            // nesting should include the class being evaluated
+            const new_nesting = [...proc.binding.nesting, self];
+            const binding = proc.binding.with_self_and_nesting(self, new_nesting);
             return await proc.with_binding(binding).call(ExecutionContext.current, [self]);
         } else {
             await Runtime.assert_type(args[0], await RubyString.klass());
@@ -426,7 +430,9 @@ export const init = async () => {
 
     mod.define_native_method("class_exec", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: CallData): Promise<RValue> => {
         const proc = block!.get_data<Proc>();
-        const binding = proc.binding.with_self(self);
+        // nesting should include the class being evaluated
+        const new_nesting = [...proc.binding.nesting, self];
+        const binding = proc.binding.with_self_and_nesting(self, new_nesting);
         let block_call_data: BlockCallData | undefined = undefined;
 
         if (call_data) {

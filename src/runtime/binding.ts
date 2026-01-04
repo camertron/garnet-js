@@ -44,6 +44,10 @@ export class Binding {
     with_self(new_self: RValue) {
         return new Binding(new_self, this.nesting, this.stack, this.stack_index, this.parent_frame);
     }
+
+    with_self_and_nesting(new_self: RValue, new_nesting: RValue[]) {
+        return new Binding(new_self, new_nesting, this.stack, this.stack_index, this.parent_frame);
+    }
 }
 
 let inited = false;

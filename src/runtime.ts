@@ -1253,7 +1253,9 @@ await (ClassClass.get_data<Class>()).tap(async (klass: Class) => {
 
         if (block) {
             const proc = block!.get_data<Proc>();
-            const binding = proc.binding.with_self(new_class_rval);
+            // nesting should include the class being evaluated
+            const new_nesting = [...proc.binding.nesting, new_class_rval];
+            const binding = proc.binding.with_self_and_nesting(new_class_rval, new_nesting);
             await proc.with_binding(binding).call(ExecutionContext.current, [new_class_rval]);
         }
 
