@@ -973,7 +973,9 @@ export class Compiler extends Visitor {
         }
 
         if (node.keywordRest) {
-            if (!(node.keywordRest instanceof NoKeywordsParameterNode)) {
+            if (node.keywordRest instanceof ForwardingParameterNode) {
+                this.with_used(true, () => this.visit(node.keywordRest!));
+            } else if (!(node.keywordRest instanceof NoKeywordsParameterNode)) {
                 const keywordRestNode = node.keywordRest as KeywordRestParameterNode;
 
                 // only mark start of kwargs if the kwrest parameter has a name
@@ -1032,6 +1034,10 @@ export class Compiler extends Visitor {
         while (current_iseq && !current_iseq.local_table.find("...")) {
           current_iseq = current_iseq.parent_iseq;
           depth ++;
+        }
+
+        if (!current_iseq) {
+            throw new SyntaxError("Forwarding arguments (...) used outside of a method that accepts forwarding parameters");
         }
 
         let lookup = this.find_local_or_throw("*", depth);
