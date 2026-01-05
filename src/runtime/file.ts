@@ -202,8 +202,14 @@ export const init = async () => {
             await Runtime.assert_type(args[0], await RubyString.klass());
             const path_str = args[0].get_data<string>();
 
-            // Use vmfs.dirname which correctly implements dirname logic
             return RubyString.new(vmfs.dirname(path_str));
+        });
+
+        klass.define_native_singleton_method("extname", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+            await Runtime.assert_type(args[0], await RubyString.klass());
+            const path_str = args[0].get_data<string>();
+
+            return RubyString.new(vmfs.extname(path_str));
         });
 
         klass.define_native_singleton_method("read", async (_self: RValue, args: RValue[]): Promise<RValue> => {

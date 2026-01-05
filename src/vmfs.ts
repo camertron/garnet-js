@@ -62,6 +62,18 @@ abstract class FileSystem {
         return segments[segments.length - 1];
     }
 
+    extname(path: string): string {
+        const segments = this.split_path(path);
+        const last_segment = segments[segments.length - 1];
+        const idx = last_segment.indexOf(".");
+
+        if (idx > -1) {
+            return last_segment.substring(idx);
+        }
+
+        return "";
+    }
+
     abstract get separator(): string;
 
     // operations
