@@ -87,19 +87,11 @@ export const init = () => {
         });
 
         klass.define_native_method("=~", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            if (args[0].klass === await Regexp.klass()) {
-                const regexp = args[0].get_data<Regexp>();
-                const result = regexp.search(self.get_data<string>());
+            const string_klass = await Object.find_constant("String");
+            const match_method = await Object.find_instance_method_under(string_klass!, "=~");
+            return await match_method!.call(await ExecutionContext.current, self, args);
+        });
 
-                if (result) {
-                    await Regexp.set_svars(result);
-                    return Integer.get(result.begin(0));
-                } else {
-                    return Qnil;
-                }
-            } else {
-                return await Object.send(args[0], "=~", [self]);
-            }
         });
     });
 
