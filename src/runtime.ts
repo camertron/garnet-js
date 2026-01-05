@@ -48,6 +48,7 @@ import { init as pathname_init } from "./lib/pathname";
 import { init as ruby_vm_init } from "./runtime/ruby-vm";
 import { init as objspace_init } from "./lib/objspace";
 import { init as objectspace_init} from "./runtime/object-space";
+import { init as warning_init } from "./runtime/warning";
 import { obj_id_hash } from "./util/object_id";
 import { RubyString } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
@@ -1524,6 +1525,7 @@ export const init = async () => {
     await pathname_init();
     ruby_vm_init();
     objectspace_init();
+    warning_init();
 
     ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"] = await (async () => {
         if (is_node) {
