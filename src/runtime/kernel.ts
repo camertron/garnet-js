@@ -1,6 +1,6 @@
 import { is_node } from "../env";
 import { ArgumentError, IRubyError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
-import { BreakError, CallingConvention, ExecutionContext, ThrowError } from "../execution_context";
+import { BreakError, CallingConvention, ExecutionContext, ReturnError, ThrowError } from "../execution_context";
 import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, Visibility, Callable, ObjectClass, InterpretedCallable, NativeCallable, STDERR, IO } from "../runtime";
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
@@ -17,7 +17,7 @@ import { Hash } from "./hash";
 import { Float } from "./float";
 import { Enumerator } from "./enumerator";
 import { Binding } from "./binding";
-import { Method } from "./method";
+import { Method, UnboundMethod } from "./method";
 import { sprintf } from "./printf";
 
 export class Kernel {
@@ -728,6 +728,58 @@ export const init = async () => {
         }
 
         return Qnil;
+    });
+
+    mod.define_native_method("define_singleton_method", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
+        const method_name = (await Runtime.coerce_to_string(args[0])).get_data<string>();
+        let body: Proc | Method | UnboundMethod | undefined = undefined;
+
+        if (args.length === 2) {
+            if (args[1].klass === await Proc.klass()) {
+                body = args[1].get_data<Proc>();
+                body.calling_convention = CallingConvention.METHOD_LAMBDA;
+            } else if (args[1].klass === await Method.klass()) {
+                body = args[1].get_data<Method>();
+            } else if (args[1].klass === await UnboundMethod.klass()) {
+                body = args[1].get_data<UnboundMethod>();
+            } else {
+                throw new TypeError(`wrong argument type ${args[1].klass.get_data<Class>().name} (expected Proc/Method/UnboundMethod)`);
+            }
+        } else {
+            body = block?.get_data<Proc>();
+        }
+
+        if (!body) {
+            throw new ArgumentError("tried to create Proc object without a block");
+        }
+
+        const singleton_class = self.get_singleton_class();
+
+        singleton_class.get_data<Module>().define_native_method(method_name, async (mtd_self: RValue, mtd_args: RValue[], mtd_kwargs?: Hash, mtd_block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
+            const new_call_data = MethodCallData.create(method_name, call_data?.argc || mtd_args.length, call_data?.flag, call_data?.kw_arg);
+
+            try {
+                if (body instanceof Proc) {
+                    const binding = body.binding.with_self(mtd_self);
+
+                    return await body.with_binding(binding).call(
+                        ExecutionContext.current, mtd_args, mtd_kwargs, mtd_block, new_call_data
+                    );
+                } else {
+                    return await body!.call(
+                        ExecutionContext.current, mtd_self, mtd_args, mtd_kwargs, mtd_block, new_call_data
+                    );
+                }
+            } catch (e) {
+                if (e instanceof ReturnError) {
+                    return e.value;
+                }
+
+                throw e;
+            }
+        });
+
+        return args[0];
     });
 
     mod.define_native_method("send", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData) => {
