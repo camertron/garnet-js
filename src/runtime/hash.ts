@@ -1,4 +1,4 @@
-import { ArgumentError, KeyError, NameError } from "../errors";
+import { ArgumentError, KeyError, NameError, TypeError } from "../errors";
 import { BreakError, ExecutionContext } from "../execution_context";
 import { RValue, Class, Qtrue, Qfalse, Qnil, Runtime, ObjectClass } from "../runtime";
 import { Object } from "./object";
@@ -54,6 +54,8 @@ export class Hash {
     public default_proc?: RValue;
 
     public self: RValue;
+
+    public ruby2_keywords_hash: boolean = false;
 
     constructor(default_value?: RValue, default_proc?: RValue) {
         this.keys = new Map();
@@ -708,6 +710,45 @@ export const init = () => {
             });
 
             return Hash.from_hash(inverted);
+        });
+
+        klass.define_native_singleton_method("ruby2_keywords_hash?", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const hash_rval = args[0];
+
+            if (hash_rval.klass !== await Hash.klass()) {
+                throw new TypeError("no implicit conversion into Hash");
+            }
+
+            const hash = hash_rval.get_data<Hash>();
+            return hash.ruby2_keywords_hash ? Qtrue : Qfalse;
+        });
+
+        klass.define_native_singleton_method("ruby2_keywords_hash", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const hash_rval = args[0];
+
+            if (hash_rval.klass !== await Hash.klass()) {
+                throw new TypeError("no implicit conversion into Hash");
+            }
+
+            const original_hash = hash_rval.get_data<Hash>();
+            const new_hash = new Hash(original_hash.default_value, original_hash.default_proc);
+
+            await original_hash.each(async (k: RValue, v: RValue) => {
+                await new_hash.set(k, v);
+            });
+
+            const new_hash_rval = await Hash.from_hash(new_hash);
+
+            // copy instance variables to match Ruby behavior
+            if (hash_rval.ivars) {
+                hash_rval.ivars.forEach((value, key) => {
+                    new_hash_rval.iv_set(key, value);
+                });
+            }
+
+            new_hash.ruby2_keywords_hash = true;
+
+            return new_hash_rval;
         });
     });
 

@@ -1,6 +1,6 @@
 import { BlockCallData, CallData, MethodCallData } from "../call_data";
 import { Compiler } from "../compiler";
-import { ArgumentError, NameError } from "../errors";
+import { ArgumentError, NameError, TypeError } from "../errors";
 import { CallingConvention, ExecutionContext, ReturnError } from "../execution_context";
 import { Module, ModuleClass, RValue, Runtime, Visibility, Qnil, Class, Qtrue, Qfalse, TrueClass, FalseClass, ObjectClass, InterpretedCallable, ClassClass } from "../runtime";
 import { Kernel } from "./kernel";
@@ -12,6 +12,7 @@ import { Symbol } from "../runtime/symbol";
 import { Integer } from "./integer";
 import { Hash } from "./hash";
 import { Method, UnboundMethod } from "./method";
+import { Args } from "./arg-scanner";
 
 let inited = false;
 
@@ -282,6 +283,32 @@ export const init = async () => {
         const existing_method_name = args[1].get_data<string>();
         await self.get_data<Module>().alias_method(new_method_name, existing_method_name);
         return await Runtime.intern(new_method_name);
+    });
+
+    mod.define_native_method("ruby2_keywords", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const [first_method_name, rest_method_names] = await Args.scan("1*", args);
+
+        for (const arg of [first_method_name, ...rest_method_names]) {
+            let method_name: string;
+
+            if (arg.klass === await Symbol.klass()) {
+                method_name = arg.get_data<string>();
+            } else if (arg.klass === await RubyString.klass()) {
+                method_name = arg.get_data<string>();
+            } else {
+                throw new TypeError(`${arg.klass.get_data<Class>().name} is not a symbol nor a string`);
+            }
+
+            const method = await Object.find_instance_method_under(self, method_name, true);
+
+            if (!method) {
+                throw new NameError(`undefined method \`${method_name}' for ${self.get_data<Module>().name}`);
+            }
+
+            method.ruby2_keywords = true;
+        }
+
+        return Qnil;
     });
 
     mod.define_native_method("===", async (self: RValue, args: RValue[]): Promise<RValue> => {

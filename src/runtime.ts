@@ -414,6 +414,7 @@ export enum Visibility {
 export abstract class Callable {
     public visibility: Visibility;
     public owner?: Module;
+    public ruby2_keywords: boolean = false;
 
     abstract call(context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: CallData): Promise<RValue>;
 }
@@ -440,6 +441,29 @@ export class InterpretedCallable extends Callable {
 
     async call(context: ExecutionContext, receiver: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): Promise<RValue> {
         call_data ||= MethodCallData.create(this.name, args.length);
+
+        // mark kwargs hash if this method is marked
+        if (this.ruby2_keywords && kwargs && kwargs.length > 0) {
+            // check if method accepts keywords (will be converted to positional hash if not)
+            if (this.iseq.argument_options.keyword_bits_index === null && this.iseq.argument_options.keyword_rest_start === null) {
+                kwargs.ruby2_keywords_hash = true;
+            }
+        }
+
+        // handle ruby2_keywords for last positional hash argument
+        if (this.ruby2_keywords && args.length > 0 && !kwargs) {
+            const last_arg = args[args.length - 1];
+
+            if (last_arg && last_arg.klass === await RubyHash.klass()) {
+                const hash = last_arg.get_data<RubyHash>();
+
+                if (!hash.ruby2_keywords_hash) {
+                    const marked_hash = await Object.send(await RubyHash.klass(), "ruby2_keywords_hash", [last_arg]);
+                    args = [...args.slice(0, -1), marked_hash];
+                }
+            }
+        }
+
         return await context.run_method_frame(call_data, this.nesting, this.iseq, receiver, args, kwargs, block, this.owner);
     }
 }
