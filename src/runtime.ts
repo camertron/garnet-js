@@ -49,6 +49,7 @@ import { init as ruby_vm_init } from "./runtime/ruby-vm";
 import { init as objspace_init } from "./lib/objspace";
 import { init as objectspace_init} from "./runtime/object-space";
 import { init as warning_init } from "./runtime/warning";
+import { init as bigdecimal_init } from "./lib/bigdecimal";
 import { obj_id_hash } from "./util/object_id";
 import { RubyString } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
@@ -404,6 +405,7 @@ Runtime.register_native_extension("net/http", net_http_init);
 Runtime.register_native_extension("etc", etc_init);
 Runtime.register_native_extension("pathname", pathname_init);
 Runtime.register_native_extension("objspace", objspace_init);
+Runtime.register_native_extension("bigdecimal", bigdecimal_init);
 
 export enum Visibility {
     public,
