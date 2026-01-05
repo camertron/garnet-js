@@ -92,6 +92,10 @@ export const init = () => {
             return await match_method!.call(await ExecutionContext.current, self, args);
         });
 
+        klass.define_native_method("match?", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const string_klass = await Object.find_constant("String");
+            const match_method = await Object.find_instance_method_under(string_klass!, "match?");
+            return await match_method!.call(await ExecutionContext.current, self, args);
         });
     });
 
