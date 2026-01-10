@@ -44,8 +44,17 @@ export const init = () => {
 
         klass.define_native_singleton_method("glob", async (_self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
             const pattern_str = (await Runtime.coerce_to_string(args[0])).get_data<string>();
-            const base_path = kwargs && await kwargs.has_symbol("base") ? (await Runtime.coerce_to_string(kwargs.get_by_symbol("base")!)).get_data<string>() : Dir.getwd();
             let flags = 0;
+            let base_path;
+
+            if (!vmfs.is_relative(pattern_str)) {
+                // indicates an absolute path
+                base_path = "";
+            } else if (kwargs && await kwargs.has_symbol("base")) {
+                base_path = (await Runtime.coerce_to_string(kwargs.get_by_symbol("base")!)).get_data<string>();
+            } else {
+                base_path = Dir.getwd();
+            }
 
             if (kwargs && await kwargs.has_symbol("flags")) {
                 const f = kwargs.get_by_symbol("flags")!;
