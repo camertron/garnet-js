@@ -18,8 +18,12 @@ let script_path_index: number | null = null;
 
 // current directory
 await ExecutionContext.current.push_onto_load_path(process.env.PWD!);
+
 // path to stdlib
 await ExecutionContext.current.push_onto_load_path(path.resolve(path.join(__dirname, "..", "src", "lib")));
+
+// push all paths in src/gems/* onto the load path (a poor man's Rubygems/Bundler)
+await Garnet.require("rubygems/setup");
 
 await Dir.setwd(process.env.PWD!);
 
