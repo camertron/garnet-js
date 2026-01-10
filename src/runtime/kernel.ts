@@ -367,7 +367,7 @@ export const init = async () => {
     });
 
     mod.define_native_method("__dir__", async (self: RValue, args: RValue[]): Promise<RValue> => {
-        return await RubyString.new(vmfs.dirname(ExecutionContext.current.frame!.iseq.file));
+        return await RubyString.new(vmfs.dirname(ExecutionContext.current.frame!.iseq.absolute_path));
     });
 
     mod.define_native_method("nil?", (self: RValue): RValue => {
