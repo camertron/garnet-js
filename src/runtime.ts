@@ -51,6 +51,7 @@ import { init as objectspace_init} from "./runtime/object-space";
 import { init as warning_init } from "./runtime/warning";
 import { init as bigdecimal_init } from "./lib/bigdecimal";
 import { init as strscan_init } from "./lib/strscan";
+import { init as argf_init } from "./runtime/argf";
 import { obj_id_hash } from "./util/object_id";
 import { RubyString } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
@@ -1554,6 +1555,7 @@ export const init = async () => {
     ruby_vm_init();
     objectspace_init();
     warning_init();
+    argf_init();
 
     ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"] = await (async () => {
         if (is_node) {

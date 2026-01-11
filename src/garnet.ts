@@ -175,6 +175,7 @@ export { Hash } from "./runtime/hash"
 export { Integer } from "./runtime/integer";
 export { Float } from "./runtime/float";
 export { Proc } from "./runtime/proc";
+export { Argf } from "./runtime/argf";
 
 export { Object } from "./runtime/object";
 export { RubyError, LoadError } from "./errors";

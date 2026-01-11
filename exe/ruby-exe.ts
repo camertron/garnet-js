@@ -1,6 +1,6 @@
 import { argv } from "process";
 import * as Garnet from "../src/garnet";
-import { ExecutionContext, Runtime, vmfs, RubyArray, String } from "../src/garnet";
+import { ExecutionContext, Runtime, vmfs, RubyArray, String, Argf } from "../src/garnet";
 import path from "path";
 import { fileURLToPath } from 'url';
 import fs from "fs";
@@ -76,12 +76,16 @@ for (let i = 2; i < argv.length; i ++) {
     }
 }
 
-Garnet.ObjectClass.get_data<Garnet.Class>().constants["ARGV"] = await RubyArray.new(
+const argv_rval = Garnet.ObjectClass.get_data<Garnet.Class>().constants["ARGV"] = await RubyArray.new(
     await Promise.all(
         script_argv.map((arg) => {
             return String.new(arg);
         })
     )
+);
+
+Garnet.ObjectClass.get_data<Garnet.Class>().constants["ARGF"] = await Argf.new(
+    argv_rval.get_data<RubyArray>().elements
 );
 
 let absolute_code_path;
