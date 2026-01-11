@@ -516,9 +516,31 @@ export const init = async () => {
     });
 
     mod.define_native_method("method_defined?", async (self: RValue, args: RValue[]): Promise<RValue> => {
-        const method_name = (await Runtime.coerce_to_string(args[0])).get_data<string>();
-        const inherit = (args[1] || Qfalse).is_truthy();
-        return await Object.find_instance_method_under(self, method_name, true, inherit) ? Qtrue : Qfalse;
+        const [method_name_rval, inherit_rval] = await Args.scan("11", args);
+        const method_name = (await Runtime.coerce_to_string(method_name_rval)).get_data<string>();
+        const inherit = inherit_rval.is_truthy();
+        const method = await Object.find_instance_method_under(self, method_name, true, inherit);
+
+        if (!method) {
+            return Qfalse;
+        }
+
+        return (method.visibility === Visibility.public || method.visibility === Visibility.protected)
+            ? Qtrue
+            : Qfalse;
+    });
+
+    mod.define_native_method("private_method_defined?", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const [method_name_rval, inherit_rval] = await Args.scan("11", args);
+        const method_name = (await Runtime.coerce_to_string(method_name_rval)).get_data<string>();
+        const inherit = inherit_rval.is_truthy();
+        const method = await Object.find_instance_method_under(self, method_name, true, inherit);
+
+        if (!method) {
+            return Qfalse;
+        }
+
+        return method.visibility === Visibility.private ? Qtrue : Qfalse;
     });
 
     mod.define_native_method("class_exec", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: CallData): Promise<RValue> => {
