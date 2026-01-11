@@ -54,6 +54,7 @@ class OnigmoExportsWrapper {
     public memory: ReattachingDataView;
     public OnigEncodingUTF_16LE: number;
     public OnigEncodingUTF_16BE: number;
+    public OnigEncodingASCII: number;
     public OnigSyntaxRuby: number;
     public OnigDefaultCaseFoldFlag: number;
 
@@ -61,6 +62,7 @@ class OnigmoExportsWrapper {
         this.original_exports = original_exports;
         this.memory = new ReattachingDataView(this.original_exports.memory);
         this.OnigEncodingUTF_16LE = original_exports.OnigEncodingUTF_16LE.value;
+        this.OnigEncodingASCII = original_exports.OnigEncodingASCII.value;
         this.OnigSyntaxRuby = original_exports.OnigSyntaxRuby.value;
         this.OnigDefaultCaseFoldFlag = original_exports.OnigDefaultCaseFoldFlag;
     }
@@ -490,6 +492,7 @@ interface OnigmoExports {
 
     OnigEncodingUTF_16LE: WebAssembly.Global;
     OnigEncodingUTF_16BE: WebAssembly.Global;
+    OnigEncodingASCII: WebAssembly.Global;
     OnigSyntaxRuby: WebAssembly.Global;
     OnigDefaultCaseFoldFlag: number;
 
@@ -614,11 +617,19 @@ export class Regexp {
         return new RValue(await this.klass(), this.compile(pattern, flags));
     }
 
-    private static make_compile_info(flags: number): CompileInfoFields {
+    private static make_compile_info(flags: number, encoding: Address): CompileInfoFields {
         return {
+            // This is the number of fields in the struct. It allows for backwards-compatibility
+            // if a sixth field is added, eg. in a future version of Onigmo.
             num_of_elements: 5,
-            pattern_enc: onigmo.exports.OnigEncodingUTF_16LE,
-            target_enc: onigmo.exports.OnigEncodingUTF_16LE,
+
+            // Both pattern and target should use the same encoding to prevent Onigmo from
+            // converting the pattern string from the pattern encoding to the target encoding.
+            // Onigmo doesn't support certain conversions, eg. from UTF-16 -> ASCII, so using
+            // different encodings can cause weird errors.
+            pattern_enc: encoding,
+            target_enc: encoding,
+
             syntax: onigmo.exports.OnigSyntaxRuby,
             option: flags,
             case_fold_flag: onigmo.exports.OnigDefaultCaseFoldFlag
@@ -626,7 +637,8 @@ export class Regexp {
     }
 
     static compile(pat: string, flags: number = ONIG_OPTION_NONE, ascii_encoding?: boolean): Regexp {
-        const compile_info = CompileInfo.create(Regexp.make_compile_info(flags));
+        const encoding = ascii_encoding ? onigmo.exports.OnigEncodingASCII : onigmo.exports.OnigEncodingUTF_16LE;
+        const compile_info = CompileInfo.create(Regexp.make_compile_info(flags, encoding));
         const regexp_ptr = RegexpPtr.create();
         const errorinfo = ErrorInfo.create({enc: 0, par: 0, par_end: 0});
         const pattern = ascii_encoding ? ASCIIString.create(pat) : UTF16String.create(pat);
