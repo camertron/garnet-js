@@ -445,8 +445,9 @@ class ASCIIString {
     }
 
     to_string(): string {
-        const pts = onigmo.exports.memory.buffer.slice(this.start, this.end);
-        return String.fromCharCode(...new Uint8Array(pts));
+        const mem = new Uint8Array(onigmo.exports.memory.buffer);
+        const bytes = mem.slice(this.start, this.end);
+        return String.fromCharCode(...bytes);
     }
 
     static create(str: string): ASCIIString {
@@ -644,7 +645,6 @@ export class Regexp {
             return new Regexp(pat, regexp);
         } else {
             const err_msg = Regexp.error_code_to_string(error_code, errorinfo);
-            console.log(err_msg);
 
             onigmo.exports.free(compile_info.address);
             onigmo.exports.free(regexp_ptr.address);
