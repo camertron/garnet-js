@@ -2078,7 +2078,8 @@ export class Compiler extends Visitor {
             // @TODO: handle all options
             const flags = Regexp.build_flags(node.isIgnoreCase(), node.isMultiLine(), node.isExtended());
             const regexp_class = ObjectClass.get_data<Module>().constants["Regexp"];
-            const regexp = new RValue(regexp_class, Regexp.compile(node.unescaped.value, flags, node.isForcedBinaryEncoding()));
+            const ascii_encoding = node.isForcedBinaryEncoding() || node.isForcedUsAsciiEncoding() || node.isAscii8bit();
+            const regexp = new RValue(regexp_class, Regexp.compile(node.unescaped.value, flags, ascii_encoding));
             this.iseq.putobject({type: "RValue", value: regexp});
         }
     }

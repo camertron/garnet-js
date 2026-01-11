@@ -624,11 +624,11 @@ export class Regexp {
         };
     }
 
-    static compile(pat: string, flags: number = ONIG_OPTION_NONE, forcedBinary?: boolean): Regexp {
+    static compile(pat: string, flags: number = ONIG_OPTION_NONE, ascii_encoding?: boolean): Regexp {
         const compile_info = CompileInfo.create(Regexp.make_compile_info(flags));
         const regexp_ptr = RegexpPtr.create();
         const errorinfo = ErrorInfo.create({enc: 0, par: 0, par_end: 0});
-        const pattern = forcedBinary ? ASCIIString.create(pat) : UTF16String.create(pat);
+        const pattern = ascii_encoding ? ASCIIString.create(pat) : UTF16String.create(pat);
 
         const error_code: ErrorCode = onigmo.exports.onig_new_deluxe(
             regexp_ptr.address, pattern.start, pattern.end, compile_info.address, errorinfo.address
