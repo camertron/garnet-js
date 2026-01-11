@@ -19,6 +19,7 @@ import { Enumerator } from "./enumerator";
 import { Binding } from "./binding";
 import { Method, UnboundMethod } from "./method";
 import { sprintf } from "./printf";
+import { Compiler } from "../compiler";
 
 export class Kernel {
     public static exit_handlers: RValue[] = [];
@@ -82,6 +83,59 @@ export const init = async () => {
         const path = args[0];
         await Runtime.assert_type(path, await RubyString.klass());
         return await Runtime.load(path.get_data<string>(), path.get_data<string>()) ? Qtrue : Qfalse;
+    });
+
+    mod.define_native_method("eval", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+        await Runtime.assert_type(args[0], await RubyString.klass());
+        const code = args[0].get_data<string>();
+        const ec = ExecutionContext.current;
+        let path, line_offset;
+        let binding_rval: RValue | undefined;
+
+        // Second argument can be a Binding, nil, or omitted
+        if (args[1] && args[1] !== Qnil) {
+            if (args[1].klass === await Binding.klass()) {
+                binding_rval = args[1];
+            }
+            // If it's not a Binding and not nil, it's an error in standard Ruby
+            // but we'll just ignore it for now
+        }
+
+        // Third argument is filename (whether second was a Binding, nil, or omitted)
+        if (args[2] && args[2] !== Qnil) {
+            path = (await Runtime.coerce_to_string(args[2])).get_data<string>();
+        }
+
+        // Fourth argument is line number
+        if (args[3] && args[3] !== Qnil) {
+            await Runtime.assert_type(args[3], await Integer.klass());
+            line_offset = args[3].get_data<number>() - 1;  // convert line to offset
+        } else {
+            line_offset = 0;
+        }
+
+        // Default path if not provided
+        if (!path) {
+            path = `(eval at ${ec.frame!.iseq.file}:${ec.frame!.line})`;
+        }
+
+        const iseq = Compiler.compile_string(code, path, path, line_offset);
+
+        // If a binding was provided, use it; otherwise use current context
+        if (binding_rval) {
+            // TODO: Implement eval with binding properly
+            // For now, just run it as a class frame with the binding's self
+            const binding = binding_rval.get_data<Binding>();
+            return await ec.run_class_frame(iseq, binding.self);
+        } else {
+            // Run in the current context with the current self
+            return await ec.run_class_frame(iseq, self);
+        }
+    });
+
+    mod.define_native_singleton_method("eval", async (_self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
+        // Kernel.eval should behave the same as instance method
+        return await mod.call_method(ExecutionContext.current, "eval", args, kwargs, block);
     });
 
     mod.define_native_method("===", async (self: RValue, args: RValue[]): Promise<RValue> => {

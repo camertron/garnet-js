@@ -17,6 +17,7 @@ import { left_pad, sprintf } from "./printf";
 import { Args } from "./arg-scanner";
 import { Kernel } from "./kernel";
 import { Enumerator } from "./enumerator";
+import { dump_string } from "./string-dump";
 
 // 7-bit strings are implicitly valid.
 // If both the valid _and_ 7bit bits are set, the string is broken.
@@ -223,6 +224,13 @@ export const init = () => {
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const str = self.get_data<string>();
             return await RubyString.new(RubyString.inspect(str));
+        });
+
+        klass.define_native_method("dump", async (self: RValue): Promise<RValue> => {
+            const str = self.get_data<string>();
+            const result = `"${dump_string(str)}"`;
+
+            return await RubyString.new(result);
         });
 
         klass.define_native_method("*", async (self: RValue, args: RValue[]): Promise<RValue> => {
