@@ -713,6 +713,7 @@ export class Regexp {
             return null;
         }
 
+        // @TODO: check the regex's encoding and potentially convert str before matching
         const str_ptr = UTF16String.create(str);
         const region = new Region(onigmo.exports.onig_region_new());
 
@@ -750,6 +751,7 @@ export class Regexp {
             return null;
         }
 
+        // @TODO: check the regex's encoding and potentially convert str before matching
         const str_ptr = UTF16String.create(str);
         const region = new Region(onigmo.exports.onig_region_new());
         let last_pos = start * 2;
