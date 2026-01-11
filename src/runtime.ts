@@ -50,6 +50,7 @@ import { init as objspace_init } from "./lib/objspace";
 import { init as objectspace_init} from "./runtime/object-space";
 import { init as warning_init } from "./runtime/warning";
 import { init as bigdecimal_init } from "./lib/bigdecimal";
+import { init as strscan_init } from "./lib/strscan";
 import { obj_id_hash } from "./util/object_id";
 import { RubyString } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
@@ -406,6 +407,7 @@ Runtime.register_native_extension("etc", etc_init);
 Runtime.register_native_extension("pathname", pathname_init);
 Runtime.register_native_extension("objspace", objspace_init);
 Runtime.register_native_extension("bigdecimal", bigdecimal_init);
+Runtime.register_native_extension("strscan", strscan_init);
 
 export enum Visibility {
     public,
