@@ -28,39 +28,51 @@ export default class GetSpecial extends Instruction {
                 throw new NotImplementedError("getspecial LASTLINE");
 
             case GetSpecialType.BACKREF:
-                // If number is 0, return $& (the entire match)
-                // If number > 0, return $1, $2, etc (capture groups)
-                // Compiler shifts number left by 1, so we need to shift it back.
-                const capture_index = this.number >> 1;
+                // this.number encodes the type of backref:
+                // - If lowest bit is 0: numbered reference ($1, $2, etc.) - number >> 1 is the capture index
+                // - If lowest bit is 1: named reference ($&, $+, etc.) - number >> 1 is the character code, eg '&'
+                const is_named = (this.number & 1) === 1;
 
-                if (capture_index === 0) {
-                    // $& (entire match)
-                    context.push(context.frame_svar()!.svars["$&"] || Qnil);
+                if (is_named) {
+                    // named backreference eg. $&
+                    const char_code = this.number >> 1;
+                    const char = String.fromCharCode(char_code);
+                    const svar_name = `$${char}`;
+                    context.push(context.frame_svar()!.svars[svar_name] || Qnil);
                 } else {
-                    // $1, $2, etc (capture groups)
-                    const match_data_rval = context.frame_svar()!.svars["$~"];
+                    // numbered backreference, eg. $1
+                    const capture_index = this.number >> 1;
 
-                    if (!match_data_rval || match_data_rval === Qnil) {
-                        context.push(Qnil);
-                        return null;
-                    }
-
-                    // get the capture group
-                    const match_data = match_data_rval.get_data<MatchData>();
-
-                    if (!match_data || capture_index >= match_data.captures.length) {
-                        context.push(Qnil);
-                        return null;
-                    }
-
-                    const [begin, end] = match_data.captures[capture_index];
-
-                    // -1 means the capture group didn't match
-                    if (begin === -1 || end === -1) {
-                        context.push(Qnil);
+                    if (capture_index === 0) {
+                        // $& (entire match) - this should be handled by the named branch above
+                        // so this case shouldn't actually happen in practice
+                        context.push(context.frame_svar()!.svars["$&"] || Qnil);
                     } else {
-                        const captured_str = match_data.str.slice(begin, end);
-                        context.push(await RubyString.new(captured_str));
+                        // $1, $2, etc (capture groups)
+                        const match_data_rval = context.frame_svar()!.svars["$~"];
+
+                        if (!match_data_rval || match_data_rval === Qnil) {
+                            context.push(Qnil);
+                            return null;
+                        }
+
+                        // get the capture group
+                        const match_data = match_data_rval.get_data<MatchData>();
+
+                        if (!match_data || capture_index >= match_data.captures.length) {
+                            context.push(Qnil);
+                            return null;
+                        }
+
+                        const [begin, end] = match_data.captures[capture_index];
+
+                        // -1 means the capture group didn't match
+                        if (begin === -1 || end === -1) {
+                            context.push(Qnil);
+                        } else {
+                            const captured_str = match_data.str.slice(begin, end);
+                            context.push(await RubyString.new(captured_str));
+                        }
                     }
                 }
 
