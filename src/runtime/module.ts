@@ -728,7 +728,7 @@ export const init = async () => {
             return Qfalse;
         }
 
-        return await is_ancestor_of_or_equal_to(other, self) ? Qtrue : Qfalse;
+        return await is_ancestor_of_or_equal_to(other, self) ? Qtrue : Qnil;
     });
 
     // returns true if self is a subclass of, the same as, or includes the given module
@@ -739,7 +739,7 @@ export const init = async () => {
 
         const other = args[0];
 
-        return await is_ancestor_of_or_equal_to(other, self) ? Qtrue : Qfalse;
+        return await is_ancestor_of_or_equal_to(other, self) ? Qtrue : Qnil;
     });
 
     // returns true if self is a superclass of or included by the given module
@@ -754,7 +754,7 @@ export const init = async () => {
             return Qfalse;
         }
 
-        return await is_ancestor_of_or_equal_to(self, other) ? Qtrue : Qfalse;
+        return await is_ancestor_of_or_equal_to(self, other) ? Qtrue : Qnil;
     });
 
     // returns true if self is a superclass of, the same as, or included by the given module
@@ -765,7 +765,7 @@ export const init = async () => {
 
         const other = args[0];
 
-        return await is_ancestor_of_or_equal_to(self, other) ? Qtrue : Qfalse;
+        return await is_ancestor_of_or_equal_to(self, other) ? Qtrue : Qnil;
     });
 
     mod.define_native_method("class_variable_get", async (self: RValue, args: RValue[]): Promise<RValue> => {
