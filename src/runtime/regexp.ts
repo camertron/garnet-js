@@ -518,7 +518,7 @@ const ONIG_NO_SUPPORT_CONFIG = -2;
 const ONIG_MAX_ERROR_MESSAGE_LEN = 90
 
 export class MatchData {
-    static from_region(str: string, region: Region) {
+    static from_region(str: string, region: Region, bytes_per_char: number = 2) {
         const captures: [number, number][] = [];
 
         for (let i = 0; i < region.num_regs; i ++) {
@@ -529,7 +529,10 @@ export class MatchData {
             if (beg === -1 || end === -1) {
                 captures.push([-1, -1]);
             } else {
-                captures.push([beg / 2, end / 2]);
+                // onigmo returns byte offsets, so divide by bytes_per_char to get character offsets
+                const char_beg = beg / bytes_per_char;
+                const char_end = end / bytes_per_char;
+                captures.push([char_beg, char_end]);
             }
         }
 
@@ -654,7 +657,7 @@ export class Regexp {
             onigmo.exports.free(regexp_ptr.address);
             onigmo.exports.free(errorinfo.address);
 
-            return new Regexp(pat, regexp);
+            return new Regexp(pat, regexp, ascii_encoding || false);
         } else {
             const err_msg = Regexp.error_code_to_string(error_code, errorinfo);
 
@@ -694,10 +697,12 @@ export class Regexp {
 
     public pattern: string;
     private regexp: Address;
+    private ascii_encoding: boolean;
 
-    constructor(pattern: string, regexp: Address) {
+    constructor(pattern: string, regexp: Address, ascii_encoding: boolean = false) {
         this.pattern = pattern;
         this.regexp = regexp;
+        this.ascii_encoding = ascii_encoding;
     }
 
     search(str: string, start: number = 0, end?: number): MatchData | null {
@@ -713,12 +718,15 @@ export class Regexp {
             return null;
         }
 
-        // @TODO: check the regex's encoding and potentially convert str before matching
-        const str_ptr = UTF16String.create(str);
+        // use the same encoding that was used to compile the regex, otherwise we get
+        // extremely weird behavior
+        const str_ptr = this.ascii_encoding ? ASCIIString.create(str) : UTF16String.create(str);
         const region = new Region(onigmo.exports.onig_region_new());
 
+        // the only two options are ASCII (eg. binary) and UTF-16 (JavaScript encoding)
+        const bytes_per_char = this.ascii_encoding ? 1 : 2;
         const exit_code_or_position = onigmo.exports.onig_search(
-            this.regexp, str_ptr.start, str_ptr.end, str_ptr.start + (start * 2), str_ptr.start + (end * 2), region.address, ONIG_OPTION_NONE
+            this.regexp, str_ptr.start, str_ptr.end, str_ptr.start + (start * bytes_per_char), str_ptr.start + (end * bytes_per_char), region.address, ONIG_OPTION_NONE
         );
 
         let result: MatchData | null = null;
@@ -729,7 +737,7 @@ export class Regexp {
         } else if (exit_code_or_position == ONIG_MISMATCH) {
             result = null;
         } else {
-            result = MatchData.from_region(str, region);
+            result = MatchData.from_region(str, region, bytes_per_char);
         }
 
         onigmo.exports.free(str_ptr.start);
@@ -751,14 +759,16 @@ export class Regexp {
             return null;
         }
 
-        // @TODO: check the regex's encoding and potentially convert str before matching
-        const str_ptr = UTF16String.create(str);
+        // use the same encoding that was used to compile the regex, otherwise we get
+        // extremely weird behavior
+        const str_ptr = this.ascii_encoding ? ASCIIString.create(str) : UTF16String.create(str);
         const region = new Region(onigmo.exports.onig_region_new());
-        let last_pos = start * 2;
+        const bytes_per_char = this.ascii_encoding ? 1 : 2;
+        let last_pos = start * bytes_per_char;
 
         while (true) {
             const exit_code_or_position = onigmo.exports.onig_search(
-                this.regexp, str_ptr.start, str_ptr.end, str_ptr.start + last_pos, str_ptr.start + (end * 2), region.address, ONIG_OPTION_NONE
+                this.regexp, str_ptr.start, str_ptr.end, str_ptr.start + last_pos, str_ptr.start + (end * bytes_per_char), region.address, ONIG_OPTION_NONE
             );
 
             if (exit_code_or_position <= -2) {
@@ -768,7 +778,7 @@ export class Regexp {
                 break;
             }
 
-            if (!(await callback(MatchData.from_region(str, region)))) {
+            if (!(await callback(MatchData.from_region(str, region, bytes_per_char)))) {
                 break;
             }
 
