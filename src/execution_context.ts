@@ -866,8 +866,22 @@ export class ExecutionContext {
         // If there is a splat argument, then we'll set that up here. It will
         // slurp up all of the remaining positional arguments.
         if (iseq.argument_options.rest_start != null) {
-            // Only store the splat array if there's a local variable for it (i.e., it's not an anonymous splat)
-            if (local_index >= 0) {
+            // check if there's a named splat parameter in the local table
+            const rest_lookup = iseq.local_table.find("*");
+
+            if (rest_lookup) {
+                // named splat (forwarding)
+                if (iseq.argument_options.post_start != null) {
+                    const length = locals.length - (iseq.argument_options.post_num || 0);
+                    this.local_set(rest_lookup.index, 0, await RubyArray.new(locals.splice(0, length)));
+                } else {
+                    this.local_set(rest_lookup.index, 0, await RubyArray.new([...locals]))
+                    locals.length = 0;
+                }
+
+                local_index = this.inc_local_index(local_index, iseq);
+            } else if (local_index >= 0) {
+                // named splat
                 if (iseq.argument_options.post_start != null) {
                     const length = locals.length - (iseq.argument_options.post_num || 0);
                     this.local_set(local_index, 0, await RubyArray.new(locals.splice(0, length)));
