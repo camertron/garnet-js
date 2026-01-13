@@ -6,7 +6,7 @@ import { Trie } from "./util/trie";
 import { Dir } from "./runtime/dir";
 import { ErrnoENOENT } from "./errors";
 
-interface IFileHandle {
+export interface IFileHandle {
     offset(): number;
     is_readable(): boolean;
     is_writable(): boolean;
@@ -78,7 +78,7 @@ abstract class FileSystem {
 
     // operations
     abstract each_child_path(base_path: string, cb: (child_path: string) => Promise<void>): Promise<void>;
-    abstract open(path: string): IFileHandle;
+    abstract open(path: string, flags?: string, mode?: number): IFileHandle;
     abstract read(path: string): Uint8Array;
     abstract write(path: string, bytes: Uint8Array): void;
 
@@ -255,6 +255,43 @@ class VirtualFileSystem extends FileSystem {
     }
 }
 
+class NodeFileDescriptor implements IFileHandle {
+    public fd: number;
+    public flags: string;
+    public mode: number;
+
+    constructor(fd: number, flags: string, mode: number) {
+        this.fd = fd;
+        this.flags = flags;
+        this.mode = mode;
+    }
+
+    // we'll have to keep track of the offset ourselves since node doesn't expose it
+    offset(): number {
+        throw new Error("Method not implemented.");
+    }
+
+    is_readable(): boolean {
+        return true;
+    }
+
+    is_writable(): boolean {
+        return this.flags.startsWith("w");
+    }
+
+    read(length: number): Uint8Array {
+        throw new Error("Method not implemented.");
+    }
+
+    write(bytes: Uint8Array): void {
+        throw new Error("Method not implemented.");
+    }
+
+    close(): void {
+        fs.closeSync(this.fd);
+    }
+}
+
 class NodeFileSystem extends FileSystem {
     get separator(): string {
         return path.sep;
@@ -304,11 +341,17 @@ class NodeFileSystem extends FileSystem {
             path = this.join_paths(Dir.getwd(), path);
         }
 
-        try {
+        return this.error_wrap(() => {
             return fs.realpathSync(path);
+        });
+    }
+
+    private error_wrap<T>(cb: () => T): T {
+        try {
+            return cb();
         } catch (e) {
             if (e instanceof Error && "code" in e && e["code"] === "ENOENT") {
-                throw new ErrnoENOENT(`No such file or directory - ${orig_path}`);
+                throw new ErrnoENOENT(`No such file or directory - ${(e as any).path}`);
             }
 
             throw e;
@@ -321,8 +364,10 @@ class NodeFileSystem extends FileSystem {
         }
     }
 
-    open(path: string): IFileHandle {
-        throw new Error("Method not implemented.");
+    open(path: string, flags: string, mode: number): IFileHandle {
+        return this.error_wrap(() => {
+            return new NodeFileDescriptor(fs.openSync(path, flags, mode), flags, mode);
+        });
     }
 
     read(path: string): Uint8Array {

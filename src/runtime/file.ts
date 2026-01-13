@@ -1,11 +1,55 @@
-import { ErrnoENOENT } from "../errors";
+import { ErrnoENOENT, NameError } from "../errors";
 import { Class, IOClass, RValue, Runtime, Qtrue, Qfalse, Qnil } from "../runtime"
-import { vmfs } from "../vmfs";
+import { IFileHandle, vmfs } from "../vmfs";
 import { Dir } from "./dir";
 import { RubyString } from "../runtime/string";
 import { flatten_string_array } from "../util/array_utils";
 import { is_node } from "../env";
 import { Args } from "./arg-scanner";
+import { Hash } from "./hash";
+import { Object } from "../runtime/object";
+import { Integer } from "./integer";
+
+export class RubyFile {
+    private static klass_: RValue;
+
+    static subclass_new(klass: RValue, path: RValue, mode: RValue, perm: RValue, opts?: Hash): RValue {
+        return new RValue(
+            klass, new RubyFile(
+                path.get_data<string>(),
+                mode.get_data<string>(),
+                perm.get_data<number>(),
+                opts
+            )
+        );
+    }
+
+    static async new(path: RValue, mode: RValue, perm: RValue, opts?: Hash): Promise<RValue> {
+        return this.subclass_new(await this.klass(), path, mode, perm, opts);
+    }
+
+    static async klass(): Promise<RValue> {
+        if (!this.klass_) {
+            const klass = await Object.find_constant("File");
+
+            if (klass) {
+                this.klass_ = klass;
+            } else {
+                throw new NameError("missing constant File");
+            }
+        }
+
+        return this.klass_;
+    }
+
+    public descriptor: IFileHandle
+    public opts: Hash | undefined;
+
+    constructor(path: string, mode: string, perm: number, opts?: Hash) {
+        this.descriptor = vmfs.open(path, mode, perm);
+        this.opts = opts; // not doing anything with this yet
+    }
+}
 
 const path_from_realpath_args = async (args: RValue[]): Promise<string> => {
     await Runtime.assert_type(args[0], await RubyString.klass());
@@ -217,6 +261,37 @@ export const init = async () => {
             // @TODO: use default encoding instead of hard-coding utf-8
             const decoder = new TextDecoder("utf-8");
             return RubyString.new(decoder.decode(vmfs.read(args[0].get_data<string>())));
+        });
+
+        const default_mode = await RubyString.new("r");
+        const default_perm = await Integer.get(0o666);
+
+        klass.define_native_singleton_method("new", async (self: RValue, args: RValue[], kwargs?: Hash): Promise<RValue> => {
+            const [path_rval, mode_rval, perm_rval] = await Args.scan("12", args);
+
+            return RubyFile.subclass_new(
+                self,
+                path_rval,
+                mode_rval || default_mode,
+                perm_rval || default_perm,
+                kwargs
+            );
+        });
+
+        klass.define_native_singleton_method("open", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const file_rval = await Object.send(self, "new", args, kwargs);
+            const file = file_rval.get_data<RubyFile>();
+            let return_value = file_rval;
+
+            try {
+                if (block) {
+                    return_value = await Object.send(block, "call", [file_rval]);
+                }
+
+                return return_value;
+            } finally {
+                file.descriptor.close();
+            }
         });
     });
 };
