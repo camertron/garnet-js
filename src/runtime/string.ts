@@ -984,7 +984,7 @@ export const init = () => {
         klass.define_native_method("index", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const [string_or_re, offset_rval] = await Args.scan("11", args);
             const data = self.get_data<string>();
-            let offset = offset_rval === Qnil ? 0 : offset_rval.get_data<number>();
+            let offset = offset_rval === undefined ? 0 : offset_rval.get_data<number>();
 
             // handle negative offset by wrapping around
             if (offset < 0) {
@@ -1018,7 +1018,7 @@ export const init = () => {
         klass.define_native_method("rindex", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const [string_or_re, offset_rval] = await Args.scan("11", args);
             const data = self.get_data<string>();
-            const offset = offset_rval === Qnil ? undefined : offset_rval.get_data<number>();
+            const offset = offset_rval === undefined ? undefined : offset_rval.get_data<number>();
 
             switch (string_or_re.klass) {
                 case await Regexp.klass():
