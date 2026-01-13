@@ -1,5 +1,6 @@
 import { ArgumentError } from "../errors";
 import { Qnil, RValue } from "../runtime";
+import { Hash } from "./hash";
 
 type DigitTuples = {
     "0": [],
@@ -18,14 +19,31 @@ type DigitTuples = {
 type TupleOfLength<N extends number, T, R extends unknown[] = []> =
     R['length'] extends N ? R : TupleOfLength<N, T, [T, ...R]>;
 
-export type ScannedArgs<S extends string, T, R extends unknown[] = []> =
+// Helper type to track position in pattern: 'required' | 'optional' | 'splat' | 'trailing'
+type ScannedArgsImpl<
+    S extends string,
+    T,
+    R extends unknown[] = [],
+    Position extends 'required' | 'optional' | 'splat' | 'trailing' = 'required'
+> =
     S extends `${infer First}${infer Rest}`
         ? First extends '*'
-            ? ScannedArgs<Rest, T, [...R, T[]]>
+            ? ScannedArgsImpl<Rest, T, [...R, T[]], 'splat'>
             : First extends keyof DigitTuples
-                ? ScannedArgs<Rest, T, [...R, ...TupleOfLength<DigitTuples[First]['length'], T>]>
+                ? Position extends 'required'
+                    // First digit: required args (type T)
+                    ? ScannedArgsImpl<Rest, T, [...R, ...TupleOfLength<DigitTuples[First]['length'], T>], 'optional'>
+                    : Position extends 'optional'
+                        // Second digit: optional args (type T | undefined)
+                        ? ScannedArgsImpl<Rest, T, [...R, ...TupleOfLength<DigitTuples[First]['length'], T | undefined>], 'splat'>
+                        : Position extends 'splat'
+                            // After splat: trailing required args (type T)
+                            ? ScannedArgsImpl<Rest, T, [...R, ...TupleOfLength<DigitTuples[First]['length'], T>], 'trailing'>
+                            : R
                 : R
         : R;
+
+export type ScannedArgs<S extends string, T> = ScannedArgsImpl<S, T>;
 
 export class ArgSignature {
     public required_args: number = 0;
@@ -116,11 +134,11 @@ export const Args = {
             signature.trailing_required_args
         );
 
-        const optional_args = args.splice(0, signature.optional_args);
+        const optional_args: Array<RValue | undefined> = args.splice(0, signature.optional_args);
 
         // fill in missing optional args with nil
         for (let i = 0; i < signature.optional_args - optional_args.length; i ++) {
-            optional_args.push(Qnil);
+            optional_args.push(undefined);
         }
 
         const splat_args = args;
@@ -144,6 +162,14 @@ export const Args = {
             throw new ArgumentError(
                 `wrong number of arguments (given ${argc}, expected ${arg_range}${max_upper > max_lower ? "+" : ""})`
             );
+        }
+    },
+
+    get_kwarg: async (key: string, kwargs?: Hash, default_value?: RValue) => {
+        if (kwargs && await kwargs.has_symbol(key)) {
+            return kwargs.get_by_symbol(key);
+        } else {
+            return default_value || Qnil;
         }
     }
 }
