@@ -1,7 +1,8 @@
-import { Class, ObjectClass, Qfalse, Qtrue, RValue, Runtime } from "../runtime";
+import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { CR_7BIT, CR_UNKNOWN, CR_VALID, RubyString as RubyString } from "../runtime/string";
 import { ArgumentError, EncodingCompatibilityError } from "../errors";
 import { Object } from "../runtime/object";
+import { Args } from "./arg-scanner";
 
 export abstract class Encoding {
     private static default_: RValue;
@@ -527,6 +528,18 @@ export const init = async () => {
     const EncodingClass = Runtime.define_class("Encoding", ObjectClass, async (klass: Class) => {
         // making new Encoding instances cannot be done from Ruby land
         klass.get_singleton_class().get_data<Class>().undef_method("new");
+
+        await Object.send(klass.get_singleton_class(), "attr_accessor", [await Runtime.intern("default_external")]);
+        await Object.send(klass.get_singleton_class(), "attr_accessor", [await Runtime.intern("default_internal")]);
+        await Object.send(klass.rval, "default_external=", [await Encoding.get("utf-16le")!]);
+
+        klass.define_native_singleton_method("find", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+            const [name_rval] = await Args.scan("1", args);
+            await Runtime.assert_type(name_rval, await RubyString.klass());
+
+            const name = name_rval.get_data<string>();
+            return Encoding.get(name) || Qnil;
+        });
 
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             return await RubyString.new(`#<Encoding:${self.get_data<Encoding>().name}>`);
