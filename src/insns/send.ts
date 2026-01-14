@@ -1,4 +1,5 @@
 import { MethodCallData, CallDataFlag } from "../call_data";
+import { extract_kwargs_from_forwarded_args } from "../util/kwargs_utils";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import { Qnil, Qtrue, RubyArray } from "../garnet";
 import Instruction from "../instruction";
@@ -43,8 +44,14 @@ export default class Send extends Instruction {
             }
         }
 
-        const args = context.popn(this.call_data.argc);
+        let args = context.popn(this.call_data.argc);
         const receiver = context.pop()!;
+
+        // Extract kwargs from the last positional arg if KW_SPLAT_FWD is set.
+        // This happens when arguments are forwarded with `...`.
+        if (this.call_data.has_flag(CallDataFlag.KW_SPLAT_FWD)) {
+            [args, kwargs] = await extract_kwargs_from_forwarded_args(args);
+        }
 
         const result = await Object.send(receiver, this.call_data, args, kwargs, block);
         context.push(result);

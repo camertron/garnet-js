@@ -787,11 +787,6 @@ export class ExecutionContext {
             kwargs = undefined;
         }
 
-        // Pop forwarded kwargs off the positional args array
-        if (!kwargs && call_data.has_flag(CallDataFlag.KW_SPLAT_FWD)) {
-            kwargs = locals.pop()!.get_data<Hash>();
-        }
-
         if (!block && call_data && call_data.has_flag(CallDataFlag.ARGS_BLOCKARG)) {
             if (locals.length > 0 && locals[locals.length - 1].klass === await Proc.klass()) {
                 block = locals.pop();

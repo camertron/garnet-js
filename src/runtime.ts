@@ -499,11 +499,6 @@ export class NativeCallable extends Callable {
             }
         }
 
-        if (call_data?.has_flag(CallDataFlag.KW_SPLAT_FWD)) {
-            kwargs = args[args.length - 1].get_data<RubyHash>();
-            args = args.slice(0, args.length - 1);
-        }
-
         return await this.method(receiver, args, kwargs, block, call_data);
     }
 }

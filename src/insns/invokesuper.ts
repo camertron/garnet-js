@@ -1,4 +1,5 @@
 import { MethodCallData, CallDataFlag } from "../call_data";
+import { extract_kwargs_from_forwarded_args } from "../util/kwargs_utils";
 import { NoMethodError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import { BlockFrame, MethodFrame } from "../frame";
@@ -78,7 +79,14 @@ export default class InvokeSuper extends Instruction {
                         }
                     }
 
-                    const args = context.popn(this.call_data.argc);
+                    let args = context.popn(this.call_data.argc);
+
+                    // Extract kwargs from the last positional arg if KW_SPLAT_FWD is set.
+                    // This happens when arguments are forwarded with `...`.
+                    if (this.call_data.has_flag(CallDataFlag.KW_SPLAT_FWD)) {
+                        [args, kwargs] = await extract_kwargs_from_forwarded_args(args);
+                    }
+
                     result = method.call(context, self, args, kwargs, block, this.call_data);
                 }
 
