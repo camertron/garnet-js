@@ -133,9 +133,9 @@ export const init = async () => {
         }
     });
 
-    mod.define_native_singleton_method("eval", async (_self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
+    mod.define_native_singleton_method("eval", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
         // Kernel.eval should behave the same as instance method
-        return await mod.call_method(ExecutionContext.current, "eval", args, kwargs, block);
+        return await Object.send(self, "eval", args, kwargs, block);
     });
 
     mod.define_native_method("===", async (self: RValue, args: RValue[]): Promise<RValue> => {
