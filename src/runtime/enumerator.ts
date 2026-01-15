@@ -65,7 +65,7 @@ class MethodRefEnumerator extends Enumerator {
 
     async next(): Promise<RValue> {
         if (!this.enumerator) {
-            const method = Object.find_method_under(this.receiver, this.method_name);
+            const method = await Object.find_method_under(this.receiver, this.method_name);
 
             if (!method) {
                 const inspect_str = (await Object.send(this.receiver, "inspect")).get_data<string>();
