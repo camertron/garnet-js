@@ -1,7 +1,7 @@
 import { is_node } from "../env";
 import { ArgumentError, IRubyError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
 import { BreakError, CallingConvention, ExecutionContext, ReturnError, ThrowError } from "../execution_context";
-import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, Visibility, Callable, ObjectClass, InterpretedCallable, NativeCallable, STDERR, IO } from "../runtime";
+import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, Visibility, Callable, ObjectClass, InterpretedCallable, NativeCallable, STDERR, STDOUT, IO } from "../runtime";
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
@@ -20,6 +20,7 @@ import { Binding } from "./binding";
 import { Method, UnboundMethod } from "./method";
 import { sprintf } from "./printf";
 import { Compiler } from "../compiler";
+import { Args } from "./arg-scanner";
 
 export class Kernel {
     public static exit_handlers: RValue[] = [];
@@ -775,10 +776,36 @@ export const init = async () => {
         return await sprintf(args[0], args.slice(1));
     });
 
-    mod.define_native_method("warn", async (self: RValue, args: RValue[]): Promise<RValue> => {
+    mod.define_native_method("warn", async (self: RValue, args: RValue[], kwargs?: Hash): Promise<RValue> => {
+        let uplevel = 0;
+        const uplevel_rval = await Args.get_kwarg("uplevel", kwargs);
+
+        if (uplevel_rval) {
+            await Runtime.assert_type(uplevel_rval, await Integer.klass());
+
+            uplevel = uplevel_rval.get_data<number>();
+
+            if (uplevel < 0) {
+                throw new ArgumentError("negative level");
+            }
+        }
+
         for (const arg of args) {
             const str = (await Runtime.coerce_to_string(arg)).get_data<string>();
-            STDERR.get_data<IO>().write(str.endsWith("\n") ? str : `${str}\n`);
+            let output = str.endsWith("\n") ? str : `${str}\n`;
+
+            // prepend caller location if uplevel is specified
+            if (uplevel > 0) {
+                const backtrace = ExecutionContext.current.create_backtrace(uplevel, 1);
+
+                if (backtrace.length > 0) {
+                    const [path, line_and_label] = backtrace[0].split(":");
+                    const [line, _label] = line_and_label.split(" in ");
+                    output = `${path}:${line}: warning: ${output}`;
+                }
+            }
+
+            STDERR.get_data<IO>().write(output);
         }
 
         return Qnil;
