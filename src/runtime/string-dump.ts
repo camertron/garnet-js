@@ -1,5 +1,5 @@
 const dump_map = new Map([
-    ['\a', '\\a'],
+    ['\x07', '\\a'],  // bell character
     ['\b', '\\b'],
     ['\t', '\\t'],
     ['\n', '\\n'],
