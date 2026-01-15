@@ -665,7 +665,12 @@ export const init = () => {
 
                 str.data = str.get_data<string>() + encoding.codepoint_to_utf16(num);
             } else {
-                await Encoding.enc_cr_str_buf_cat(str, await Runtime.coerce_to_string(val));
+                str.data = str.get_data<string>() + (await Runtime.coerce_to_string(val)).get_data<string>();
+
+                // I think str_buf_cat is overkill here. Since all our strings are UTF-16 under the hood,
+                // we should be able to just glue them together
+
+                // await Encoding.enc_cr_str_buf_cat(str, await Runtime.coerce_to_string(val));
             }
         }
 
