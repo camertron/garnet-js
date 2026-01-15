@@ -6,6 +6,7 @@ import * as WASM from "../wasm";
 import { Integer } from "./integer";
 import { Object } from "./object";
 import { RubyArray } from "../runtime/array";
+import { Args } from "./arg-scanner";
 
 let onigmo: Onigmo;
 let inited = false;
@@ -184,6 +185,53 @@ export const init = async () => {
             }
 
             return Qtrue;
+        });
+
+        const escape_re = /[\[\]\{\}\(\)\|\-\*\.\\\?\+\^\$\# \t\n\r\f\v]/;
+
+        klass.define_native_singleton_method("escape", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+            const [input_rval] = await Args.scan("1", args);
+            const string_rval = await Runtime.coerce_to_string(input_rval);
+
+            if (!escape_re.test(string_rval.get_data<string>())) {
+                return string_rval;
+            }
+
+            let result = [];
+
+            for (const char of string_rval.get_data<string>()) {
+                switch (char) {
+                    case '[': case ']': case '{': case '}':
+                    case '(': case ')': case '|': case '-':
+                    case '*': case '.': case '\\':
+                    case '?': case '+': case '^': case '$':
+                    case '#':
+                        result.push("\\", char);
+                        break;
+                    case ' ':
+                        result.push("\\ ");
+                        break;
+                    case '\t':
+                        result.push("\\t");
+                        break;
+                    case '\n':
+                        result.push("\\n");
+                        break;
+                    case '\r':
+                        result.push("\\r");
+                        break;
+                    case '\f':
+                        result.push("\\f");
+                        break;
+                    case '\v':
+                        result.push("\\v");
+                        break;
+                    default:
+                        result.push(char);
+                }
+            }
+
+            return RubyString.new(result.join(""));
         });
     });
 
