@@ -77,7 +77,10 @@ export abstract class Encoding {
 
         if (!e1 || !e2) return null;
 
-        if (encoding_conversions.has(`${e1.get_data<Encoding>().name}:${e2.get_data<Encoding>().name}`)) {
+        const e1_name = normalize_enc_name(e1.get_data<Encoding>().name);
+        const e2_name = normalize_enc_name(e2.get_data<Encoding>().name);
+
+        if (encoding_conversions.has(`${e1_name}:${e2_name}`)) {
             return e2;
         }
 
