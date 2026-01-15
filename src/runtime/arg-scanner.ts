@@ -165,11 +165,11 @@ export const Args = {
         }
     },
 
-    get_kwarg: async (key: string, kwargs?: Hash, default_value?: RValue) => {
+    get_kwarg: async (key: string, kwargs?: Hash, default_value?: RValue): Promise<RValue | undefined> => {
         if (kwargs && await kwargs.has_symbol(key)) {
             return kwargs.get_by_symbol(key);
         } else {
-            return default_value || Qnil;
+            return default_value || undefined;
         }
     }
 }

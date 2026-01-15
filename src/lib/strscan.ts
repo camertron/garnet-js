@@ -1,5 +1,5 @@
 import { NameError } from "../errors";
-import { Class, ObjectClass, Qnil, Runtime, RValue } from "../runtime";
+import { Class, ObjectClass, Qfalse, Qnil, Runtime, RValue } from "../runtime";
 import { Args } from "../runtime/arg-scanner";
 import { Encoding } from "../runtime/encoding";
 import { Hash } from "../runtime/hash";
@@ -79,7 +79,7 @@ export const init = () => {
             const [str_rval] = await Args.scan("1", args);
             const str = await Runtime.coerce_to_string(str_rval);
             const fixed_anchor = await Args.get_kwarg("fixed_anchor", kwargs);
-            return await StringScanner.subclass_new(self, str, fixed_anchor);
+            return await StringScanner.subclass_new(self, str, fixed_anchor || Qfalse);
         });
 
         klass.define_native_method("scan", async (self: RValue, args: RValue[]): Promise<RValue> => {
