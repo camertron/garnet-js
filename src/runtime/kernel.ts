@@ -425,6 +425,16 @@ export const init = async () => {
         return await RubyString.new(vmfs.dirname(ExecutionContext.current.frame!.iseq.absolute_path));
     });
 
+    mod.define_native_method("__method__", async (self: RValue): Promise<RValue> => {
+        const current_iseq = ExecutionContext.current.frame?.iseq;
+
+        if (current_iseq?.type === 'method') {
+            return Runtime.intern(current_iseq.name);
+        }
+
+        return Qnil;
+    });
+
     mod.define_native_method("nil?", (self: RValue): RValue => {
         return self === Qnil ? Qtrue : Qfalse;
     });
