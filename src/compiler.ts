@@ -221,6 +221,7 @@ export class Compiler extends Visitor {
         this.local_depth = 0;
         this.local_catch_table_stack = new CatchTableStack();
         this.line_offset = line;
+        this.current_line = 1;
         this.used_stack = [];
         this.lexical_scope_stack = new LexicalScopeStack();
     }
