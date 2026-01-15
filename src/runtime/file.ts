@@ -42,7 +42,7 @@ export class RubyFile {
         return this.klass_;
     }
 
-    public descriptor: IFileHandle
+    public descriptor: IFileHandle | null
     public opts: Hash | undefined;
 
     constructor(path: string, mode: string, perm: number, opts?: Hash) {
@@ -290,8 +290,22 @@ export const init = async () => {
 
                 return return_value;
             } finally {
-                file.descriptor.close();
+                if (file.descriptor) {
+                    file.descriptor.close();
+                    file.descriptor = null;
+                }
             }
+        });
+
+        klass.define_native_method("close", (self: RValue, _args: RValue[]): RValue => {
+            const file = self.get_data<RubyFile>();
+
+            if (file && file.descriptor) {
+                file.descriptor.close();
+                file.descriptor = null;
+            }
+
+            return Qnil;
         });
     });
 };
