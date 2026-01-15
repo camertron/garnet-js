@@ -815,10 +815,12 @@ export const init = () => {
         });
 
         klass.define_native_method("encode!", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [target_encoding_rval] = await Args.scan("1", args);
             const encoding_arg = await Encoding.coerce(args[0]);
+            const target_encoding_arg = await Encoding.coerce(target_encoding_rval);
 
-            if (encoding_arg) {
-                const target_encoding = await Encoding.supported_conversion(self, encoding_arg);
+            if (target_encoding_arg) {
+                const target_encoding = await Encoding.supported_conversion(self, target_encoding_arg);
 
                 if (target_encoding) {
                     await RubyString.set_encoding(self, target_encoding);
@@ -827,27 +829,42 @@ export const init = () => {
             }
 
             const self_encoding = await RubyString.get_encoding_rval(self);
+            let target_encoding_str: string;
+
+            if (await Kernel.is_a(target_encoding_rval, await Encoding.encoding_class_rval())) {
+                target_encoding_str = target_encoding_rval.get_data<Encoding>().name;
+            } else {
+                target_encoding_str = (await Runtime.coerce_to_string(target_encoding_rval)).get_data<string>();
+            }
 
             throw new EncodingConverterNotFoundError(
-                `code converter not found (${self_encoding.get_data<Encoding>().name} to ${args[0].get_data<string>()})`
+                `code converter not found (${self_encoding.get_data<Encoding>().name} to ${target_encoding_str})`
             );
         });
 
         klass.define_native_method("encode", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            const encoding_arg = await Encoding.coerce(args[0]);
+            const [target_encoding_rval] = await Args.scan("1", args);
+            const target_encoding_arg = await Encoding.coerce(target_encoding_rval);
 
-            if (encoding_arg) {
-                if (await Encoding.supported_conversion(self, encoding_arg)) {
+            if (target_encoding_arg) {
+                if (await Encoding.supported_conversion(self, target_encoding_arg)) {
                     const new_str = await RubyString.new(self.get_data<string>());
-                    RubyString.set_encoding(new_str, encoding_arg);
+                    RubyString.set_encoding(new_str, target_encoding_arg);
                     return new_str;
                 }
             }
 
             const self_encoding = await RubyString.get_encoding_rval(self);
+            let target_encoding_str: string;
+
+            if (await Kernel.is_a(target_encoding_rval, await Encoding.encoding_class_rval())) {
+                target_encoding_str = target_encoding_rval.get_data<Encoding>().name;
+            } else {
+                target_encoding_str = (await Runtime.coerce_to_string(target_encoding_rval)).get_data<string>();
+            }
 
             throw new EncodingConverterNotFoundError(
-                `code converter not found (${self_encoding.get_data<Encoding>().name} to ${args[0].get_data<string>()})`
+                `code converter not found (${self_encoding.get_data<Encoding>().name} to ${target_encoding_str})`
             );
         });
 
