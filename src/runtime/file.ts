@@ -269,9 +269,12 @@ export const init = async () => {
         klass.define_native_singleton_method("new", async (self: RValue, args: RValue[], kwargs?: Hash): Promise<RValue> => {
             const [path_rval, mode_rval, perm_rval] = await Args.scan("12", args);
 
+            // Coerce path to string - this will raise TypeError if path is nil
+            const path_str_rval = await Runtime.coerce_to_string(path_rval);
+
             return RubyFile.subclass_new(
                 self,
-                path_rval,
+                path_str_rval,
                 mode_rval || default_mode,
                 perm_rval || default_perm,
                 kwargs
