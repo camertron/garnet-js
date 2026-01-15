@@ -8,6 +8,9 @@ import { RubyArray } from "../runtime/array";
  *
  * When forwarding with `...`, the args are wrapped in an array, and the kwargs hash
  * (if present) is the last element of that array.
+ *
+ * When there are other arguments before the `...`, they are passed as separate arguments,
+ * and the forwarded arguments are in the last argument as an array.
  */
 export async function extract_kwargs_from_forwarded_args(args: RValue[]): Promise<[RValue[], Hash | undefined]> {
     if (args.length === 0) {
@@ -30,6 +33,11 @@ export async function extract_kwargs_from_forwarded_args(args: RValue[]): Promis
         } else {
             // no kwargs, just use all array elements as args
             extracted_args = arr.elements;
+        }
+
+        // If there are other arguments before the forwarded array, prepend them
+        if (args.length > 1) {
+            extracted_args = [...args.slice(0, args.length - 1), ...extracted_args];
         }
     } else {
         // not an array, extract kwargs directly (NOTE: shouldn't actually happen with `...` but handle it just in case)
