@@ -7,7 +7,7 @@ import { NameError } from "../errors";
 export class Range {
     private static klass_: RValue;
 
-    private static async klass(): Promise<RValue> {
+    static async klass(): Promise<RValue> {
         const klass = await Object.find_constant("Range");
 
         if (klass) {

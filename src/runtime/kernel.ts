@@ -895,4 +895,99 @@ export const init = async () => {
             );
         }
     });
+
+    // Simple linear congruential generator for seeded random numbers
+    // When srand is called, we use this PRNG; otherwise we use Math.random()
+    let random_seed: number | null = null;
+
+    // LCG parameters (same as used in many implementations)
+    const a = 1103515245;
+    const c = 12345;
+    const m = 2147483648; // 2^31
+
+    const next_random = (): number => {
+        if (random_seed === null) {
+            // no seed set, use Math.random()
+            return Math.random();
+        }
+
+        random_seed = (a * random_seed + c) % m;
+        return random_seed / m;
+    };
+
+    mod.define_native_method("srand", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+        const old_seed = random_seed === null ? Date.now() : random_seed;
+
+        if (args.length > 0) {
+            const seed_arg = args[0];
+            await Runtime.assert_type(seed_arg, await Integer.klass(), await Float.klass());
+            random_seed = Math.abs(Math.floor(seed_arg.get_data<number>()));
+        } else {
+            // Use current time as seed
+            random_seed = Date.now();
+        }
+
+        return await Integer.get(old_seed);
+    });
+
+    mod.define_native_method("rand", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+        if (args.length === 0) {
+            return await Float.new(next_random());
+        }
+
+        const max_arg = args[0];
+        await Runtime.assert_type(max_arg, await Integer.klass(), await Float.klass(), await Range.klass());
+
+        if (max_arg.klass === await Integer.klass()) {
+            const max = max_arg.get_data<number>();
+
+            if (max <= 0) {
+                throw new ArgumentError(`invalid argument - ${max}`);
+            }
+
+            // Return an integer between 0 and max-1
+            return await Integer.get(Math.floor(next_random() * max));
+        } else if (max_arg.klass === await Float.klass()) {
+            const max = max_arg.get_data<number>();
+
+            if (max < 0) {
+                throw new ArgumentError(`invalid argument - ${max}`);
+            }
+
+            if (max < 1.0) {
+                // For values between -1 and 1, return a float
+                return await Float.new(next_random() * max);
+            }
+
+            // For values >= 1.0, return an integer
+            return await Integer.get(Math.floor(next_random() * max));
+        } else if (max_arg.klass === await Range.klass()) {
+            const range = max_arg.get_data<Range>();
+            const begin_val = range.begin;
+            const end_val = range.end;
+
+            if (begin_val.klass === await Integer.klass() && end_val.klass === await Integer.klass()) {
+                const begin_int = begin_val.get_data<number>();
+                const end_int = end_val.get_data<number>();
+                const range_size = range.exclude_end ? (end_int - begin_int) : (end_int - begin_int + 1);
+
+                if (range_size <= 0) {
+                    throw new ArgumentError("invalid argument - empty range");
+                }
+
+                return await Integer.get(begin_int + Math.floor(next_random() * range_size));
+            } else if (begin_val.klass === await Float.klass() || end_val.klass === await Float.klass()) {
+                const begin_float = begin_val.get_data<number>();
+                const end_float = end_val.get_data<number>();
+                const range_size = end_float - begin_float;
+
+                return await Float.new(begin_float + next_random() * range_size);
+            }
+
+            throw new ArgumentError("bad value for range");
+        }
+
+        // impossible to get here, but just in case:
+        return Qnil;
+    });
 };
