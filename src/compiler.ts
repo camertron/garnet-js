@@ -1878,7 +1878,7 @@ export class Compiler extends Visitor {
              */
             for (const element of node.elements) {
                 const value = (element as AssocNode).value;
-                if (value) this.visit(value);
+                if (value) this.with_used(true, () => this.visit(value));
             }
 
             return
