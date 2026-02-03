@@ -10,8 +10,9 @@ export interface IFileHandle {
     offset(): number;
     is_readable(): boolean;
     is_writable(): boolean;
-    read(length: number): Uint8Array;
+    read(length: number, buffer: Uint8Array): number;
     write(bytes: Uint8Array): void;
+    length(): number;
     close(): void;
 }
 
@@ -259,16 +260,17 @@ class NodeFileDescriptor implements IFileHandle {
     public fd: number;
     public flags: string;
     public mode: number;
+    private position: number;
 
     constructor(fd: number, flags: string, mode: number) {
         this.fd = fd;
         this.flags = flags;
         this.mode = mode;
+        this.position = 0;
     }
 
-    // we'll have to keep track of the offset ourselves since node doesn't expose it
     offset(): number {
-        throw new Error("Method not implemented.");
+        return this.position;
     }
 
     is_readable(): boolean {
@@ -279,12 +281,18 @@ class NodeFileDescriptor implements IFileHandle {
         return this.flags.startsWith("w");
     }
 
-    read(length: number): Uint8Array {
-        throw new Error("Method not implemented.");
+    read(length: number, buffer: Uint8Array): number {
+        const bytes_read = fs.readSync(this.fd, buffer, 0, length, this.position);
+        this.position += bytes_read;
+        return bytes_read;
     }
 
     write(bytes: Uint8Array): void {
         throw new Error("Method not implemented.");
+    }
+
+    length() {
+        return fs.fstatSync(this.fd).size;
     }
 
     close(): void {

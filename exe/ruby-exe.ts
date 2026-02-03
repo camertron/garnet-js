@@ -1,6 +1,6 @@
 import { argv } from "process";
 import * as Garnet from "../src/garnet";
-import { ExecutionContext, Runtime, vmfs, RubyArray, String, Argf } from "../src/garnet";
+import { ExecutionContext, Runtime, vmfs, RubyArray, String as RubyString, Argf } from "../src/garnet";
 import path from "path";
 import { fileURLToPath } from 'url';
 import fs from "fs";
@@ -26,6 +26,9 @@ await ExecutionContext.current.push_onto_load_path(path.resolve(path.join(__dirn
 await Garnet.require("rubygems/setup");
 
 await Dir.setwd(process.env.PWD!);
+
+// initialize ARGV early so it's available during -r requires
+let argv_rval = Garnet.ObjectClass.get_data<Garnet.Class>().constants["ARGV"] = await RubyArray.new([]);
 
 // skip the first two elements (node and script path)
 for (let i = 2; i < argv.length; i ++) {
@@ -76,13 +79,9 @@ for (let i = 2; i < argv.length; i ++) {
     }
 }
 
-const argv_rval = Garnet.ObjectClass.get_data<Garnet.Class>().constants["ARGV"] = await RubyArray.new(
-    await Promise.all(
-        script_argv.map((arg) => {
-            return String.new(arg);
-        })
-    )
-);
+for (const arg of script_argv) {
+    argv_rval.get_data<RubyArray>().elements.push(await RubyString.new(arg));
+}
 
 Garnet.ObjectClass.get_data<Garnet.Class>().constants["ARGF"] = await Argf.new(
     argv_rval.get_data<RubyArray>().elements
@@ -93,10 +92,11 @@ let absolute_code_path;
 if (code) {
     code_path = "-e";
     absolute_code_path = "-e"
+    ExecutionContext.current.globals["$0"] = await RubyString.new(code_path);
 } else if (script_path_index !== null) {
     code_path = argv[script_path_index];
     absolute_code_path = vmfs.real_path(code_path);
-    ExecutionContext.current.globals["$0"] = await String.new(code_path);
+    ExecutionContext.current.globals["$0"] = await RubyString.new(code_path);
 
     if (fs.existsSync(code_path)) {
         code = fs.readFileSync(code_path).toString('utf8');
