@@ -14,6 +14,7 @@ import { quick_sort } from "../util/array_utils";
 import { spaceship_compare } from "./comparable";
 import { Numeric } from "./numeric";
 import { Args } from "./arg-scanner";
+import { Kernel } from "./kernel";
 
 export class RubyArray {
     private static klass_: RValue;
@@ -267,7 +268,7 @@ export const init = () => {
             return Qnil;
         });
 
-        klass.define_native_method("delete_if", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+        klass.define_native_method("delete_if", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             const elements = self.get_data<RubyArray>().elements;
             const result: RValue[] = [];
 
@@ -351,7 +352,7 @@ export const init = () => {
 
         klass.define_native_method("delete", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             const elements = self.get_data<RubyArray>().elements;
-            const obj = args[0];
+            const [obj] = await Args.scan("1", args);
             let found_index: number | null = null;
 
             for (let i = 0; i < elements.length; i ++) {
@@ -398,9 +399,10 @@ export const init = () => {
 
         klass.define_native_method("[]", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             const elements = self.get_data<RubyArray>().elements;
+            const [arg1, arg2] = await Args.scan("11", args);
 
-            if (args[0].klass == (await Object.find_constant("Range"))!) {
-                const range = args[0].get_data<Range>();
+            if (await Kernel.is_a(arg1, (await Object.find_constant("Range"))!)) {
+                const range = arg1.get_data<Range>();
 
                 await Runtime.assert_type(range.begin, await Integer.klass());
                 await Runtime.assert_type(range.end, await Integer.klass());
@@ -430,11 +432,11 @@ export const init = () => {
                 }
             } else {
                 // floor here because you can pass a float to Array#[]
-                let index = Math.floor(args[0].get_data<number>());
+                let index = Math.floor(arg1.get_data<number>());
 
-                if (args.length > 1) {
-                    await Runtime.assert_type(args[1], await Integer.klass());
-                    const length = args[1].get_data<number>();
+                if (arg2) {
+                    await Runtime.assert_type(arg2, await Integer.klass());
+                    const length = arg2.get_data<number>();
 
                     // wraparound
                     if (index < 0) {
@@ -458,10 +460,11 @@ export const init = () => {
         });
 
         // @TODO: fill array with Qnils
-        klass.define_native_method("[]=", (self: RValue, args: RValue[]): RValue => {
+        klass.define_native_method("[]=", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const elements = self.get_data<RubyArray>().elements;
-            const index = args[0].get_data<number>();
-            const new_value = args[1];
+            const [index_rval, new_value] = await Args.scan("2", args);
+            await Runtime.assert_type(index_rval, await Integer.klass());
+            const index = index_rval.get_data<number>();
 
             elements[index] = new_value;
             return new_value;
@@ -469,7 +472,9 @@ export const init = () => {
 
         klass.define_native_method("fetch", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             const elements = self.get_data<RubyArray>().elements;
-            const index = Math.floor(args[0].get_data<number>());
+            const [index_rval, default_rval] = await Args.scan("11", args);
+            await Runtime.assert_type(index_rval, await Integer.klass());
+            const index = Math.floor(index_rval.get_data<number>());
 
             // wraparound for negative indices
             const actual_index = index < 0 ? elements.length + index : index;
@@ -479,9 +484,9 @@ export const init = () => {
             }
 
             if (block) {
-                return await block.get_data<Proc>().call(ExecutionContext.current, [args[0]]);
-            } else if (args.length > 1) {
-                return args[1];
+                return await block.get_data<Proc>().call(ExecutionContext.current, [index_rval]);
+            } else if (default_rval) {
+                return default_rval;
             } else {
                 throw new IndexError(`index ${index} outside of array bounds: ${-elements.length}...${elements.length}`);
             }
@@ -519,8 +524,10 @@ export const init = () => {
         });
 
         klass.define_native_method("include?", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [target_rval] = await Args.scan("1", args);
+
             for (const elem of self.get_data<RubyArray>().elements) {
-                if ((await Object.send(elem, "==", [args[0]])).is_truthy()) {
+                if ((await Object.send(elem, "==", [target_rval])).is_truthy()) {
                     return Qtrue;
                 }
             }
@@ -569,8 +576,9 @@ export const init = () => {
         });
 
         klass.define_native_method("+", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            await Runtime.assert_type(args[0], await RubyArray.klass());
-            return await RubyArray.new(self.get_data<RubyArray>().elements.concat(args[0].get_data<RubyArray>().elements));
+            const [other_rval] = await Args.scan("1", args);
+            await Runtime.assert_type(other_rval, await RubyArray.klass());
+            return await RubyArray.new(self.get_data<RubyArray>().elements.concat(other_rval.get_data<RubyArray>().elements));
         });
 
         klass.define_native_method("-", async (self: RValue, args: RValue[]): Promise<RValue> => {
@@ -644,8 +652,9 @@ export const init = () => {
             return await RubyArray.new(result);
         });
 
-        klass.define_native_method("<<", (self: RValue, args: RValue[]): RValue => {
-            self.get_data<RubyArray>().elements.push(args[0]);
+        klass.define_native_method("<<", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [element_rval] = await Args.scan("1", args);
+            self.get_data<RubyArray>().elements.push(element_rval);
             return self;
         });
 
@@ -678,22 +687,11 @@ export const init = () => {
 
         klass.define_native_method("first", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const elements = self.get_data<RubyArray>().elements;
-            let count;
+            const [count_rval] = await Args.scan("01", args);
 
-            if (args.length > 0) {
-                await Runtime.assert_type(args[0], await Integer.klass());
-                count = args[0].get_data<number>();
-            } else {
-                count = 1;
-            }
-
-            if (args.length === 0) {
-                if (elements.length > 0) {
-                    return elements[0];
-                } else {
-                    return Qnil;
-                }
-            } else {
+            if (count_rval) {
+                await Runtime.assert_type(count_rval, await Integer.klass());
+                const count = args[0].get_data<number>();
                 return await RubyArray.new(elements.slice(0, count));
             }
         });
@@ -774,9 +772,9 @@ export const init = () => {
         });
 
         klass.define_native_method("replace", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            await Runtime.assert_type(args[0], await RubyArray.klass());
-            const other = args[0];
-            self.get_data<RubyArray>().elements = [...other.get_data<RubyArray>().elements];
+            const [other_rval] = await Args.scan("1", args);
+            await Runtime.assert_type(other_rval, await RubyArray.klass());
+            self.get_data<RubyArray>().elements = [...other_rval.get_data<RubyArray>().elements];
             return self;
         });
 
@@ -870,11 +868,12 @@ export const init = () => {
         }
 
         klass.define_native_method("flatten", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [max_depth_rval] = await Args.scan("01", args);
             let max_depth = -1;
 
-            if (args.length > 0) {
-                await Runtime.assert_type(args[0], await Integer.klass());
-                max_depth = args[0].get_data<number>();
+            if (max_depth_rval) {
+                await Runtime.assert_type(max_depth_rval, await Integer.klass());
+                max_depth = max_depth_rval.get_data<number>();
             }
 
             const [flattened, _] = await flatten(self.get_data<RubyArray>().elements, max_depth);
@@ -882,10 +881,11 @@ export const init = () => {
         });
 
         klass.define_native_method("flatten!", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [max_depth_rval] = await Args.scan("01", args);
             let max_depth = -1;
 
-            if (args.length > 0) {
-                await Runtime.assert_type(args[0], await Integer.klass());
+            if (max_depth_rval) {
+                await Runtime.assert_type(max_depth_rval, await Integer.klass());
                 max_depth = args[0].get_data<number>();
             }
 
@@ -911,13 +911,13 @@ export const init = () => {
 
         klass.define_native_method("==", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const array = self.get_data<RubyArray>().elements;
-            const other_array = args[0];
+            const [other_array_rval] = await Args.scan("1", args);
 
-            if (!(await Object.respond_to(other_array, "size"))) {
+            if (!(await Object.respond_to(other_array_rval, "size"))) {
                 return Qfalse;
             }
 
-            const other_array_size = await Object.send(other_array, "size");
+            const other_array_size = await Object.send(other_array_rval, "size");
 
             if (other_array_size.klass !== await Integer.klass()) {
                 return Qfalse;
@@ -929,7 +929,7 @@ export const init = () => {
 
             for (let i = 0; i < array.length; i ++) {
                 const obj = array[i];
-                const other_obj = await Object.send(other_array, "[]", [await Integer.get(i)]);
+                const other_obj = await Object.send(other_array_rval, "[]", [await Integer.get(i)]);
 
                 if (!(await Object.send(obj, "==", [other_obj])).is_truthy()) {
                     return Qfalse;
