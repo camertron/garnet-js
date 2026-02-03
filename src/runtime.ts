@@ -149,6 +149,9 @@ export class Runtime {
             const klass_rval = new RValue(ClassClass, klass);
             klass.rval = klass_rval;
             parent_mod.constants[name] = klass_rval;
+
+            // Call the inherited hook on the superclass
+            await Object.send(superclass, "inherited", [klass_rval]);
         }
 
         if (cb) {
@@ -1281,7 +1284,12 @@ await (ClassClass.get_data<Class>()).tap(async (klass: Class) => {
             // nesting should include the class being evaluated
             const new_nesting = [...proc.binding.nesting, new_class_rval];
             const binding = proc.binding.with_self_and_nesting(new_class_rval, new_nesting);
+            // Call the inherited hook on the superclass before evaluating the block
+            await Object.send(superclass, "inherited", [new_class_rval]);
             await proc.with_binding(binding).call(ExecutionContext.current, [new_class_rval]);
+        } else {
+            // Call the inherited hook on the superclass
+            await Object.send(superclass, "inherited", [new_class_rval]);
         }
 
         return new_class_rval;
@@ -1307,6 +1315,11 @@ await (ClassClass.get_data<Class>()).tap(async (klass: Class) => {
 
     klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
         return await RubyString.new(self.get_data<Class>().full_name);
+    });
+
+    // stub that does nothing so we can call it without checking to see if it's defined
+    klass.define_native_method("inherited", (_self: RValue, _args: RValue[]): RValue => {
+        return Qnil;
     });
 
     await klass.alias_method("to_s", "inspect");
