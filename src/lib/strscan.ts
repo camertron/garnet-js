@@ -3,6 +3,7 @@ import { Class, ObjectClass, Qfalse, Qnil, Runtime, RValue } from "../runtime";
 import { Args } from "../runtime/arg-scanner";
 import { Encoding } from "../runtime/encoding";
 import { Hash } from "../runtime/hash";
+import { Integer } from "../runtime/integer";
 import { Object } from "../runtime/object";
 import { Regexp } from "../runtime/regexp";
 import { RubyString } from "../runtime/string";
@@ -69,6 +70,15 @@ export class StringScanner {
 
         return null;
     }
+
+    rest(): string {
+        return this.str.slice(this.charpos);
+    }
+
+    set_pos(new_bytepos: number) {
+        this.bytepos = new_bytepos;
+        this.charpos = Math.floor(new_bytepos / 2);
+    }
 }
 
 export const init = () => {
@@ -95,6 +105,21 @@ export const init = () => {
             }
 
             return result ? await RubyString.new(result) : Qnil;
+        });
+
+        klass.define_native_method("pos", async (self: RValue): Promise<RValue> => {
+            return await Integer.get(self.get_data<StringScanner>().bytepos);
+        });
+
+        klass.define_native_method("pos=", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [pos_rval] = await Args.scan("1", args);
+            await Runtime.assert_type(pos_rval, await Integer.klass());
+            self.get_data<StringScanner>().set_pos(pos_rval.get_data<number>());
+            return pos_rval;
+        });
+
+        klass.define_native_method("rest", async (self: RValue): Promise<RValue> => {
+            return await RubyString.new(self.get_data<StringScanner>().rest());
         });
     });
 
