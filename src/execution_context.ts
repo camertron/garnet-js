@@ -1004,8 +1004,7 @@ export class ExecutionContext {
                 // anonymous kwrest (i.e. **) - but don't store them anywhere, and no need to set any local variables
             } else {
                 // named kwrest (eg. **rest) - store kwargs in local variable
-                this.local_set(local_index, 0, kwargs ? await Hash.from_hash(kwargs) : await Hash.new());
-                local_index = this.inc_local_index(local_index, iseq);
+                this.local_set(iseq.argument_options.keyword_rest_start, 0, kwargs ? await Hash.from_hash(kwargs) : await Hash.new());
             }
         }
 
