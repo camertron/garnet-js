@@ -66,7 +66,7 @@ export class RubyString {
         const context = this.get_context(str);
 
         if (!context.encoding_rval) {
-            context.encoding_rval = await Encoding.default();
+            context.encoding_rval = Encoding.default_external;
         }
 
         return context.encoding_rval;
@@ -836,7 +836,7 @@ export const init = () => {
             const self_encoding = await RubyString.get_encoding_rval(self);
             let target_encoding_str: string;
 
-            if (await Kernel.is_a(target_encoding_rval, await Encoding.encoding_class_rval())) {
+            if (await Kernel.is_a(target_encoding_rval, await Encoding.klass())) {
                 target_encoding_str = target_encoding_rval.get_data<Encoding>().name;
             } else {
                 target_encoding_str = (await Runtime.coerce_to_string(target_encoding_rval)).get_data<string>();
@@ -848,28 +848,27 @@ export const init = () => {
         });
 
         klass.define_native_method("encode", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            const [target_encoding_rval] = await Args.scan("1", args);
-            const target_encoding_arg = await Encoding.coerce(target_encoding_rval);
-
-            if (target_encoding_arg) {
-                if (await Encoding.supported_conversion(self, target_encoding_arg)) {
-                    const new_str = await RubyString.new(self.get_data<string>());
-                    RubyString.set_encoding(new_str, target_encoding_arg);
-                    return new_str;
-                }
-            }
+            let [target_encoding_rval] = await Args.scan("01", args);
+            target_encoding_rval ||= Encoding.default_internal;
 
             const self_encoding = await RubyString.get_encoding_rval(self);
-            let target_encoding_str: string;
+            let target_encoding = await Encoding.coerce(target_encoding_rval);
 
-            if (await Kernel.is_a(target_encoding_rval, await Encoding.encoding_class_rval())) {
-                target_encoding_str = target_encoding_rval.get_data<Encoding>().name;
-            } else {
-                target_encoding_str = (await Runtime.coerce_to_string(target_encoding_rval)).get_data<string>();
+            if (!target_encoding || target_encoding === Qnil) {
+                target_encoding = self_encoding;
             }
 
+            if (await Encoding.supported_conversion(self, target_encoding)) {
+                const new_str = await RubyString.new(self.get_data<string>());
+                RubyString.set_encoding(new_str, target_encoding);
+                return new_str;
+            }
+
+            const self_name = self_encoding.get_data<Encoding>().name;
+            const target_name = target_encoding.get_data<Encoding>().name;
+
             throw new EncodingConverterNotFoundError(
-                `code converter not found (${self_encoding.get_data<Encoding>().name} to ${target_encoding_str})`
+                `code converter not found (${self_name} to ${target_name})`
             );
         });
 
@@ -936,7 +935,6 @@ export const init = () => {
                 }
             }
 
-            chunks.push(str.substring(last_pos));
             return chunks.join("");
         }
 
