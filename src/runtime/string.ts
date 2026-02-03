@@ -975,6 +975,16 @@ export const init = () => {
             return await RubyString.new(data);
         });
 
+        klass.define_native_method("count", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const data = self.get_data<string>();
+            const [first_pattern, rest_patterns] = await Args.scan("1*", args);
+            const selectors = CharSelectors.from(
+                first_pattern.get_data<string>(), ...rest_patterns.map(p => p.get_data<string>())
+            );
+
+            return Integer.get(selectors.count(data));
+        });
+
         klass.define_native_method("clear", (self: RValue): RValue => {
             self.data = "";
             return self;
