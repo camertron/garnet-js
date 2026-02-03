@@ -9,6 +9,8 @@ import { Numeric } from "./numeric";
 import { Hash } from "./hash";
 import { vmfs } from "../vmfs";
 import { Args } from "./arg-scanner";
+import { Env } from "./env";
+import { Integer } from "../garnet";
 
 export class Dir {
     private static wd: string;
@@ -91,13 +93,52 @@ export const init = () => {
             }
         });
 
+        await klass.get_singleton_class().get_data<Class>().alias_method("[]", "glob");
+
         klass.define_native_singleton_method("exist?", async (_self: RValue, args: RValue[]): Promise<RValue> => {
             Args.check_arity(args.length, 1, 1);
             const path = (await Runtime.coerce_to_string(args[0])).get_data<string>();
             return vmfs.path_exists(path) && vmfs.is_directory(path) ? Qtrue : Qfalse;
         });
 
-        await klass.get_singleton_class().get_data<Class>().alias_method("[]", "glob");
+        const HOME = await RubyString.new("HOME");
+        const LOGDIR = await RubyString.new("LOGDIR");
+
+        klass.define_native_singleton_method("chdir", async (_self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            if (args.length > 0) {
+                const old_dir = Dir.getwd();
+                const dir_arg = await Runtime.coerce_to_string(args[0]);
+                const dir_str = dir_arg.get_data<string>();
+                const expanded_dir_str = vmfs.is_relative(dir_str) ? vmfs.join_paths(old_dir, dir_str) : dir_str;
+                const expanded_dir_arg = await RubyString.new(expanded_dir_str);
+
+                if (block) {
+                    await Dir.setwd(expanded_dir_str);
+
+                    try {
+                        return await block.get_data<Proc>().call(ExecutionContext.current, [expanded_dir_arg]);
+                    } finally {
+                        await Dir.setwd(old_dir);
+                    }
+                } else {
+                    await Dir.setwd(expanded_dir_str);
+                    return await Integer.get(0);
+                }
+            } else if (block) {
+                return await block.get_data<Proc>().call(ExecutionContext.current, [Dir.getwd_val()]);
+            } else {
+                let new_dir = Dir.getwd_val();
+
+                if (await Env.instance.has(HOME)) {
+                    new_dir = await Env.instance.get(HOME);
+                } else if (await Env.instance.has(LOGDIR)) {
+                    new_dir = await Env.instance.get(LOGDIR);
+                }
+
+                await Dir.setwd(new_dir.get_data<string>());
+                return await Integer.get(0);
+            }
+        });
     });
 
     inited = true;
