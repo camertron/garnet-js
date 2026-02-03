@@ -926,6 +926,43 @@ export const init = () => {
             return Qtrue;
         });
 
+        klass.define_native_method("<=>", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const other = args[0];
+
+            if (!(await Object.send(other, "is_a?", [await RubyArray.klass()])).is_truthy()) {
+                return Qnil;
+            }
+
+            const self_elements = self.get_data<RubyArray>().elements;
+            const other_elements = other.get_data<RubyArray>().elements;
+
+            const min_length = Math.min(self_elements.length, other_elements.length);
+
+            for (let i = 0; i < min_length; i++) {
+                const cmp = await Object.send(self_elements[i], "<=>", [other_elements[i]]);
+
+                if (cmp === Qnil) {
+                    return Qnil;
+                }
+
+                const cmp_value = cmp.get_data<number>();
+
+                // return first non-equal result
+                if (cmp_value !== 0) {
+                    return cmp;
+                }
+            }
+
+            // all elements are equal, compare lengths
+            if (self_elements.length < other_elements.length) {
+                return await Integer.get(-1);
+            } else if (self_elements.length > other_elements.length) {
+                return await Integer.get(1);
+            } else {
+                return await Integer.get(0);
+            }
+        });
+
         const sort = async (elements: RValue[], block?: Proc) => {
             let compare_fn = spaceship_compare;
 
