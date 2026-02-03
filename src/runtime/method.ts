@@ -132,7 +132,7 @@ export const init = async () => {
         });
 
         klass.define_native_method("to_proc", async (self: RValue): Promise<RValue> => {
-            return await Proc.from_native_fn(ExecutionContext.current, async (block_self: RValue, block_args: RValue[], block_kwargs?: Hash, block_block?: RValue, block_call_data?: MethodCallData): Promise<RValue> => {
+            return await Proc.from_native_fn(ExecutionContext.current, async (_block_self: RValue, block_args: RValue[], block_kwargs?: Hash, block_block?: RValue, block_call_data?: MethodCallData): Promise<RValue> => {
                 const mtd = self.get_data<Method>();
                 let mtd_call_data;
 
@@ -149,7 +149,7 @@ export const init = async () => {
 
                 return await mtd.callable.call(
                     ExecutionContext.current,
-                    block_self,
+                    mtd.receiver,
                     block_args,
                     block_kwargs,
                     block_block,
