@@ -963,6 +963,18 @@ export const init = () => {
             return self;
         });
 
+        klass.define_native_method("delete_suffix", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [suffix_rval] = await Args.scan("1", args);
+            const suffix = (await Runtime.coerce_to_string(suffix_rval)).get_data<string>();
+            let data = self.get_data<string>();
+
+            if (data.endsWith(suffix)) {
+                data = data.substring(0, data.length - suffix.length);
+            }
+
+            return await RubyString.new(data);
+        });
+
         klass.define_native_method("clear", (self: RValue): RValue => {
             self.data = "";
             return self;
