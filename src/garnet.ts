@@ -1,7 +1,7 @@
 import { Qnil, RValue, Runtime, init as initRuntime } from "./runtime";
 import { ExecutionContext } from "./execution_context";
 import { vmfs } from "./vmfs";
-import { Compiler, ParseLocal } from "./compiler";
+import { Compiler } from "./compiler";
 import { CompilerOptions } from "./compiler_options";
 import { RubyError, SystemExit } from "./errors";
 import { Kernel } from "./runtime/kernel";
@@ -12,6 +12,7 @@ import * as WASM from "./wasm";
 import { parsePrism } from "@ruby/prism/src/parsePrism";
 import { Regexp } from "./runtime/regexp";
 import { Hash } from "./runtime/hash";
+import { Integer } from "./runtime/integer";
 
 export async function init() {
     if (!ExecutionContext.current) {
@@ -77,6 +78,17 @@ export async function evaluate(code: string, path?: string, absolute_path?: stri
         // we print the backtrace and re-throw the error. The re-thrown error
         // should be handled by the caller.
         if (e instanceof RubyError) {
+            // SystemExit should exit silently, i.e. without a backtrace
+            if (e instanceof SystemExit) {
+                await deinit();
+
+                if (is_node) {
+                    process.exit(e.status);
+                }
+
+                return await Integer.get(0);
+            }
+
             ExecutionContext.print_backtrace(e);
         } else if (e instanceof RValue) {
             // jesus christ improve this crap
