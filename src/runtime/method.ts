@@ -11,8 +11,8 @@ import { Integer } from "./integer";
 export class Method {
     private static klass_: RValue;
 
-    static async new(name: string, callable: Callable): Promise<RValue> {
-        return new RValue(await this.klass(), new Method(name, callable));
+    static async new(name: string, callable: Callable, receiver: RValue): Promise<RValue> {
+        return new RValue(await this.klass(), new Method(name, callable, receiver));
     }
 
     static async klass(): Promise<RValue> {
@@ -31,10 +31,12 @@ export class Method {
 
     public name: string;
     public callable: Callable;
+    public receiver: RValue;
 
-    constructor(name: string, callable: Callable) {
+    constructor(name: string, callable: Callable, receiver: RValue) {
         this.name = name;
         this.callable = callable;
+        this.receiver = receiver;
     }
 
     call(...params: Parameters<Callable["call"]>): ReturnType<Callable["call"]> {
@@ -81,7 +83,35 @@ let inited = false;
 export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("Method", ObjectClass, (klass: Class) => {
+    Runtime.define_class("Method", ObjectClass, async (klass: Class) => {
+        klass.define_native_method("call", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
+            const mtd = self.get_data<Method>();
+            let mtd_call_data;
+
+            if (call_data) {
+                mtd_call_data = MethodCallData.create(
+                    mtd.name,
+                    call_data.argc,
+                    call_data.flag,
+                    call_data.kw_arg
+                );
+            } else {
+                mtd_call_data = MethodCallData.from_args(mtd.name, args, kwargs);
+            }
+
+            return await mtd.callable.call(
+                ExecutionContext.current,
+                mtd.receiver,
+                args,
+                kwargs,
+                block,
+                mtd_call_data
+            );
+        });
+
+        await klass.alias_method("[]", "call");
+        await klass.alias_method("===", "call");
+
         klass.define_native_method("parameters", async (self: RValue): Promise<RValue> => {
             const callable = self.get_data<Method>().callable;
 
@@ -120,7 +150,7 @@ export const init = async () => {
                 return await mtd.callable.call(
                     ExecutionContext.current,
                     block_self,
-                    block_args,
+                    args,
                     block_kwargs,
                     block_block,
                     mtd_call_data

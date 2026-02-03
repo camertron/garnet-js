@@ -689,7 +689,7 @@ export const init = async () => {
         const callable = await Object.find_method_under(self, method_name);
 
         if (callable) {
-            return Method.new(method_name, callable);
+            return Method.new(method_name, callable, self);
         }
 
         throw new NameError(`undefined method \`${method_name}' for class ${self.klass.get_data<Class>().name}`);
