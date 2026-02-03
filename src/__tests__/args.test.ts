@@ -1,7 +1,7 @@
 import {beforeAll, describe, expect, test} from '@jest/globals';
 import * as Garnet from "../garnet";
 import { evaluate } from '../test_helpers';
-import { Qtrue, RubyArray, Runtime, String, TrueClass } from '../garnet';
+import { RubyArray, Runtime, String } from '../garnet';
 import { Hash } from '../runtime/hash';
 
 beforeAll(() => {
