@@ -3,7 +3,92 @@ import { ArgumentError } from "../errors";
 interface IPattern {
     length: number;
     index_of(search: string): number | null;
-    matches(search: string, offset: number): boolean
+    matches(search: string, offset: number): boolean;
+    to_set(): ICharSet;
+}
+
+interface ICharSet {
+    chars: Set<string>;
+    get is_negated(): boolean;
+    intersect(other: ICharSet): ICharSet;
+    has(char: string): boolean;
+}
+
+class CharSet implements ICharSet {
+    public chars: Set<string>;
+
+    constructor(chars: Set<string>) {
+        this.chars = chars;
+    }
+
+    get is_negated(): boolean {
+        return false;
+    }
+
+    intersect(other: ICharSet): ICharSet {
+        const result: Set<string> = new Set();
+
+        if (other.is_negated) {
+            for (const char of other.chars) {
+                if (!this.chars.has(char)) {
+                    result.add(char);
+                }
+            }
+        } else {
+            for (const char of other.chars) {
+                if (this.chars.has(char)) {
+                    result.add(char);
+                }
+            }
+        }
+
+        return new CharSet(result);
+    }
+
+    has(char: string): boolean {
+        return this.chars.has(char);
+    }
+}
+
+class NegatedCharSet implements ICharSet {
+    public chars: Set<string>;
+
+    constructor(chars: Set<string>) {
+        this.chars = chars;
+    }
+
+    get is_negated(): boolean {
+        return true;
+    }
+
+    intersect(other: ICharSet): ICharSet {
+        if (other.is_negated) {
+            const result: Set<string> = new Set(this.chars);
+
+            // The interesction of two negated sets is the union of their complements
+            for (const char of other.chars) {
+                if (!this.chars.has(char)) {
+                    result.add(char);
+                }
+            }
+
+            return new NegatedCharSet(result);
+        } else {
+            const result: Set<string> = new Set(other.chars);
+
+            for (const char of this.chars) {
+                if (other.chars.has(char)) {
+                    result.delete(char);
+                }
+            }
+
+            return new CharSet(result);
+        }
+    }
+
+    has(char: string): boolean {
+        return !this.chars.has(char);
+    }
 }
 
 class Pattern implements IPattern {
@@ -27,6 +112,10 @@ class Pattern implements IPattern {
     matches(search: string, offset: number): boolean {
         const charAtOffset = search.charAt(offset);
         return this.chars.some(char => char === charAtOffset);
+    }
+
+    to_set(): ICharSet {
+        return new CharSet(new Set(this.chars));
     }
 }
 
@@ -58,6 +147,27 @@ class NegatedPattern implements IPattern {
             return !child_pattern.matches(search, offset);
         })
     }
+
+    to_set(): ICharSet {
+        const char_set = intersect_all(this.child_patterns.map(p => p.to_set()));
+        return new NegatedCharSet(char_set.chars);
+    }
+}
+
+const intersect_all = (char_sets: ICharSet[]): ICharSet => {
+    if (char_sets.length === 0) {
+        return new CharSet(new Set());
+    } else if (char_sets.length === 1) {
+        return char_sets[0];
+    }
+
+    let result = char_sets[0];
+
+    for (let i = 1; i < char_sets.length; i ++) {
+        result = result.intersect(char_sets[i]);
+    }
+
+    return result;
 }
 
 class RangePattern implements IPattern {
@@ -92,6 +202,16 @@ class RangePattern implements IPattern {
         const cp = search.codePointAt(offset)!
         return cp >= this.begin_code_point && cp <= this.end_code_point;
     }
+
+    to_set(): CharSet {
+        const chars = [];
+
+        for (let cp = this.begin_code_point; cp <= this.end_code_point; cp ++) {
+            chars.push(String.fromCodePoint(cp));
+        }
+
+        return new CharSet(new Set(chars));
+    }
 }
 
 class PatternParser {
@@ -118,9 +238,9 @@ class PatternParser {
 
         const patterns: IPattern[] = [];
 
-        while (!this.eos()) {
+        do {
             patterns.push(this.handle_pattern());
-        }
+        } while (!this.eos());
 
         if (this.negated) {
             return [new NegatedPattern(patterns)]
@@ -227,144 +347,61 @@ class PatternParser {
     }
 }
 
-export class CharSelector {
-    static from(pattern_str: string) {
-        return new CharSelector(PatternParser.parse(pattern_str));
+export class CharSelectors {
+    static from(...pattern_strs: string[]): CharSelectors {
+        const char_sets = pattern_strs.flatMap(pattern_str => {
+            const patterns = PatternParser.parse(pattern_str);
+            const char_sets = patterns.map(p => p.to_set());
+            const union = new Set(char_sets.flatMap(p => Array.from(p.chars)));
+
+            if (char_sets[0]?.is_negated) {
+                return new NegatedCharSet(union);
+            } else {
+                return new CharSet(union);
+            }
+        });
+
+        const char_set = intersect_all(char_sets);
+        return new CharSelectors(char_set);
     }
 
-    private patterns: IPattern[];
+    private char_set: CharSet;
 
-    constructor(patterns: IPattern[]) {
-        this.patterns = patterns;
+    constructor(char_set: CharSet) {
+        this.char_set = char_set;
     }
 
-    indexOf(search: string): number | null {
-        for (const pattern of this.patterns) {
-            const index = pattern.index_of(search);
-            if (index != null) return index;
+    index_of(search: string): number | null {
+        for (let i = 0; i < search.length; i ++) {
+            if (this.char_set.has(search[i])) {
+                return i;
+            }
         }
 
         return null;
     }
 
-    match_all(search: string): [number, number][] {
-        const matches: [number, number][] = [];
-        let start = 0;
-        let stop = 0;
+    match_all(search: string): number[] {
+        const offsets: number[] = [];
 
         for (let i = 0; i < search.length; i ++) {
-            if (this.patterns.some(pattern => pattern.matches(search, i))) {
-                stop += 1;
-            } else {
-                if (stop - start > 0) {
-                    matches.push([start, stop]);
-                }
-
-                stop = start = i + 1;
+            if (this.char_set.has(search[i])) {
+                offsets.push(i);
             }
         }
 
-        if (stop - start > 0) {
-            matches.push([start, stop]);
-        }
-
-        return matches;
-    }
-}
-
-class RangeSet {
-    public ranges: [number, number][];
-
-    constructor(ranges: [number, number][]) {
-        this.ranges = ranges;
+        return offsets;
     }
 
-    intersect(their_ranges: [number, number][]) {
-        const new_ranges = [];
+    count(search: string): number {
+        let n = 0;
 
-        for (const their_range of their_ranges) {
-            for (const our_range of this.ranges) {
-                if (this.overlap(their_range, our_range)) {
-                    const intrsc = this.find_intersection(our_range, their_range);
-                    if (intrsc) {
-                        new_ranges.push(intrsc);
-                    }
-                }
+        for (let i = 0; i < search.length; i ++) {
+            if (this.char_set.has(search[i])) {
+                n ++;
             }
         }
 
-        this.ranges = new_ranges;
-    }
-
-    private find_intersection(range1: [number, number], range2: [number, number]): [number, number] | null {
-        // range2 entirely contains range1
-        if (this.fully_overlapped_by(range1, range2)) {
-            return range1;
-        } else if (this.front_overlap(range1, range2)) {
-            return [range2[0], range1[1]];
-        } else if (this.rear_overlap(range1, range2)) {
-            return [range1[0], range2[1]]
-        } else if (this.full_overlap(range1, range2)) {
-            return [Math.max(range1[0], range2[0]), Math.min(range1[1], range2[1])];
-        } else {
-            return null;
-        }
-    }
-
-    private overlap(range1: [number, number], range2: [number, number]): boolean {
-        return (
-            this.front_overlap(range1, range2) ||
-            this.rear_overlap(range1, range2) ||
-            this.full_overlap(range1, range2)
-        );
-    }
-
-    private front_overlap(range1: [number, number], range2: [number, number]): boolean {
-        return range1[1] >= range2[0] && range1[1] <= range2[1];
-    }
-
-    private rear_overlap(range1: [number, number], range2: [number, number]): boolean {
-        return range1[0] >= range2[0] && range1[0] <= range2[1];
-    }
-
-    // range1 entirely contains range2
-    private full_overlap(range1: [number, number], range2: [number, number]): boolean {
-        return range1[0] <= range2[0] && range1[1] >= range2[1];
-    }
-
-    // range2 entirely contains range1
-    private fully_overlapped_by(range1: [number, number], range2: [number, number]): boolean {
-        return range2[0] <= range1[0] && range1[1] <= range2[1];
-    }
-
-    // returns true if range1 and range2 are within 1 of each other
-    private adjacent(range1: [number, number], range2: [number, number]): boolean {
-        return range1[1] == range2[0] - 1 || range2[0] == range1[1] + 1;
-    }
-}
-
-export class CharSelectors {
-    static from(pattern_strs: string[]): CharSelectors {
-        const patterns = pattern_strs.map(pattern_str => CharSelector.from(pattern_str));
-        return new CharSelectors(patterns);
-    }
-
-    private patterns: CharSelector[];
-
-    constructor(patterns: CharSelector[]) {
-        this.patterns = patterns;
-    }
-
-    match_all(search: string): [number, number][] {
-        const range_groups = this.patterns.map(pattern => pattern.match_all(search));
-        if (range_groups.length === 0) return [];
-
-        const range_set = new RangeSet(range_groups[0]);
-
-        for (let i = 1; i < range_groups.length; i ++) {
-            range_set.intersect(range_groups[i]);
-        }
-
-        return range_set.ranges;
+        return n;
     }
 }

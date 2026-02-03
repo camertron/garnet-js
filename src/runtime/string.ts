@@ -7,7 +7,7 @@ import { Range } from "./range";
 import { Object as RubyObject } from "./object";
 import { ExecutionContext } from "../execution_context";
 import { Encoding } from "./encoding";
-import { CharSelector, CharSelectors } from "./char-selector";
+import { CharSelectors } from "./char-selector";
 import { Hash } from "./hash";
 import { RubyArray } from "../runtime/array";
 import { Numeric } from "./numeric";
@@ -874,12 +874,12 @@ export const init = () => {
         });
 
         const tr = async (data: string, selector_str: string, replacements: string): Promise<string> => {
-            const selector = CharSelector.from(selector_str);
+            const selector = CharSelectors.from(selector_str);
             const chars = [];
 
             for (let i = 0; i < data.length; i ++) {
                 const char = data.charAt(i);
-                const idx = selector.indexOf(char);
+                const idx = selector.index_of(char);
 
                 if (idx != null) {
                     if (idx === -1 || idx >= replacements.length) {
@@ -920,24 +920,23 @@ export const init = () => {
             }
         });
 
-        const find_matches_in = async (str: RValue, patterns: RValue[]): Promise<[number, number][]> => {
+        const find_matches_in = async (str: RValue, patterns: RValue[]): Promise<number[]> => {
             const selector_strings = (await Runtime.coerce_all_to_string(patterns)).map(str => str.get_data<string>());
             const data = str.get_data<string>();
-            const selectors = CharSelectors.from(selector_strings);
+            const selectors = CharSelectors.from(...selector_strings);
             return selectors.match_all(data);
         };
 
-        const delete_matches_from = (str: string, matches: [number, number][]): string => {
+        const delete_matches_from = (str: string, offsets: number[]): string => {
             const chunks = [];
-            let last_pos = 0;
 
-            for (const [start, stop] of matches) {
-                chunks.push(str.substring(last_pos, start));
-                last_pos = stop;
+            for (let i = 0; i < str.length; i ++) {
+                if (!offsets.includes(i)) {
+                    chunks.push(str[i]);
+                }
             }
 
             chunks.push(str.substring(last_pos));
-
             return chunks.join("");
         }
 
