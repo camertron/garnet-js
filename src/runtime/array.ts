@@ -535,43 +535,38 @@ export const init = () => {
             return Qfalse;
         });
 
-        klass.define_native_method("pop", (self: RValue, args: RValue[]): RValue => {
-            return self.get_data<RubyArray>().elements.pop() || Qnil;
+        klass.define_native_method("pop", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const elements = self.get_data<RubyArray>().elements;
+            const [count_rval] = await Args.scan("01", args);
+
+            if (count_rval) {
+                await Runtime.assert_type(count_rval, await Integer.klass());
+                const count = count_rval.get_data<number>();
+                let start = elements.length - count;
+                if (start < 0) start = 0;
+                return await RubyArray.new(elements.splice(start, count));
+            } else {
+                return elements.pop() || Qnil;
+            }
         });
 
         klass.define_native_method("shift", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            let count = 1;
-
-            if (args.length > 0) {
-                await Runtime.assert_type(args[0], await Integer.klass());
-                count = args[0].get_data<number>();
-            }
-
             const elements = self.get_data<RubyArray>().elements;
+            const [count_rval] = await Args.scan("01", args);
 
-            // a count of 0 should return an empty array
-            if (count === 1) {
-                return elements.shift() || Qnil;
-            } else {
+            if (count_rval) {
+                await Runtime.assert_type(count_rval, await Integer.klass());
+                const count = count_rval.get_data<number>();
                 return await RubyArray.new(elements.splice(0, count));
+            } else {
+                return elements.shift() || Qnil;
             }
         });
 
-        klass.define_native_method("unshift", async (self: RValue, args: RValue[], _kwargs?: Hash, _block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
+        klass.define_native_method("unshift", async (self: RValue, args: RValue[], _kwargs?: Hash, _block?: RValue): Promise<RValue> => {
             const elements = self.get_data<RubyArray>().elements;
-
-            if (call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
-                for (const arg of args) {
-                    if (arg.klass === await RubyArray.klass()) {
-                        elements.unshift(...arg.get_data<RubyArray>().elements);
-                    } else {
-                        elements.unshift(arg);
-                    }
-                }
-            } else {
-                elements.unshift(...args);
-            }
-
+            const [new_elements] = await Args.scan("*", args);
+            elements.unshift(...new_elements);
             return self;
         });
 
@@ -660,22 +655,7 @@ export const init = () => {
 
         klass.define_native_method("push", (self: RValue, args: RValue[], _kwargs?: Hash, _block?: RValue, call_data?: MethodCallData): RValue => {
             const elements = self.get_data<RubyArray>().elements;
-
-            // // this is wrong but I don't know how to fix it, since I need to know which args are splatted
-            // // but that info is not available right now. We'll need to capture more info in CallData.
-            // if (call_data && call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
-            //     for (const arg of args) {
-            //         try {
-            //             elements.push(...arg.get_data<RubyArray>().elements);
-            //         } catch(e) {
-            //             debugger;
-            //             throw e;
-            //         }
-            //     }
-            // } else {
-                elements.push(...args);
-            // }
-
+            elements.push(...args);
             return self;
         });
 
@@ -693,16 +673,23 @@ export const init = () => {
                 await Runtime.assert_type(count_rval, await Integer.klass());
                 const count = args[0].get_data<number>();
                 return await RubyArray.new(elements.slice(0, count));
+            } else {
+                return elements[0] || Qnil;
             }
         });
 
-        klass.define_native_method("last", (self: RValue): RValue => {
+        klass.define_native_method("last", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const elements = self.get_data<RubyArray>().elements;
+            const [count_rval] = await Args.scan("01", args);
 
-            if (elements.length > 0) {
-                return elements[elements.length - 1];
+            if (count_rval) {
+                await Runtime.assert_type(count_rval, await Integer.klass());
+                const count = count_rval.get_data<number>();
+                let start = elements.length - count;
+                if (start < 0) start = 0;
+                return await RubyArray.new(elements.slice(start, start + count));
             } else {
-                return Qnil;
+                return elements[elements.length - 1] || Qnil;
             }
         });
 
