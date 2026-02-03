@@ -3,7 +3,7 @@ import { Object } from "./runtime/object";
 import { RubyString } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
 
-export const init = () => {
+export const init = async () => {
     const ExceptionClass = Runtime.define_class("Exception", ObjectClass, async (klass: Class) => {
         klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
             self.data = new UserDefinedException(self.klass, args[0] || Qnil);
@@ -95,6 +95,7 @@ export const init = () => {
     const FrozenErrorClass = Runtime.define_class("FrozenError", RuntimeErrorClass);
     const NoMethodErrorClass = Runtime.define_class("NoMethodError", NameErrorClass);
     const ArgumentErrorClass = Runtime.define_class("ArgumentError", StandardErrorClass);
+    const IOError = Runtime.define_class("IOError", StandardErrorClass);
 
     const ScriptErrorClass = Runtime.define_class("ScriptError", ExceptionClass);
     const SyntaxErrorClass = Runtime.define_class("SyntaxError", ScriptErrorClass);
@@ -103,9 +104,9 @@ export const init = () => {
 
     const SystemCallErrorClass = Runtime.define_class("SystemCallError", StandardErrorClass);
     const ErrnoModule = Runtime.define_module("Errno");
-    const ErrnoENOENTClass = Runtime.define_class_under(ErrnoModule, "ENOENT", SystemCallErrorClass);
-    const ErrnoENOTDIRClass = Runtime.define_class_under(ErrnoModule, "ENOTDIR", SystemCallErrorClass);
-    const ErrnoEINVALClass = Runtime.define_class_under(ErrnoModule, "EINVAL", SystemCallErrorClass);
+    const ErrnoENOENTClass = await Runtime.define_class_under(ErrnoModule, "ENOENT", SystemCallErrorClass);
+    const ErrnoENOTDIRClass = await Runtime.define_class_under(ErrnoModule, "ENOTDIR", SystemCallErrorClass);
+    const ErrnoEINVALClass = await Runtime.define_class_under(ErrnoModule, "EINVAL", SystemCallErrorClass);
 
     const SystemExitClass = Runtime.define_class("SystemExit", ExceptionClass, (klass: Class) => {
         klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
@@ -450,5 +451,18 @@ export class ZeroDivisionError extends RubyError {
 
     async ruby_class(): Promise<RValue> {
         return ZeroDivisionError.ruby_class ||= (await Object.find_constant("ZeroDivisionError"))!;
+    }
+}
+
+export class IOError extends RubyError {
+    private static ruby_class: RValue | null;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "IOError";
+    }
+
+    async ruby_class(): Promise<RValue> {
+        return IOError.ruby_class ||= (await Object.find_constant("IOError"))!;
     }
 }

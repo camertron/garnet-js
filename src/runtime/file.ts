@@ -1,4 +1,4 @@
-import { ErrnoENOENT, NameError } from "../errors";
+import { ErrnoENOENT, IOError, NameError } from "../errors";
 import { Class, IOClass, RValue, Runtime, Qtrue, Qfalse, Qnil } from "../runtime"
 import { IFileHandle, vmfs } from "../vmfs";
 import { Dir } from "./dir";
@@ -9,6 +9,8 @@ import { Args } from "./arg-scanner";
 import { Hash } from "./hash";
 import { Object } from "../runtime/object";
 import { Integer } from "./integer";
+import { Encoding } from "../runtime/encoding";
+import { ExecutionContext } from "../execution_context";
 
 export class RubyFile {
     private static klass_: RValue;
@@ -42,12 +44,154 @@ export class RubyFile {
         return this.klass_;
     }
 
+    private static BUFFER_SIZE = 8 * 1024;
+
     public descriptor: IFileHandle | null
     public opts: Hash | undefined;
+    public buffer_offset = 0;
+    public buffer_len = 0;
+
+    private _buffer: Uint8Array;
 
     constructor(path: string, mode: string, perm: number, opts?: Hash) {
         this.descriptor = vmfs.open(path, mode, perm);
         this.opts = opts; // not doing anything with this yet
+        this.buffer_offset = -1;
+        this.buffer_len = -1;
+    }
+
+    get buffer(): Uint8Array {
+        if (!this._buffer) {
+            this._buffer = new Uint8Array(RubyFile.BUFFER_SIZE);
+        }
+
+        return this._buffer;
+    }
+
+    gets(separator?: string): string | null {
+        separator ||= ExecutionContext.current.globals["$/"].get_data<string>() || "\n";
+
+        const encoding = Encoding.default_external.get_data<Encoding>();
+        const separator_bytes = encoding.string_to_bytes(separator);
+        const first_separator_byte = separator_bytes.at(0)!;
+        const chunks = [];
+
+        while (true) {
+            if (this.is_eof()) break;
+
+            chunks.push(...this.read_until(first_separator_byte));
+            const candidate = this.read_bytes(separator_bytes.length);
+            chunks.push(candidate);
+
+            if (this.buffers_equal(candidate, separator_bytes)) {
+                break;
+            }
+        }
+
+        if (chunks.length === 0) {
+            return null;
+        }
+
+        const result = this.combine_buffers(chunks);
+        return encoding.bytes_to_string(result);
+    }
+
+    private buffers_equal(buf1: Uint8Array, buf2: Uint8Array): boolean {
+        if (buf1.length !== buf2.length) return false;
+
+        for (let i = 0; i < buf1.length; i ++) {
+            if (buf1.at(i) !== buf2.at(i)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    read_until(byte: number): Uint8Array[] {
+        const result = [];
+
+        while (true) {
+            if (this.is_eof()) {
+                break;
+            }
+
+            this.maybe_read_next_chunk();
+            let index = this.buffer.indexOf(byte, this.buffer_offset);
+            result.push(this.buffer.slice(this.buffer_offset, index < 0 ? this.buffer_len : index));
+
+            if (index > -1) {
+                this.buffer_offset = index;
+                break;
+            } else {
+                this.buffer_offset = this.buffer_len;
+            }
+        }
+
+        return result;
+    }
+
+    read_byte(): Uint8Array | null {
+        if (this.is_eof()) {
+            return null;
+        }
+
+        this.maybe_read_next_chunk();
+        const byte = this.buffer.slice(this.buffer_offset, this.buffer_offset + 1);
+        this.buffer_offset ++;
+
+        return byte;
+    }
+
+    read_bytes(length: number): Uint8Array {
+        let remaining = length;
+        const result = [];
+
+        while (remaining > 0) {
+            if (this.is_eof()) break;
+
+            this.maybe_read_next_chunk();
+
+            const chunk = this.buffer.slice(this.buffer_offset, this.buffer_offset + remaining);
+            result.push(chunk);
+            this.buffer_offset += chunk.length;
+            remaining -= chunk.length;
+        }
+
+        return this.combine_buffers(result);
+    }
+
+    private combine_buffers(buffers: Uint8Array[]): Uint8Array {
+        if (buffers.length === 1) {
+            return buffers[0];
+        }
+
+        let len = 0;
+
+        for (let i = 0; i < buffers.length; i ++) {
+            len += buffers[i].length;
+        }
+
+        const new_array = new Uint8Array(len);
+        let offset = 0;
+
+        for (let i = 0; i < buffers.length; i ++) {
+            new_array.set(buffers[i], offset);
+            offset += buffers[i].length;
+        }
+
+        return new_array;
+    }
+
+    private maybe_read_next_chunk() {
+        if (this.buffer_offset < 0 || this.buffer_offset >= this.buffer.length) {
+            this.buffer_len = this.descriptor!.read(this.buffer.length, this.buffer);
+            this.buffer_offset = 0;
+        }
+    }
+
+    private is_eof(): boolean {
+        return this.buffer_len >= 0 && this.buffer_len < this.buffer.length && this.buffer_offset >= this.buffer_len;
     }
 }
 
@@ -286,18 +430,18 @@ export const init = async () => {
             const file = file_rval.get_data<RubyFile>();
             let return_value = file_rval;
 
-            try {
-                if (block) {
+            if (block) {
+                try {
                     return_value = await Object.send(block, "call", [file_rval]);
-                }
-
-                return return_value;
-            } finally {
-                if (file.descriptor) {
-                    file.descriptor.close();
-                    file.descriptor = null;
+                } finally {
+                    if (file.descriptor) {
+                        file.descriptor.close();
+                        file.descriptor = null;
+                    }
                 }
             }
+
+            return return_value;
         });
 
         klass.define_native_method("close", (self: RValue, _args: RValue[]): RValue => {
@@ -309,6 +453,12 @@ export const init = async () => {
             }
 
             return Qnil;
+        });
+
+        klass.define_native_method("gets", async (self: RValue, _args: RValue[]): Promise<RValue> => {
+            const file = self.get_data<RubyFile>();
+            const line = file.gets();
+            return line ? await RubyString.new(line) : Qnil;
         });
     });
 };
