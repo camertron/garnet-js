@@ -230,17 +230,25 @@ export class Runtime {
         return true;
     }
 
-    static async assert_type(obj: RValue, type: Module): Promise<void>;
-    static async assert_type(obj: RValue, type: RValue): Promise<void>;
-    static async assert_type(obj: RValue, type: Module | RValue): Promise<void> {
-        if (type instanceof Module) {
-            if (obj.klass.get_data<Module>() !== type) {
-                throw new TypeError(`no implicit conversion of ${obj.klass.get_data<Module>().name} into ${type.name}`);
+    static async assert_type(obj: RValue, ...types: Module[]): Promise<RValue>;
+    static async assert_type(obj: RValue, ...types: RValue[]): Promise<RValue>;
+    static async assert_type(obj: RValue, ...types: Array<Module | RValue>): Promise<RValue> {
+        for (const type of types) {
+            if (type instanceof Module) {
+                if (obj.klass.get_data<Module>() === type) {
+                    return type.rval;
+                }
+            } else {
+                if (await Kernel.is_a(obj, type)) {
+                    return type;
+                }
             }
+        }
+
+        if (types[0] instanceof Module) {
+            throw new TypeError(`no implicit conversion of ${obj.klass.get_data<Module>().name} into ${types[0].name}`);
         } else {
-            if (!(await Kernel.is_a(obj, type))) {
-                throw new TypeError(`no implicit conversion of ${obj.klass.get_data<Module>().name} into ${type.get_data<Module>().name}`);
-            }
+            throw new TypeError(`no implicit conversion of ${obj.klass.get_data<Module>().name} into ${types[0].get_data<Module>().name}`);
         }
     }
 
