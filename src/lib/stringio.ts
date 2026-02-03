@@ -56,6 +56,10 @@ export const init = () => {
             }
         });
 
+        klass.define_native_method("read", async (self: RValue): Promise<RValue> => {
+            return RubyString.new(self.get_data<string>());
+        });
+
         klass.define_native_method("puts", async (self: RValue, args: RValue[]): Promise<RValue> => {
             for (const arg of args) {
                 self.data += (await Object.send(arg, "to_s")).get_data<string>();
