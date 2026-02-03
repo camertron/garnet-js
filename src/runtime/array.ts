@@ -146,6 +146,45 @@ export const init = () => {
             return self;
         });
 
+        klass.define_native_method("group_by", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const elements = self.get_data<RubyArray>().elements;
+            const result = await Hash.new();
+            const result_hash = result.get_data<Hash>();
+
+            if (block) {
+                try {
+                    for (const element of elements) {
+                        const key = await Object.send(block, "call", [element]);
+
+                        if (await result_hash.has(key)) {
+                            (await result_hash.get(key)).get_data<RubyArray>().add(element);
+                        } else {
+                            const arr = await RubyArray.new();
+                            arr.get_data<RubyArray>().add(element);
+                            await result_hash.set(key, arr);
+                        }
+                    }
+                } catch (e) {
+                    if (e instanceof BreakError) {
+                        // return break value
+                        return e.value;
+                    } else {
+                        // an error occurred
+                        throw e;
+                    }
+                }
+            } else {
+                // calling #group_by without a block functions like #each
+                return await Enumerator.for_native_generator(async function* () {
+                    for (const element of elements) {
+                        yield element;
+                    }
+                });
+            }
+
+            return result;
+        });
+
         klass.define_native_method("reverse_each", async (self: RValue, args?: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
             const elements = self.get_data<RubyArray>().elements;
 
