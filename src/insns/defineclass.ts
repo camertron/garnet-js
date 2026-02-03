@@ -40,7 +40,7 @@ export default class DefineClass extends Instruction {
                 const module = Runtime.define_module_under(object, this.name);
                 context.push(await context.run_class_frame(this.iseq, module));
             } else {
-                const klass = Runtime.define_class_under(object, this.name, superclass);
+                const klass = await Runtime.define_class_under(object, this.name, superclass);
                 context.push(await context.run_class_frame(this.iseq, klass))
             }
         }

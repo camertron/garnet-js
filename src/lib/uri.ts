@@ -57,14 +57,14 @@ export const init = async () => {
         });
     });
 
-    const generic_class = Runtime.define_class_under(uri_module, "Generic", ObjectClass, (klass: Class) => {
+    const generic_class = await Runtime.define_class_under(uri_module, "Generic", ObjectClass, (klass: Class) => {
         klass.define_native_method("scheme", async (self: RValue): Promise<RValue> => {
             return await self.get_data<URI>().scheme();
         })
     });
 
-    const http_class = Runtime.define_class_under(uri_module, "HTTP", generic_class);
-    const https_class = Runtime.define_class_under(uri_module, "HTTPS", generic_class);
+    const http_class = await Runtime.define_class_under(uri_module, "HTTP", generic_class);
+    const https_class = await Runtime.define_class_under(uri_module, "HTTPS", generic_class);
 
     inited = true;
 };

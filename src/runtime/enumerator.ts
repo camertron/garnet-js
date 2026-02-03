@@ -353,7 +353,7 @@ export const init = async () => {
         });
     });
 
-    Runtime.define_class_under(await Enumerator.klass(), "Yielder", ObjectClass, async (klass: Class) => {
+    await Runtime.define_class_under(await Enumerator.klass(), "Yielder", ObjectClass, async (klass: Class) => {
         klass.define_native_method("yield", (self: RValue, args: RValue[]): RValue => {
             self.get_data<Yielder>().yield(args[0]);
             return Qnil;

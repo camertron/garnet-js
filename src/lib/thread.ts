@@ -141,7 +141,7 @@ export class BacktraceLocation {
     }
 }
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
     // Jesus I hope I don't have to implement this whole thing any time soon 😱
@@ -165,7 +165,7 @@ export const init = () => {
         });
     });
 
-    const MutexClass = Runtime.define_class_under(ThreadClass, "Mutex", ObjectClass, (klass: Class) => {
+    const MutexClass = await Runtime.define_class_under(ThreadClass, "Mutex", ObjectClass, (klass: Class) => {
         klass.define_native_singleton_method("new", async (self: RValue): Promise<RValue> => {
             return await Mutex.new();
         });
@@ -231,7 +231,7 @@ export const init = () => {
     // alias
     ObjectClass.get_data<Class>().constants["Mutex"] = MutexClass;
 
-    const BacktraceClass = Runtime.define_class_under(ThreadClass, "Backtrace", ObjectClass, (klass: Class) => {
+    const BacktraceClass = await Runtime.define_class_under(ThreadClass, "Backtrace", ObjectClass, (klass: Class) => {
         // klass.define_native_method("to_s", (self: RValue): RValue => {
         //     return Qnil;
         // });

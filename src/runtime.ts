@@ -137,7 +137,7 @@ export class Runtime {
         return obj.constants[name];
     }
 
-    static define_class_under(parent: RValue, name: string, superclass: RValue, cb?: ClassDefinitionCallback): RValue {
+    static async define_class_under(parent: RValue, name: string, superclass: RValue, cb?: ClassDefinitionCallback): Promise<RValue> {
         const parent_mod = parent.get_data<Module>();
 
         if (!parent_mod.constants[name]) {
