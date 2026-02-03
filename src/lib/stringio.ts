@@ -1,4 +1,4 @@
-import { Class, NilClass, ObjectClass, Qfalse, Qnil, RValue, Runtime } from "../runtime";
+import { Class, IOClass, NilClass, ObjectClass, Qfalse, Qnil, RValue, Runtime } from "../runtime";
 import { Integer } from "../runtime/integer";
 import { RubyString } from "../runtime/string"
 import { Object } from "../runtime/object"
@@ -29,7 +29,7 @@ export class StringIO {
 export const init = () => {
     if (inited) return;
 
-    Runtime.define_class("StringIO", ObjectClass, async (klass: Class) => {
+    Runtime.define_class("StringIO", IOClass, async (klass: Class) => {
         // @TODO: also include IO::generic_readable and IO::generic_writable
         klass.include((await Object.find_constant("Enumerable"))!);
 
