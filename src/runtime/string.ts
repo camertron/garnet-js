@@ -1330,6 +1330,11 @@ export const init = () => {
 
             return await Integer.get(parseInt(value, 16) * multiplier);
         });
+
+        klass.define_native_method("valid_encoding?", async (self: RValue): Promise<RValue> => {
+            const encoding = await RubyString.get_encoding(self);
+            return encoding.is_representable(self.get_data<string>()) ? Qtrue : Qfalse;
+        });
     });
 
     inited = true;
