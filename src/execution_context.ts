@@ -165,9 +165,9 @@ export class ExecutionContext {
 
     async init() {
         this.globals = {
-            '$:': await RubyArray.new(),  // load path
-            '$"': await RubyArray.new(),  // loaded features
-            '$,': Qnil,                   // field separator for print and Array#join
+            '$:': await RubyArray.new(),      // load path
+            '$"': await RubyArray.new(),      // loaded features
+            '$,': Qnil,                       // field separator for print and Array#join
             '$/': await RubyString.new("\n"), // line separator
             '$stdout': STDOUT,
             '$stderr': STDERR,
