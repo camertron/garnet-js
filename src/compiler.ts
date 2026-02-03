@@ -1966,13 +1966,21 @@ export class Compiler extends Visitor {
 
     override visitYieldNode(node: YieldNode) {
         let argc = 0;
+        let flags = CallDataFlag.ARGS_SIMPLE;
 
         if (node.arguments_) {
+            for (const argument of node.arguments_.arguments_) {
+                if (argument instanceof SplatNode) {
+                    flags = CallDataFlag.ARGS_SPLAT;
+                    break;
+                }
+            }
+
             this.with_used(true, () => this.visit(node.arguments_!));
             argc = node.arguments_.arguments_.length;
         }
 
-        this.iseq.invokeblock(new BlockCallData(argc, CallDataFlag.ARGS_SIMPLE, null));
+        this.iseq.invokeblock(new BlockCallData(argc, flags, null));
         if (!this.used) this.iseq.pop();
     }
 
