@@ -43,6 +43,28 @@ export const strlen = (input: string): number => {
     return length;
 };
 
+export function *each_code_point(input: string) {
+    for (let i = 0; i < input.length; i ++) {
+        let code_point = input.charCodeAt(i);
+
+        if (code_point >= 0xD800 && code_point <= 0xDBFF) {
+            const high_surrogate = code_point;
+            const low_surrogate = input.charCodeAt(++ i); // low surrogate
+
+            if (low_surrogate >= 0xDC00 && low_surrogate <= 0xDFFF) {
+                // Combine surrogate pair to get the actual code point
+                code_point = 0x10000 + ((high_surrogate - 0xD800) << 10) + (low_surrogate - 0xDC00);
+            } else {
+                throw new Error('Invalid surrogate pair');
+            }
+        }
+
+        yield code_point;
+    }
+
+    return length;
+}
+
 export const is_alpha_num = (code: number) => {
     return (
         (code > 47 && code < 58) ||  // numeric (0-9)
