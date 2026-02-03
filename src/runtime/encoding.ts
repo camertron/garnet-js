@@ -3,26 +3,20 @@ import { CR_7BIT, CR_UNKNOWN, CR_VALID, RubyString as RubyString } from "../runt
 import { ArgumentError, EncodingCompatibilityError } from "../errors";
 import { Object } from "../runtime/object";
 import { Args } from "./arg-scanner";
+import { each_code_point } from "../util/string_utils";
 
 export abstract class Encoding {
-    private static default_: RValue;
+    public static default_external: RValue;
+    public static default_internal: RValue;
 
     public name: string;
 
     static async encoding_class(): Promise<Class> {
-        return (await this.encoding_class_rval()).get_data<Class>();
+        return (await this.klass()).get_data<Class>();
     }
 
-    static async encoding_class_rval(): Promise<RValue> {
+    static async klass(): Promise<RValue> {
         return (await Object.find_constant("Encoding"))!;
-    }
-
-    static async default(): Promise<RValue> {
-        // Ruby's default encoding is UTF-8, and Garnet.js follows this convention.
-        // String literals from source files are typically UTF-8, and dynamically
-        // created strings should match this encoding for compatibility.
-        this.default_ = (await this.encoding_class()).constants["UTF_8"];
-        return this.default_;
     }
 
     static get us_ascii(): RValue {
@@ -46,7 +40,7 @@ export abstract class Encoding {
 
     // accepts an Encoding instance or an encoded string and returns an Encoding
     static async extract(obj: RValue): Promise<RValue | undefined> {
-        if (obj.klass === await this.encoding_class_rval()) {
+        if (obj.klass === await this.klass()) {
             return obj;
         } else if (obj.klass === await RubyString.klass()) {
             return await RubyString.get_encoding_rval(obj);
@@ -55,10 +49,20 @@ export abstract class Encoding {
 
     // accepts an Encoding instance or a string like "UTF-8" and returns an Encoding
     static async coerce(obj: RValue): Promise<RValue | undefined> {
-        if (obj.klass === await this.encoding_class_rval()) {
+        if (obj.klass === await this.klass()) {
             return obj;
         } else if (obj.klass === await RubyString.klass()) {
             return this.get(obj.get_data<string>());
+        } else {
+            return undefined;
+        }
+    }
+
+    static async coerce_bang(obj: RValue): Promise<RValue | undefined> {
+        if (obj.klass === await this.klass()) {
+            return obj;
+        } else if (obj.klass === await RubyString.klass()) {
+            return this.get_or_throw(obj.get_data<string>());
         } else {
             return undefined;
         }
@@ -232,6 +236,8 @@ export abstract class Encoding {
     abstract unicode_to_codepoint(unicode_cp: number): number;
     abstract bytesize(str: string): number;
     abstract string_to_bytes(str: string): Uint8Array;
+    abstract bytes_to_string(bytes: Uint8Array): string;
+    abstract is_representable(str: string): boolean;
 
     abstract conversion_targets: string[];
 
@@ -249,6 +255,7 @@ export abstract class Encoding {
 export class USASCIIEncoding extends Encoding {
     public name: string = "US-ASCII";
     public conversion_targets = ["binary", "us-ascii", "utf-8", "utf-16le", "utf-16be", "utf-32"];
+    private _decoder: TextDecoder;
 
     constructor() {
         super(1, 1);
@@ -279,12 +286,35 @@ export class USASCIIEncoding extends Encoding {
         }
 
         return result;
+    }
+
+    bytes_to_string(bytes: Uint8Array): string {
+        return this.decoder.decode(bytes);
+    }
+
+    private get decoder() {
+        if (!this._decoder) {
+            this._decoder = new TextDecoder("ascii");
+        }
+
+        return this._decoder;
+    }
+
+    is_representable(str: string): boolean {
+        for (const cp of each_code_point(str)) {
+            if (cp > 255) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
 
 export class ASCII8BitEncoding extends Encoding {
     public name: string = "ASCII-8BIT";
     public conversion_targets = ["us-ascii", "ascii-8bit"];
+    private _decoder: TextDecoder;
 
     constructor() {
         super(1, 1);
@@ -315,6 +345,28 @@ export class ASCII8BitEncoding extends Encoding {
         }
 
         return result;
+    }
+
+    bytes_to_string(bytes: Uint8Array): string {
+        return this.decoder.decode(bytes);
+    }
+
+    private get decoder() {
+        if (!this._decoder) {
+            this._decoder = new TextDecoder("utf-16le");
+        }
+
+        return this._decoder;
+    }
+
+    is_representable(str: string): boolean {
+        for (const cp of each_code_point(str)) {
+            if (cp > 255) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
 
@@ -332,11 +384,17 @@ export abstract class UnicodeEncoding extends Encoding {
     unicode_to_codepoint(unicode_cp: number): number {
         return unicode_cp;
     }
+
+    is_representable(str: string): boolean {
+        // This is not strictly correct but it's fine for now
+        return true;
+    }
 }
 
 export class UTF8Encoding extends UnicodeEncoding {
     public name: string = "UTF-8";
     private _encoder: TextEncoder;
+    private _decoder: TextDecoder;
 
     constructor() {
         super(1, 4);
@@ -378,6 +436,10 @@ export class UTF8Encoding extends UnicodeEncoding {
         return this.encoder.encode(str);
     }
 
+    bytes_to_string(bytes: Uint8Array): string {
+        return this.decoder.decode(bytes);
+    }
+
     private get encoder() {
         if (!this._encoder) {
             this._encoder = new TextEncoder();
@@ -385,10 +447,19 @@ export class UTF8Encoding extends UnicodeEncoding {
 
         return this._encoder;
     }
+
+    private get decoder() {
+        if (!this._decoder) {
+            this._decoder = new TextDecoder();
+        }
+
+        return this._decoder;
+    }
 }
 
 export class UTF16LEEncoding extends UnicodeEncoding {
     public name: string = "UTF-16LE";
+    private _decoder: TextDecoder;
 
     constructor() {
         super(2, 2);
@@ -408,11 +479,24 @@ export class UTF16LEEncoding extends UnicodeEncoding {
         }
 
         return result;
+    }
+
+    bytes_to_string(bytes: Uint8Array): string {
+        return this._decoder.decode(bytes);
+    }
+
+    private get decoder() {
+        if (!this._decoder) {
+            this._decoder = new TextDecoder("utf-16le");
+        }
+
+        return this._decoder;
     }
 }
 
 export class UTF16BEEncoding extends UnicodeEncoding {
     public name: string = "UTF-16BE";
+    private _decoder: TextDecoder;
 
     constructor() {
         super(2, 2);
@@ -432,6 +516,18 @@ export class UTF16BEEncoding extends UnicodeEncoding {
         }
 
         return result;
+    }
+
+    bytes_to_string(bytes: Uint8Array): string {
+        return this.decoder.decode(bytes);
+    }
+
+    private get decoder() {
+        if (!this._decoder) {
+            this._decoder = new TextDecoder("utf-16be");
+        }
+
+        return this._decoder;
     }
 }
 
@@ -492,6 +588,17 @@ export class UTF32Encoding extends UnicodeEncoding {
 
         return result;
     }
+
+    bytes_to_string(bytes: Uint8Array): string {
+        const code_points: number[] = [];
+
+        for (let i = 0; i < bytes.length; i += 4) {
+            const code_point = (bytes[i] << 24) | (bytes[i + 1] << 16) | (bytes[i + 2] << 8) | bytes[i + 3];
+            code_points.push(code_point);
+        }
+
+        return String.fromCodePoint(...code_points);
+    }
 }
 
 const encoding_map: Map<string, RValue> = new Map();
@@ -532,9 +639,43 @@ export const init = async () => {
         // making new Encoding instances cannot be done from Ruby land
         klass.get_singleton_class().get_data<Class>().undef_method("new");
 
-        await Object.send(klass.get_singleton_class(), "attr_accessor", [await Runtime.intern("default_external")]);
-        await Object.send(klass.get_singleton_class(), "attr_accessor", [await Runtime.intern("default_internal")]);
-        await Object.send(klass.rval, "default_external=", [await Encoding.get("utf-16le")!]);
+        await Object.send(klass.get_singleton_class(), "attr_reader", [await Runtime.intern("default_external")]);
+        await Object.send(klass.get_singleton_class(), "attr_reader", [await Runtime.intern("default_internal")]);
+
+        klass.define_native_singleton_method("default_external=", async (_self: RValue, args: RValue[]) => {
+            const [enc_or_name] = await Args.scan("1", args);
+
+            if (enc_or_name === Qnil) {
+                Encoding.default_external = Qnil;
+                return Qnil;
+            }
+
+            await Runtime.assert_type(enc_or_name, await RubyString.klass(), await Encoding.klass());
+
+            const encoding = (await Encoding.coerce_bang(enc_or_name))!;
+            Encoding.default_external = encoding;
+
+            return enc_or_name;
+        });
+
+        klass.define_native_singleton_method("default_internal=", async (_self: RValue, args: RValue[]) => {
+            const [enc_or_name] = await Args.scan("1", args);
+
+            if (enc_or_name === Qnil) {
+                Encoding.default_internal = Qnil;
+                return Qnil;
+            }
+
+            await Runtime.assert_type(enc_or_name, await RubyString.klass(), await Encoding.klass());
+
+            const encoding = (await Encoding.coerce_bang(enc_or_name))!;
+            Encoding.default_internal = encoding;
+
+            return enc_or_name;
+        });
+
+        await Object.send(klass.rval, "default_internal=", [Qnil]);
+        await Object.send(klass.rval, "default_external=", [await Encoding.get("utf-8")!]);
 
         klass.define_native_singleton_method("find", async (_self: RValue, args: RValue[]): Promise<RValue> => {
             const [name_rval] = await Args.scan("1", args);
@@ -571,8 +712,8 @@ export const init = async () => {
     await register_encoding("utf-16be", [], new UTF16BEEncoding());
     await register_encoding("utf-32", [], new UTF32Encoding());
 
-    Runtime.define_class_under(EncodingClass, "CompatibilityError", (await Object.find_constant("EncodingError"))!);
-    Runtime.define_class_under(EncodingClass, "ConverterNotFoundError", (await Object.find_constant("EncodingError"))!);
+    await Runtime.define_class_under(EncodingClass, "CompatibilityError", (await Object.find_constant("EncodingError"))!);
+    await Runtime.define_class_under(EncodingClass, "ConverterNotFoundError", (await Object.find_constant("EncodingError"))!);
 
     inited = true;
 };
