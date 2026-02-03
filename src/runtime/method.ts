@@ -150,7 +150,7 @@ export const init = async () => {
                 return await mtd.callable.call(
                     ExecutionContext.current,
                     block_self,
-                    args,
+                    block_args,
                     block_kwargs,
                     block_block,
                     mtd_call_data
