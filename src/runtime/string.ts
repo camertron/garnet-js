@@ -248,15 +248,43 @@ export const init = () => {
                 return await RubyArray.new([]);
             }
 
-            let delim;
+            const chunks: Promise<RValue>[] = [];
+            const [delim_arg] = await Args.scan("01", args);
 
-            if (args.length > 0) {
-                delim = args[0].get_data<string>();
+            if (delim_arg) {
+                if (delim_arg.klass === await Regexp.klass()) {
+                    const regexp = delim_arg.get_data<Regexp>();
+                    let last_pos = 0;
+                    let match_found = false;
+
+                    await regexp.scan(str, async (match_data: MatchData): Promise<boolean> => {
+                        match_found = true;
+                        const match_start = match_data.begin(0);
+                        const match_end = match_data.end(0);
+
+                        // substring before the match
+                        chunks.push(RubyString.new(str.substring(last_pos, match_start)));
+                        last_pos = match_end;
+
+                        return true;  // keep going
+                    });
+
+                    // add substring after last match
+                    if (match_found) {
+                        chunks.push(RubyString.new(str.substring(last_pos)));
+                    } else {
+                        // no matches found, return the whole string
+                        chunks.push(RubyString.new(str));
+                    }
+                } else {
+                    const delim = delim_arg.get_data<string>();
+                    str.split(delim).forEach((elem) => chunks.push(RubyString.new(elem)));
+                }
             } else {
-                delim = " ";
+                // default delimiter is a space
+                str.split(" ").forEach((elem) => chunks.push(RubyString.new(elem)));
             }
 
-            const chunks = str.split(delim).map((elem) => RubyString.new(elem));
             return await RubyArray.new(await Promise.all(chunks));
         });
 
