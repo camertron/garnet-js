@@ -1550,7 +1550,7 @@ export const init = async () => {
     hash_init();
     array_init();
     proc_init();
-    error_init();
+    await error_init();
     process_init();
     env_init();
     await file_init();
@@ -1561,7 +1561,7 @@ export const init = async () => {
     binding_init();
     await signal_init();
     time_init();
-    thread_init();
+    await thread_init();
     await regexp_init();
     await encoding_init();
     struct_init();
