@@ -664,7 +664,7 @@ export class Regexp {
         return this.klass_;
     }
 
-    static async new(pattern: string, flags: number): Promise<RValue> {
+    static async new(pattern: string, flags: number = 0): Promise<RValue> {
         return new RValue(await this.klass(), this.compile(pattern, flags));
     }
 
@@ -826,11 +826,24 @@ export class Regexp {
                 break;
             }
 
+            const match_start = region.beg_at(0);
+            const match_end = region.end_at(0);
+
+            if (match_start === match_end) {
+                // advance by 1 char to avoid infinite loop if match is zero-width
+                last_pos = match_end + bytes_per_char;
+            } else {
+                last_pos = match_end;
+            }
+
+            // don't allow a match at the first position if the match is zero-width
+            if (match_start === match_end && match_start === 0) {
+                continue;
+            }
+
             if (!(await callback(MatchData.from_region(str, region, bytes_per_char)))) {
                 break;
             }
-
-            last_pos = region.end_at(0);
         }
 
         onigmo.exports.free(str_ptr.start);

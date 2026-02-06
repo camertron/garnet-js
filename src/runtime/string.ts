@@ -248,44 +248,101 @@ export const init = () => {
                 return await RubyArray.new([]);
             }
 
-            const chunks: Promise<RValue>[] = [];
-            const [delim_arg] = await Args.scan("01", args);
+            const chunks: RValue[] = [];
+            let [delim_arg, limit_arg] = await Args.scan("02", args);
+            let limit = 0;
 
-            if (delim_arg) {
-                if (delim_arg.klass === await Regexp.klass()) {
-                    const regexp = delim_arg.get_data<Regexp>();
-                    let last_pos = 0;
-                    let match_found = false;
-
-                    await regexp.scan(str, async (match_data: MatchData): Promise<boolean> => {
-                        match_found = true;
-                        const match_start = match_data.begin(0);
-                        const match_end = match_data.end(0);
-
-                        // substring before the match
-                        chunks.push(RubyString.new(str.substring(last_pos, match_start)));
-                        last_pos = match_end;
-
-                        return true;  // keep going
-                    });
-
-                    // add substring after last match
-                    if (match_found) {
-                        chunks.push(RubyString.new(str.substring(last_pos)));
-                    } else {
-                        // no matches found, return the whole string
-                        chunks.push(RubyString.new(str));
-                    }
-                } else {
-                    const delim = delim_arg.get_data<string>();
-                    str.split(delim).forEach((elem) => chunks.push(RubyString.new(elem)));
-                }
-            } else {
-                // default delimiter is a space
-                str.split(" ").forEach((elem) => chunks.push(RubyString.new(elem)));
+            if (limit_arg) {
+                await Runtime.assert_type(limit_arg, await Integer.klass());
+                limit = limit_arg.get_data<number>();
             }
 
-            return await RubyArray.new(await Promise.all(chunks));
+            if (!delim_arg || delim_arg === Qnil || delim_arg.get_data<any>() === " ") {
+                delim_arg = await Regexp.new("\\s+");
+            } else if (delim_arg && delim_arg.get_data<any>() === "" && limit > 1) {
+                delim_arg = await Regexp.new("");
+            }
+
+            if (delim_arg.klass === await Regexp.klass()) {
+                const regexp = delim_arg.get_data<Regexp>();
+                let last_pos = 0;
+                let match_found = false;
+                let split_count = 0;
+
+                await regexp.scan(str, async (match_data: MatchData): Promise<boolean> => {
+                    match_found = true;
+                    split_count ++;
+
+                    const match_start = match_data.begin(0);
+                    const match_end = match_data.end(0);
+
+                    // substring before the match
+                    chunks.push(await RubyString.new(str.substring(last_pos, match_start)));
+                    last_pos = match_end;
+
+                    if (match_data.captures.length > 1) {
+                        // first capture is the overall match, so skip it
+                        for (let i = 1; i < match_data.captures.length; i ++) {
+                            const [begin_pos, end_pos] = match_data.captures[i];
+                            chunks.push(await RubyString.new(str.substring(begin_pos, end_pos)));
+                        }
+                    }
+
+                    if (limit > 0 && split_count >= limit - 1) {
+                        return false; // reached the limit, so stop scanning
+                    } else {
+                        return true;  // keep going
+                    }
+                });
+
+                // Add substring after last match. From the docs:
+                // When limit is zero, there is no limit on the size of the array, but trailing empty strings are omitted.
+                // When limit is negative, there is no limit on the size of the array, and trailing empty strings are not omitted.
+                if (match_found) {
+                    const last_chunk = str.substring(last_pos);
+
+                    if (limit < 0 || limit > 0 || last_chunk.length > 0) {
+                        chunks.push(await RubyString.new(last_chunk));
+                    }
+                } else {
+                    // no matches found, return the whole string
+                    chunks.push(await RubyString.new(str));
+                }
+            } else {
+                const delim = (await Runtime.coerce_to_string(delim_arg)).get_data<string>();
+                let chunk_strs: string[];
+
+                if (limit === 0 || limit === -1) {
+                    chunk_strs = str.split(delim);
+                } else if (limit > 1) {
+                    chunk_strs = str.split(delim, limit - 1);
+                } else {
+                    chunk_strs = [];
+                }
+
+                const len = chunk_strs.reduce<number>((prev: number, cur: string) => prev + cur.length, 0) + delim.length * chunk_strs.length;
+                const last_chunk = str.slice(len);
+
+                if (limit === 0) {
+                    if (last_chunk.length !== 0) {
+                        chunk_strs.push(last_chunk);
+                    }
+
+                    if (chunk_strs.length > 0 && chunk_strs[chunk_strs.length - 1].length === 0) {
+                        delete chunk_strs[chunk_strs.length - 1];
+                    }
+                } else {
+                    if (last_chunk.length > 0 || (chunk_strs.length > 0 && chunk_strs[chunk_strs.length - 1] !== '')) {
+                        chunk_strs.push(last_chunk);
+                    }
+                }
+
+                for (const chunk_str of chunk_strs) {
+                    chunks.push(await RubyString.new(chunk_str));
+                }
+            }
+
+            return await RubyArray.new(chunks);
         });
 
         // a count of 0 means replace all matches, > 0 means only replace max n times
