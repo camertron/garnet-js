@@ -1350,8 +1350,9 @@ await (BasicObjectClass.get_data<Class>()).tap(async (klass: Class) => {
         return self.is_truthy() ? Qfalse : Qtrue;
     });
 
-    klass.define_native_method("!=", (self: RValue, args: RValue[]): RValue => {
-        return self.object_id != args[0].object_id ? Qtrue : Qfalse;
+    klass.define_native_method("!=", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const eq_result = await Object.send(self, "==", args);
+        return eq_result.is_truthy() ? Qfalse : Qtrue;
     });
 
     klass.define_native_method("instance_exec", async (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
