@@ -15,6 +15,7 @@ import { spaceship_compare } from "./comparable";
 import { Numeric } from "./numeric";
 import { Args } from "./arg-scanner";
 import { Kernel } from "./kernel";
+import { warn } from "console";
 
 export class RubyArray {
     private static klass_: RValue;
@@ -1065,6 +1066,43 @@ export const init = () => {
             }
 
             return await RubyArray.new(result);
+        });
+
+        klass.define_native_method("count", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const elements = self.get_data<RubyArray>().elements;
+            const [target_arg] = await Args.scan("01", args);
+
+            if (!target_arg && !block) {
+                return await Integer.get(elements.length);
+            }
+
+            if (target_arg && block) {
+                warn("warning: given block not used");
+            }
+
+            let count = 0;
+
+            if (target_arg) {
+                const target_arg_arr = [target_arg];
+
+                for (const element of elements) {
+                    if ((await Object.send(element, "==", target_arg_arr)).is_truthy()) {
+                        count ++;
+                    }
+                }
+            } else {
+                const proc = block!.get_data<Proc>();
+
+                for (const element of elements) {
+                    const result = await proc.call(ExecutionContext.current, [element]);
+
+                    if (result.is_truthy()) {
+                        count ++;
+                    }
+                }
+            }
+
+            return await Integer.get(count);
         });
     });
 
