@@ -348,6 +348,19 @@ export const init = async () => {
         }
     });
 
+    mod.define_native_method("remove_instance_variable", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const [name_rval] = await Args.scan("1", args);
+        const arg = (await Runtime.coerce_to_string(name_rval)).get_data<string>();
+
+        if (self.iv_exists(arg)) {
+            const value = self.iv_get(arg);
+            self.ivars.delete(arg);
+            return value;
+        } else {
+            throw new NameError(`instance variable ${arg} not defined`);
+        }
+    });
+
     mod.define_native_method("exit", async (self: RValue, args: RValue[]): Promise<RValue> => {
         let status = 0;
         let message = null;
