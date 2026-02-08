@@ -107,7 +107,6 @@ export class RubyString {
     }
 
     static set_code_range(str: RValue, code_range: number) {
-        const context = this.get_context(str);
         this.clear_code_range(str);
         this.set_flags(str, this.get_flags(str) | (code_range & CR_MASK));
     }
@@ -125,7 +124,7 @@ export class RubyString {
 
         if (cr == CR_UNKNOWN) {
             const new_cr = this.code_range_scan(str, 0, str.get_data<string>().length);
-            this.set_code_range(str, cr);
+            this.set_code_range(str, new_cr);
         }
 
         return cr;
@@ -590,6 +589,7 @@ export const init = () => {
         });
 
         klass.define_native_method("+", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            // @TODO: consider encodings
             await Runtime.assert_type(args[0], await RubyString.klass());
             return RubyString.new(self.get_data<string>() + args[0].get_data<string>());
         });
