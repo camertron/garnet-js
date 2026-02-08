@@ -1,6 +1,6 @@
 import { IndexError, NameError, RuntimeError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
+import { Class, Module, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { RubyString as RubyString } from "../runtime/string";
 import * as WASM from "../wasm";
 import { Integer } from "./integer";
@@ -111,7 +111,7 @@ export const init = async () => {
     const onigmo_instance = await WASM.load_module("onigmo");
     onigmo = { exports: new OnigmoExportsWrapper(onigmo_instance.exports as unknown as OnigmoExports) };
 
-    Runtime.define_class("Regexp", ObjectClass, (klass: Class) => {
+    Runtime.define_class("Regexp", ObjectClass, async (klass: Class) => {
         klass.define_native_singleton_method("compile", async (_self: RValue, args: RValue[]): Promise<RValue> => {
             // @TODO: handle flags/options
             const pattern = await Runtime.coerce_to_string(args[0]);
@@ -233,6 +233,10 @@ export const init = async () => {
 
             return RubyString.new(result.join(""));
         });
+
+        // Alias Regexp.quote to Regexp.escape
+        const singleton_class = klass.get_singleton_class().get_data<Module>();
+        await singleton_class.alias_method("quote", "escape");
     });
 
     Runtime.define_class("MatchData", ObjectClass, (klass: Class) => {
