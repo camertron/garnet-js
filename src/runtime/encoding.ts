@@ -224,7 +224,8 @@ export class USASCIIEncoding extends Encoding {
 
     is_representable(str: string): boolean {
         for (const cp of each_code_point(str)) {
-            if (cp > 255) {
+            // US-ASCII is a 7-bit encoding
+            if (cp > 128) {
                 return false;
             }
         }
