@@ -206,6 +206,10 @@ export const init = async () => {
             return self;
         });
 
+        klass.define_native_method("to_f", async (self: RValue): Promise<RValue> => {
+            return await Float.new(self.get_data<number>());
+        });
+
         klass.define_native_method("even?", (self: RValue): RValue => {
             return self.get_data<number>() % 2 == 0 ? Qtrue : Qfalse;
         });
