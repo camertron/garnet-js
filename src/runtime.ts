@@ -1138,9 +1138,18 @@ export const VMCoreClass = Runtime.define_class("VMCore", ObjectClass, (klass: C
         const new_hash = new RubyHash();
 
         for (const arg of args) {
-            await arg.get_data<RubyHash>().each(async (k: RValue, v: RValue) => {
-                await new_hash.set(k, v);
-            });
+            // skip nil values (**nil should be treated as empty hash)
+            if (arg === Qnil) {
+                continue;
+            }
+
+            const hash_data = arg.get_data<RubyHash>();
+
+            if (hash_data) {
+                await hash_data.each(async (k: RValue, v: RValue) => {
+                    await new_hash.set(k, v);
+                });
+            }
         }
 
         return await RubyHash.from_hash(new_hash);
@@ -1149,11 +1158,17 @@ export const VMCoreClass = Runtime.define_class("VMCore", ObjectClass, (klass: C
     klass.define_native_method("hash_merge_ptr", async (self: RValue, args: RValue[]): Promise<RValue> => {
         // @TODO: can we do this without creating a new hash?
         const new_hash = new RubyHash();
-        const old_hash = args[0].get_data<RubyHash>();
 
-        await old_hash.each(async (k: RValue, v: RValue) => {
-            await new_hash.set(k, v);
-        });
+        // skip nil values (**nil should be treated as empty hash)
+        if (args[0] !== Qnil) {
+            const old_hash = args[0].get_data<RubyHash>();
+
+            if (old_hash) {
+                await old_hash.each(async (k: RValue, v: RValue) => {
+                    await new_hash.set(k, v);
+                });
+            }
+        }
 
         for (let i = 1; i < args.length; i += 2) {
             await new_hash.set(args[i], args[i + 1]);
