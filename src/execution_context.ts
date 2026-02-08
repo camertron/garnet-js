@@ -700,11 +700,19 @@ export class ExecutionContext {
     }
 
     async run_rescue_frame(iseq: InstructionSequence, frame: Frame, error: RValue): Promise<RValue> {
-        return await this.run_frame(new RescueFrame(iseq, frame, this.stack.length), () => {
-            this.local_set(0, 0, error);
-            this.globals["$!"] = error;
-            return Promise.resolve(null);
-        });
+        // Save the previous value of $! so we can restore it after the rescue block
+        const previous_error = this.globals["$!"];
+
+        try {
+            return await this.run_frame(new RescueFrame(iseq, frame, this.stack.length), () => {
+                this.local_set(0, 0, error);
+                this.globals["$!"] = error;
+                return Promise.resolve(null);
+            });
+        } finally {
+            // Restore the previous value of $! after the rescue block completes
+            this.globals["$!"] = previous_error;
+        }
     }
 
     async run_ensure_frame(iseq: InstructionSequence, frame: Frame, error: RValue): Promise<RValue> {
