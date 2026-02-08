@@ -544,7 +544,7 @@ export const init = () => {
         });
 
         klass.define_native_method("merge", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
-            if (args.length === 0) {
+            if (args.length === 0 && !kwargs) {
                 return self;
             }
 
@@ -577,11 +577,29 @@ export const init = () => {
                 });
             }
 
+            if (kwargs) {
+                await kwargs.each(async (k: RValue, v: RValue) => {
+                    if (proc && await data.has(k)) {
+                        try {
+                            v = await proc.call(ExecutionContext.current, [k, await data.get(k), v]);
+                        } catch (e) {
+                            if (e instanceof BreakError) {
+                                v = e.value;
+                            } else {
+                                throw e;
+                            }
+                        }
+                    }
+
+                    await result.set(k, v);
+                });
+            }
+
             return await Hash.from_hash(result);
         });
 
-        klass.define_native_method("merge!", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
-            if (args.length === 0) {
+        klass.define_native_method("merge!", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            if (args.length === 0 && !kwargs) {
                 return self;
             }
 
@@ -593,6 +611,24 @@ export const init = () => {
                 const other = arg.get_data<Hash>();
 
                 await other.each(async (k: RValue, v: RValue) => {
+                    if (proc && await data.has(k)) {
+                        try {
+                            v = await proc.call(ExecutionContext.current, [k, await data.get(k), v]);
+                        } catch (e) {
+                            if (e instanceof BreakError) {
+                                v = e.value;
+                            } else {
+                                throw e;
+                            }
+                        }
+                    }
+
+                    await data.set(k, v);
+                });
+            }
+
+            if (kwargs) {
+                await kwargs.each(async (k: RValue, v: RValue) => {
                     if (proc && await data.has(k)) {
                         try {
                             v = await proc.call(ExecutionContext.current, [k, await data.get(k), v]);
