@@ -161,9 +161,13 @@ export class MethodFrame extends Frame implements IFrameWithOwner {
     }
 }
 
-export class ClassFrame extends Frame {
+export class ClassFrame extends Frame implements IFrameWithOwner {
+    public owner?: Module;
+
     constructor(iseq: InstructionSequence, parent: Frame, stack_index: number, self: RValue, nesting?: RValue[]) {
         super(iseq, parent, stack_index, self, nesting || parent.nesting.concat([self]));
+        // In a class/module body, the owner is the class/module being defined
+        this.owner = self.get_data<Module>();
     }
 }
 
