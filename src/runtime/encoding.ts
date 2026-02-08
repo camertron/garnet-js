@@ -1,6 +1,3 @@
-import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
-import { CR_7BIT, CR_UNKNOWN, CR_VALID, RubyString as RubyString } from "../runtime/string";
-import { ArgumentError, EncodingCompatibilityError } from "../errors";
 import { Class, IOClass, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { CR_7BIT, RubyString as RubyString } from "../runtime/string";
 import { ArgumentError } from "../errors";
@@ -154,92 +151,6 @@ export abstract class Encoding {
         if (cr1 == CR_7BIT) return enc2;
 
         return null;
-    }
-
-    static enc_asciicompat(enc: RValue): boolean {
-        return enc.get_data<Encoding>().min_length == 1;
-    }
-
-    static async enc_cr_str_buf_cat(str: RValue, str2: RValue): Promise<number> {
-        const str_enc = await RubyString.get_encoding_rval(str);
-        const str2_enc = await RubyString.get_encoding_rval(str2);
-        let str2_cr = RubyString.get_code_range(str2);
-        let res_enc: RValue;
-        let str_cr, res_cr;
-        let incompatible = false;
-
-        str_cr = str.get_data<string>().length > 0 ? RubyString.get_code_range(str) : CR_7BIT;
-
-        if (str_enc == str2_enc) {
-            if (str_cr === CR_UNKNOWN) {
-                str2_cr = CR_UNKNOWN;
-            } else if (str2_cr === CR_UNKNOWN) {
-                str2_cr = RubyString.scan_for_code_range(str2);
-            }
-        } else {
-            if (!this.enc_asciicompat(str_enc) || !this.enc_asciicompat(str2_enc)) {
-                if (str2.get_data<string>().length == 0) return str2_cr;
-                if (str.get_data<string>().length == 0) {
-                    str.data = str.get_data<string>() + str2.get_data<string>();
-                    RubyString.set_encoding(str, str2_enc);
-                    RubyString.set_code_range(str, str2_cr);
-                    return str2_cr;
-                }
-
-                incompatible = true;
-            }
-
-            if (!incompatible) {
-                if (str2_cr === CR_UNKNOWN) {
-                    str2_cr = RubyString.scan_for_code_range(str2);
-                }
-
-                if (str_cr == CR_UNKNOWN) {
-                    if (str_enc === Encoding.us_ascii || str2_cr !== CR_7BIT) {
-                        str_cr = RubyString.scan_for_code_range(str);
-                    }
-                }
-            }
-        }
-
-        if (incompatible ||
-                (str_enc !== str2_enc &&
-                str_cr != CR_7BIT &&
-                str2_cr != CR_7BIT)) {
-            throw new EncodingCompatibilityError(`incompatible encodings: ${str_enc.get_data<Encoding>().name} and ${str2_enc.get_data<Encoding>().name}`);
-        }
-
-        if (str_cr === CR_UNKNOWN) {
-            res_enc = str_enc;
-            res_cr = CR_UNKNOWN;
-        } else if (str_cr === CR_7BIT) {
-            if (str2_cr == CR_7BIT) {
-                res_enc = str_enc;
-                res_cr = CR_7BIT;
-            } else {
-                res_enc = str2_enc;
-                res_cr = str2_cr;
-            }
-        } else if (str_cr === CR_VALID) {
-            res_enc = str_enc;
-            if (str2_cr === CR_7BIT || str2_cr === CR_VALID) {
-                res_cr = str_cr;
-            } else {
-                res_cr = str2_cr;
-            }
-        } else { // str_cr must be BROKEN at this point
-            res_enc = str_enc;
-            res_cr = str_cr;
-            if (0 < str2.get_data<string>().length) res_cr = CR_UNKNOWN;
-        }
-
-        // MRI checks for len < 0 here, but I don't think that's possible for us
-
-        str.data = str.get_data<string>() + str2.get_data<string>();
-        RubyString.set_encoding(str, res_enc);
-        RubyString.set_code_range(str, res_cr);
-
-        return str2_cr;
     }
 
     abstract codepoint_valid(codepoint: number): boolean;
@@ -702,8 +613,10 @@ export const init = async () => {
 
         await klass.alias_method("to_s", "inspect");
 
-        klass.define_native_method("compatible?", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            return await Encoding.are_compatible(self, args[0]) ? Qtrue : Qfalse;
+        klass.define_native_singleton_method("compatible?", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+            const [encodable1, encodable2] = await Args.scan("2", args);
+            const encoding = await Encoding.are_compatible(encodable1, encodable2);
+            return encoding || Qnil;
         });
 
         klass.define_native_method("ascii_compatible?", (self: RValue): RValue => {
