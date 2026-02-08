@@ -1,9 +1,14 @@
 import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { CR_7BIT, CR_UNKNOWN, CR_VALID, RubyString as RubyString } from "../runtime/string";
 import { ArgumentError, EncodingCompatibilityError } from "../errors";
+import { Class, IOClass, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
+import { CR_7BIT, RubyString as RubyString } from "../runtime/string";
+import { ArgumentError } from "../errors";
 import { Object } from "../runtime/object";
 import { Args } from "./arg-scanner";
 import { each_code_point } from "../util/string_utils";
+import { Symbol } from "./symbol";
+import { Regexp } from "./regexp";
 
 export abstract class Encoding {
     public static default_external: RValue;
@@ -42,8 +47,14 @@ export abstract class Encoding {
     static async extract(obj: RValue): Promise<RValue | undefined> {
         if (obj.klass === await this.klass()) {
             return obj;
-        } else if (obj.klass === await RubyString.klass()) {
-            return await RubyString.get_encoding_rval(obj);
+        } else {
+            switch (obj.klass) {
+                case await RubyString.klass():
+                case await Symbol.klass():
+                case await Regexp.klass():
+                case await IOClass:
+                    return await Object.send(obj, "encoding");
+            }
         }
     }
 
