@@ -945,6 +945,21 @@ export class Compiler extends Visitor {
 
     // (required, optional = nil, *rest, post, keywords:, **keywordRest, &block)
     override visitParametersNode(node: ParametersNode) {
+        // track repeated parameters (i.e. duplicate underscore params)
+        const repeated_params: number[] = [];
+
+        for (let i = 0; i < node.requireds.length; i ++) {
+            const param = node.requireds[i] as RequiredParameterNode;
+
+            if (param.isRepeatedParameter()) {
+                repeated_params.push(i);
+            }
+        }
+
+        if (repeated_params.length > 0) {
+            this.iseq.argument_options.repeated_params = repeated_params;
+        }
+
         this.with_used(true, () => this.visitAll(node.requireds));
         this.iseq.argument_options.lead_num = node.requireds.length;
         this.with_used(true, () => this.visitAll(node.optionals));
@@ -958,6 +973,21 @@ export class Compiler extends Visitor {
 
         // posts are of type RequiredParameterNode
         if (node.posts) {
+            // track repeated parameters here too
+            const post_offset = node.requireds.length + node.optionals.length + (node.rest ? 1 : 0);
+
+            for (let i = 0; i < node.posts.length; i ++) {
+                const param = node.posts[i] as RequiredParameterNode;
+
+                if (param.isRepeatedParameter()) {
+                    if (!this.iseq.argument_options.repeated_params) {
+                        this.iseq.argument_options.repeated_params = [];
+                    }
+
+                    this.iseq.argument_options.repeated_params.push(post_offset + i);
+                }
+            }
+
             this.iseq.argument_options.post_start = this.iseq.argument_size;
             this.with_used(true, () => this.visitAll(node.posts));
             this.iseq.argument_size += node.posts.length;

@@ -366,6 +366,7 @@ type ArgumentOptions = {
     keyword: [string, RValue | null][] | null;
     keyword_bits_index: number | null;
     keyword_rest_start: number | null;
+    repeated_params: number[] | null; // indices of repeated parameters (e.g., duplicate _ params)
 }
 
 export class InstructionSequence {
@@ -409,7 +410,8 @@ export class InstructionSequence {
             block_start: null,
             keyword: null,
             keyword_bits_index: null,
-            keyword_rest_start: null
+            keyword_rest_start: null,
+            repeated_params: null
         };
 
         this.local_table = new LocalTable();

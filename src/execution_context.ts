@@ -828,10 +828,20 @@ export class ExecutionContext {
             }
         }
 
+        // Prism deduplicates _ parameters in the local table, but doesn't adjust lead_num to match.
+        // We use the repeated_params array (populated at compile time) to know which parameter
+        // positions to skip.
+        const repeated_params = iseq.argument_options.repeated_params || [];
+
         for (let i = 0; i < lead_num; i ++) {
             // if calling a method or lambda, enforce required positional args
             if (calling_convention === CallingConvention.METHOD_LAMBDA && locals.length === 0) {
                 throw new ArgumentError(`wrong number of arguments (given ${args.length}, expected ${lead_num + post_num})`);
+            }
+
+            if (repeated_params.includes(i)) {
+                locals.shift();
+                continue;
             }
 
             this.local_set(local_index, 0, locals.shift() || Qnil);
