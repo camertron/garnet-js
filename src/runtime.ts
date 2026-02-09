@@ -189,13 +189,16 @@ export class Runtime {
     // Pass false for include_self to skip checking mod and prepended modules, i.e. if you're trying to
     // find a method somewhere above mod on the ancestry chain
     private static async each_unique_ancestor_helper(mod: RValue, seen: Set<RValue>, include_self: boolean, cb: (ancestor: RValue) => Promise<boolean>): Promise<boolean> {
+        if (!mod) return true;
         if (seen.has(mod)) return true;
 
         seen.add(mod);
 
         if (include_self) {
             // prepends are processed in reverse order (last prepended is first in ancestor chain)
-            const prepends = mod.get_data<Module>().prepends;
+            const mod_data = mod.get_data<Module>();
+            if (!mod_data) return true;
+            const prepends = mod_data.prepends;
 
             for (let i = prepends.length - 1; i >= 0; i --) {
                 if (!(await this.each_unique_ancestor_helper(prepends[i], seen, true, cb))) {
@@ -208,7 +211,7 @@ export class Runtime {
             }
 
             // includes are processed in reverse order (last included is first in ancestor chain)
-            const includes = mod.get_data<Module>().includes;
+            const includes = mod_data.includes;
 
             for (let i = includes.length - 1; i >= 0; i --) {
                 if (!(await this.each_unique_ancestor_helper(includes[i], seen, true, cb))) {
@@ -218,7 +221,9 @@ export class Runtime {
         }
 
         if (mod.klass === ClassClass) {
-            const superclass = mod.get_data<Class>().superclass;
+            const class_data = mod.get_data<Class>();
+            if (!class_data) return true;
+            const superclass = class_data.superclass;
 
             if (superclass) {
                 if (!(await this.each_unique_ancestor_helper(superclass, seen, true, cb))) {
