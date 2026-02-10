@@ -261,6 +261,23 @@ export const init = async () => {
             return await RubyArray.new(captures);
         });
 
+        klass.define_native_method("to_a", async (self: RValue): Promise<RValue> => {
+            const match_data = self.get_data<MatchData>();
+            const captures = [];
+
+            for (let i = 0; i < match_data.captures.length; i ++) {
+                const [begin, end] = match_data.captures[i];
+
+                if (begin === -1 || end === -1) {
+                    captures.push(Qnil);
+                } else {
+                    captures.push(await RubyString.new(match_data.str.slice(begin, end)));
+                }
+            }
+
+            return await RubyArray.new(captures);
+        });
+
         klass.define_native_method("begin", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const match_data = self.get_data<MatchData>();
             await Runtime.assert_type(args[0], await Integer.klass());
