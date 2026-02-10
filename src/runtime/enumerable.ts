@@ -266,6 +266,30 @@ export const init = async () => {
         }
     });
 
+    mod.define_native_method("include?", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const object = args[0];
+
+        try {
+            await Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, block_args: RValue[]): Promise<RValue> => {
+                if ((await Object.send(object, "==", [block_args[0]])).is_truthy()) {
+                    throw new BreakError(Qtrue);
+                }
+
+                return Qnil;
+            }));
+        } catch (e) {
+            if (e instanceof BreakError) {
+                return e.value;
+            }
+
+            throw e;
+        }
+
+        return Qfalse;
+    });
+
+    await mod.alias_method("member?", "include?");
+
     mod.define_native_method("first", async (self: RValue, args: RValue[]): Promise<RValue> => {
         const found: RValue[] = [];
         let count: number;
