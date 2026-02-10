@@ -123,6 +123,10 @@ export const init = async () => {
             const f = self.get_data<number>();
             return f === 0 ? Qtrue : Qfalse;
         });
+
+        klass.define_native_method("abs", async (self: RValue): Promise<RValue> => {
+            return await Integer.get(Math.abs(self.get_data<number>()));
+        });
     });
 
     inited = true;
