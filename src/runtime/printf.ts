@@ -9,7 +9,7 @@ const printf_pattern = (
     "((?:[ #+-0*]|\\d+\\$)+)?" +  // Flag. Any of space, #, +, -, 0, *, or n$ meaning nth argument.
     "([^.]-?\\d+)?" +             // Width. Possibly negative integer.
     "(\\.\\d)?" +                 // Precision. A dot followed by a non-negative integer.
-    "([bBdiuoxXaAeEfgGcps])"      // Type specifier.
+    "([bBdiuoxXaAeEfgGcps%])"     // Type specifier.
 );
 
 const printf_re = new RegExp(printf_pattern, "g");
