@@ -234,6 +234,10 @@ export const init = async () => {
             return RubyString.new(result.join(""));
         });
 
+        klass.define_native_method("source", async (self: RValue, _args: RValue[]): Promise<RValue> => {
+            return await RubyString.new(self.get_data<Regexp>().pattern);
+        });
+
         // Alias Regexp.quote to Regexp.escape
         const singleton_class = klass.get_singleton_class().get_data<Module>();
         await singleton_class.alias_method("quote", "escape");
@@ -279,7 +283,7 @@ export const init = async () => {
             return matched === null ? Qnil : await RubyString.new(matched);
         });
 
-        klass.define_native_method("inspect", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const match_data = self.get_data<MatchData>();
             const first_match = match_data.match(0);
             const fragments = [`#<MatchData ${RubyString.inspect(first_match || "")}`];
