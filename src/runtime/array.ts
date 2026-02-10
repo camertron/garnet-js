@@ -392,6 +392,34 @@ export const init = () => {
             return Qtrue;
         });
 
+        klass.define_native_method("none?", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const elements = self.get_data<RubyArray>().elements;
+
+            if (args.length > 0) {
+                for (const element of elements) {
+                    if ((await Object.send(element, "===", [args[0]])).is_truthy()) {
+                        return Qfalse;
+                    }
+                }
+            } else if (block) {
+                const proc = block.get_data<Proc>();
+
+                for (const element of elements) {
+                    if ((await proc.call(ExecutionContext.current, [element])).is_truthy()) {
+                        return Qfalse;
+                    }
+                }
+            } else {
+                for (const element of elements) {
+                    if (element.is_truthy()) {
+                        return Qfalse;
+                    }
+                }
+            }
+
+            return Qtrue;
+        });
+
         klass.define_native_method("delete", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             const elements = self.get_data<RubyArray>().elements;
             const [obj] = await Args.scan("1", args);
