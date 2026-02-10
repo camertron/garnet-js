@@ -199,6 +199,10 @@ export class Rational {
     get s() {
         return this.negative ? -1 : 1;
     }
+
+    to_f(): number {
+        return this.n / this.d;
+    }
 }
 
 export const init = async () => {
@@ -280,6 +284,10 @@ export const init = async () => {
             } else {
                 return Integer.get(0);
             }
+        });
+
+        klass.define_native_method("to_f", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            return await Float.new(self.get_data<Rational>().to_f());
         });
     });
 
