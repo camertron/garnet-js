@@ -951,7 +951,7 @@ export class Compiler extends Visitor {
         for (let i = 0; i < node.requireds.length; i ++) {
             const param = node.requireds[i] as RequiredParameterNode;
 
-            if (param.isRepeatedParameter()) {
+            if (param.isRepeatedParameter && param.isRepeatedParameter()) {
                 repeated_params.push(i);
             }
         }
@@ -979,7 +979,7 @@ export class Compiler extends Visitor {
             for (let i = 0; i < node.posts.length; i ++) {
                 const param = node.posts[i] as RequiredParameterNode;
 
-                if (param.isRepeatedParameter()) {
+                if (param.isRepeatedParameter && param.isRepeatedParameter()) {
                     if (!this.iseq.argument_options.repeated_params) {
                         this.iseq.argument_options.repeated_params = [];
                     }
