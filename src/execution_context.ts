@@ -247,7 +247,12 @@ export class ExecutionContext {
             frame.pc = frame.iseq.compiled_insns.indexOf(start_label);
         }
 
-        return await this.execute_frame(frame, previous);
+        try {
+            return await this.execute_frame(frame, previous);
+        } finally {
+            // restore previous frame
+            this.frame = previous;
+        }
     }
 
     async execute_frame(frame: Frame, previous: Frame | null): Promise<RValue> {
@@ -361,6 +366,11 @@ export class ExecutionContext {
                         } else if (error instanceof PauseError) {
                             frame.pc += 1;
                             this.stack.splice(frame.stack_index);
+                            this.frame = previous || frame.parent;
+                            throw error;
+                        } else if (error instanceof ThrowError) {
+                            // Restore the frame before propagating.
+                            // Don't clean up the stack here - let with_stack handle it.
                             this.frame = previous || frame.parent;
                             throw error;
                         } else {
