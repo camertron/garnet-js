@@ -148,6 +148,16 @@ export const init = async () => {
         return Qnil;
     });
 
+    mod.define_native_method("!~", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const [other] = await Args.scan("1", args);
+
+        if ((await Object.send(self, "=~", [other])).is_truthy()) {
+            return Qfalse;
+        } else {
+            return Qtrue;
+        }
+    });
+
     mod.define_native_method("is_a?", async (self: RValue, args: RValue[]): Promise<RValue> => {
         const target = args[0];
 
