@@ -374,8 +374,10 @@ export const init = () => {
                     }
                 }
             } else if (block) {
+                const proc = block.get_data<Proc>();
+
                 for (const element of elements) {
-                    if (!(await Object.send(block, "call", [element])).is_truthy()) {
+                    if (!(await proc.call(ExecutionContext.current, [element])).is_truthy()) {
                         return Qfalse;
                     }
                 }
