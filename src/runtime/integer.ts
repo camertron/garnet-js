@@ -7,6 +7,10 @@ import { Object } from "../runtime/object";
 import { Rational } from "./rational";
 import { Numeric } from "./numeric";
 import { Float } from "./float";
+import { Proc } from "./proc";
+import { Hash } from "./hash";
+import { BreakError, ExecutionContext, NextError } from "../execution_context";
+import { Args } from "./arg-scanner";
 
 export class Integer {
     static INT2FIX0: RValue;
@@ -243,6 +247,40 @@ export const init = async () => {
 
         klass.define_native_method("abs", async (self: RValue): Promise<RValue> => {
             return await Integer.get(Math.abs(self.get_data<number>()));
+        });
+
+        klass.define_native_method("upto", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const [limit_arg] = await Args.scan("1", args);
+            await Runtime.assert_type(limit_arg, await Integer.klass());
+            const limit = limit_arg.get_data<number>();
+
+            if (block) {
+                try {
+                    const proc = block.get_data<Proc>();
+
+                    for (let i = self.get_data<number>(); i <= limit; i ++) {
+                        try {
+                            await proc.call(ExecutionContext.current, [await Integer.get(i)]);
+                        } catch (e) {
+                            // swallow NextErrors and keep going
+                            if (!(e instanceof NextError)) {
+                                throw e;
+                            }
+                        }
+                    }
+
+                    return self;
+                } catch (e) {
+                    if (e instanceof BreakError) {
+                        return e.value;
+                    } else {
+                        throw e;
+                    }
+                }
+            } else {
+                // @TODO: return an Enumerator
+                return Qnil;
+            }
         });
     });
 
