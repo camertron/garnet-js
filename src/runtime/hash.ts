@@ -10,6 +10,7 @@ import { hash_combine } from "../util/hash_utils";
 import { RubyArray } from "../runtime/array";
 import { hash_string } from "../util/string_utils";
 import { BlockCallData, CallDataFlag, MethodCallData } from "../call_data";
+import { Kernel } from "./kernel";
 
 export class Hash {
     static async new(default_value?: RValue, default_proc?: RValue): Promise<RValue> {
@@ -654,7 +655,7 @@ export const init = () => {
             const hash = self.get_data<Hash>();
             const other_hash_rval = args[0];
 
-            if (other_hash_rval.klass !== await Hash.klass()) {
+            if (!(await Kernel.is_a(other_hash_rval, await Hash.klass()))) {
                 return Qfalse;
             }
 
