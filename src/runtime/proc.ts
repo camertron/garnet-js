@@ -143,6 +143,8 @@ export const init = () => {
             return await self.get_data<Proc>().call(ec, args, kwargs, block, call_data || (ec.frame as BlockFrame).call_data);
         });
 
+        await klass.alias_method("[]", "call");
+
         klass.define_native_method("arity", async (self: RValue): Promise<RValue> => {
             return await Integer.get(self.get_data<Proc>().arity);
         });
