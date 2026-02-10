@@ -120,6 +120,27 @@ export const sprintf = async (pattern: RValue, objects: RValue[]): Promise<RValu
                 precision ||= 6;
 
                 const num = objects[idx].get_data<number>();
+
+                if (!isFinite(num)) {
+                    if (isNaN(num)) {
+                        chunks.push("NaN");
+                    } else if (num === Infinity) {
+                        chunks.push("Inf");
+                    } else {
+                        chunks.push("-Inf");
+                    }
+
+                    idx ++;
+                    break;
+                }
+
+                // handle zero specially because Math.log10(0) returns -Infinity below
+                if (num === 0) {
+                    chunks.push("0");
+                    idx ++;
+                    break;
+                }
+
                 const exponent = Math.floor(Math.log10(Math.abs(num)));
 
                 // From the Ruby docs: Format argument using exponential form (e/E specifier)
@@ -140,7 +161,7 @@ export const sprintf = async (pattern: RValue, objects: RValue[]): Promise<RValu
                     // float form
                     chunks.push(num.toString()); // as above, this needs to be fleshed out
                 }
-
+                idx++;
                 break;
 
             case "%":
