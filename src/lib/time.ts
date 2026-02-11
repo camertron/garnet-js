@@ -45,7 +45,7 @@ export const init = () => {
             if (await Kernel.is_a(args[0], await Numeric.klass())) {
                 throw new NotImplementedError("Time#- with a numeric argument is not yet implemented");
             } else if (args[0].klass === self.klass) {
-                const millis = self.get_data<Time>().date.getMilliseconds() - args[0].get_data<Time>().date.getMilliseconds();
+                const millis = self.get_data<Time>().date.getTime() - args[0].get_data<Time>().date.getTime();
                 return await Float.new(millis / 1000);
             } else {
                 throw new TypeError(`can't convert ${args[0].klass.get_data<Class>().name} into exact number`);
