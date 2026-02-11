@@ -88,6 +88,16 @@ export class ArgSignature {
     }
 }
 
+async function get_kwarg_impl(key: string, kwargs?: Hash, default_value?: undefined): Promise<RValue | undefined>;
+async function get_kwarg_impl(key: string, kwargs: Hash | undefined, default_value: RValue): Promise<RValue>;
+async function get_kwarg_impl(key: string, kwargs?: Hash, default_value?: RValue): Promise<RValue | undefined> {
+    if (kwargs && await kwargs.has_symbol(key)) {
+        return kwargs.get_by_symbol(key);
+    } else {
+        return default_value || undefined;
+    }
+}
+
 export const Args = {
     /* scan is analogous to MRI's rb_scan_args. It's designed to accept a JavaScript array of
     * positional arguments and coerce them into an array of required, optional, and splatted
@@ -165,11 +175,5 @@ export const Args = {
         }
     },
 
-    get_kwarg: async (key: string, kwargs?: Hash, default_value?: RValue): Promise<RValue | undefined> => {
-        if (kwargs && await kwargs.has_symbol(key)) {
-            return kwargs.get_by_symbol(key);
-        } else {
-            return default_value || undefined;
-        }
-    }
+    get_kwarg: get_kwarg_impl
 }
