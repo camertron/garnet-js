@@ -48,6 +48,7 @@ export const init = () => {
     if (inited) return;
 
     Runtime.define_class("Symbol", ObjectClass, async (klass: Class) => {
+        klass.include((await Object.find_constant("Comparable"))!);
         await mix_shared_string_methods_into(klass);
 
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
@@ -70,6 +71,23 @@ export const init = () => {
         klass.define_native_method("===", async (self: RValue, args: RValue[]): Promise<RValue> => {
             if (args[0].klass !== await Symbol.klass()) return Qfalse;
             return args[0].get_data<string>() === self.get_data<string>() ? Qtrue : Qfalse;
+        });
+
+        klass.define_native_method("<=>", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            if (args[0].klass !== await Symbol.klass()) {
+                return Qnil;
+            }
+
+            const self_str = self.get_data<string>();
+            const other_str = args[0].get_data<string>();
+
+            if (self_str < other_str) {
+                return await Integer.get(-1);
+            } else if (self_str > other_str) {
+                return await Integer.get(1);
+            } else {
+                return await Integer.get(0);
+            }
         });
 
         klass.define_native_method("to_s", async (self: RValue): Promise<RValue> => {
