@@ -1134,6 +1134,46 @@ export const init = () => {
 
             return await Integer.get(count);
         });
+
+        const product_helper = async (arrays: RValue[][], index: number, accum: RValue[], callback: (result: RValue[]) => Promise<void>) => {
+            for (const element of arrays[index]) {
+                const new_arr = [...accum, element];
+
+                if (index === arrays.length - 1) {
+                    await callback(new_arr);
+                } else {
+                    await product_helper(arrays, index + 1, new_arr, callback);
+                }
+            }
+        }
+
+        klass.define_native_method("product", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const other_arrays: RValue[][] = [self.get_data<RubyArray>().elements];
+
+            for (const arg of args) {
+                const array_rval = await Runtime.coerce_to_array(arg);
+                other_arrays.push(array_rval.get_data<RubyArray>().elements);
+            }
+
+            if (block) {
+                const proc = block.get_data<Proc>();
+                const ec = ExecutionContext.current;
+
+                await product_helper(other_arrays, 0, [], async (result: RValue[]) => {
+                    await proc.call(ec, [await RubyArray.new(result)]);
+                });
+
+                return self;
+            } else {
+                const all_results: RValue[] = [];
+
+                await product_helper(other_arrays, 0, [], async (result: RValue[]) => {
+                    all_results.push(await RubyArray.new(result));
+                });
+
+                return await RubyArray.new(all_results);
+            }
+        });
     });
 
     inited = true;
