@@ -162,6 +162,11 @@ export class Hash {
             return (await Object.send(obj, "hash")).get_data<number>();
         }
     }
+
+    clear() {
+        this.keys.clear();
+        this.values.clear();
+    }
 }
 
 let inited = false;
@@ -786,6 +791,11 @@ export const init = () => {
             new_hash.ruby2_keywords_hash = true;
 
             return new_hash_rval;
+        });
+
+        klass.define_native_method("clear", (self: RValue): RValue => {
+            self.get_data<Hash>().clear();
+            return self;
         });
     });
 
