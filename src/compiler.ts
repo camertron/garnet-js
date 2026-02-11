@@ -71,6 +71,7 @@ import {
     LocalVariableWriteNode,
     Location,
     ModuleNode,
+    MultiTargetNode,
     MultiWriteNode,
     NextNode,
     NilNode,
@@ -480,6 +481,42 @@ export class Compiler extends Visitor {
         }
     }
 
+    private extractMultiTargetLocals(node: MultiTargetNode): string[] {
+        const locals: string[] = [];
+
+        for (const left of node.lefts) {
+            if (left instanceof LocalVariableTargetNode) {
+                locals.push(left.name);
+            } else if (left instanceof RequiredParameterNode) {
+                locals.push(left.name);
+            } else if (left instanceof MultiTargetNode) {
+                locals.push(...this.extractMultiTargetLocals(left));
+            }
+        }
+
+        if (node.rest) {
+            const rest = node.rest as SplatNode;
+
+            if (rest.expression instanceof LocalVariableTargetNode) {
+                locals.push(rest.expression.name);
+            } else if (rest.expression instanceof RequiredParameterNode) {
+                locals.push(rest.expression.name);
+            }
+        }
+
+        for (const right of node.rights) {
+            if (right instanceof LocalVariableTargetNode) {
+                locals.push(right.name);
+            } else if (right instanceof RequiredParameterNode) {
+                locals.push(right.name);
+            } else if (right instanceof MultiTargetNode) {
+                locals.push(...this.extractMultiTargetLocals(right));
+            }
+        }
+
+        return locals;
+    }
+
     override visitBlockNode(node: BlockNode): InstructionSequence {
         const block_begin_label = this.iseq.label();
         const block_end_label = this.iseq.label();
@@ -490,18 +527,109 @@ export class Compiler extends Visitor {
             const begin_label = this.iseq.label();
             const end_label = this.iseq.label();
 
-            // contrary to the type signature, node.locals can be undefined
-            if (node.locals) {
-                node.locals.forEach((local: string) => {
-                    this.iseq.local_table.plain(local);
-                });
+            // for generating destructuring instructions
+            const multi_targets: Array<{index: number, node: MultiTargetNode}> = [];
+            const nested_locals = new Set<string>();
+            const all_param_names = new Set<string>();
+
+            if (node.parameters && node.parameters instanceof BlockParametersNode) {
+                const block_params = node.parameters as BlockParametersNode;
+
+                if (block_params.parameters) {
+                    const params = block_params.parameters;
+
+                    for (let i = 0; i < params.requireds.length; i ++) {
+                        const req = params.requireds[i];
+
+                        if (req instanceof MultiTargetNode) {
+                            multi_targets.push({
+                                index: i,
+                                node: req
+                            });
+
+                            for (const name of this.extractMultiTargetLocals(req)) {
+                                nested_locals.add(name);
+                                all_param_names.add(name);
+                            }
+                        } else if (req instanceof RequiredParameterNode) {
+                            all_param_names.add(req.name);
+                        }
+                    }
+                }
             }
 
+            // add block parameters FIRST, before other local variables
             if (node.parameters) {
                 this.with_used(true, () => this.visit(node.parameters!));
             }
 
+            // add block-local variables, but exclude ALL parameter names
+            // (parameters have already been added by visiting the parameters node)
+            if (node.locals) {
+                for (const local of node.locals) {
+                    if (!all_param_names.has(local)) {
+                        this.iseq.local_table.plain(local);
+                    }
+                }
+            }
+
             this.iseq.push(begin_label);
+
+            // destructuring instructions for MultiTargetNodes (must be at the beginning of the block body)
+            for (const {index, node: multi_target} of multi_targets) {
+                const placeholder_lookup = this.iseq.local_table.find_or_throw(`?@${index}`, 0);
+
+                this.iseq.getlocal(placeholder_lookup.index, 0);
+
+                let flags = 0;
+                if (multi_target.rest) flags |= ExpandArrayFlag.SPLAT_FLAG;
+                this.iseq.expandarray(multi_target.lefts.length, flags);
+
+                for (const left of multi_target.lefts) {
+                    if (left instanceof LocalVariableTargetNode) {
+                        const local_lookup = this.iseq.local_table.find_or_throw(left.name, 0);
+                        this.iseq.setlocal(local_lookup.index, 0);
+                    } else if (left instanceof RequiredParameterNode) {
+                        const local_lookup = this.iseq.local_table.find_or_throw(left.name, 0);
+                        this.iseq.setlocal(local_lookup.index, 0);
+                    }
+                }
+
+                if (multi_target.rest) {
+                    const rest = multi_target.rest as SplatNode;
+
+                    if (rest.expression) {
+                        if (rest.expression instanceof LocalVariableTargetNode) {
+                            if (multi_target.rights.length > 0) {
+                                const flags = ExpandArrayFlag.SPLAT_FLAG | ExpandArrayFlag.POSTARG_FLAG;
+                                this.iseq.expandarray(1, flags);
+                            }
+
+                            const local_lookup = this.iseq.local_table.find_or_throw(rest.expression.name, 0);
+                            this.iseq.setlocal(local_lookup.index, 0);
+                        } else if (rest.expression instanceof RequiredParameterNode) {
+                            if (multi_target.rights.length > 0) {
+                                const flags = ExpandArrayFlag.SPLAT_FLAG | ExpandArrayFlag.POSTARG_FLAG;
+                                this.iseq.expandarray(1, flags);
+                            }
+
+                            const local_lookup = this.iseq.local_table.find_or_throw(rest.expression.name, 0);
+                            this.iseq.setlocal(local_lookup.index, 0);
+                        }
+                    }
+                }
+
+                // post params
+                for (const right of multi_target.rights) {
+                    if (right instanceof LocalVariableTargetNode) {
+                        const local_lookup = this.iseq.local_table.find_or_throw(right.name, 0);
+                        this.iseq.setlocal(local_lookup.index, 0);
+                    } else if (right instanceof RequiredParameterNode) {
+                        const local_lookup = this.iseq.local_table.find_or_throw(right.name, 0);
+                        this.iseq.setlocal(local_lookup.index, 0);
+                    }
+                }
+            }
 
             if (node.body) {
                 this.with_used(true, () => this.visit(node.body!));
@@ -831,7 +959,7 @@ export class Compiler extends Visitor {
                 this.visit(element);
 
                 if (this.used) {
-                    const call_data = MethodCallData.create("hash_merge_kwd", 2)
+                    const call_data = MethodCallData.create("hash_merge_kwd", 2);
                     this.iseq.send(call_data, null);
                 }
             } else {
@@ -841,7 +969,7 @@ export class Compiler extends Visitor {
         });
 
         if (this.used) {
-            this.iseq.newhash(node.elements.length * 2)
+            this.iseq.newhash(node.elements.length * 2);
         }
     }
 
@@ -948,11 +1076,18 @@ export class Compiler extends Visitor {
         // track repeated parameters (i.e. duplicate underscore params)
         const repeated_params: number[] = [];
 
-        for (let i = 0; i < node.requireds.length; i ++) {
-            const param = node.requireds[i] as RequiredParameterNode;
+        // Track MultiTargetNodes for nested destructuring
+        const multi_target_nodes: MultiTargetNode[] = [];
 
-            if (param.isRepeatedParameter && param.isRepeatedParameter()) {
-                repeated_params.push(i);
+        for (let i = 0; i < node.requireds.length; i ++) {
+            const param = node.requireds[i];
+
+            if (param instanceof MultiTargetNode) {
+                multi_target_nodes.push(param);
+            } else if (param instanceof RequiredParameterNode) {
+                if (param.isRepeatedParameter && param.isRepeatedParameter()) {
+                    repeated_params.push(i);
+                }
             }
         }
 
@@ -960,7 +1095,24 @@ export class Compiler extends Visitor {
             this.iseq.argument_options.repeated_params = repeated_params;
         }
 
-        this.with_used(true, () => this.visitAll(node.requireds));
+        // First pass: Add all argument parameters to the local table
+        // For MultiTargetNodes, add a placeholder local (like ?@0 in CRuby)
+        for (let i = 0; i < node.requireds.length; i ++) {
+            const param = node.requireds[i];
+
+            if (param instanceof MultiTargetNode) {
+                // Add a placeholder local for the nested array (like ?@0 in CRuby)
+                this.iseq.local_table.plain(`?@${i}`);
+            } else {
+                this.with_used(true, () => this.visit(param));
+            }
+        }
+
+        // Second pass: Add all nested locals from MultiTargetNodes
+        for (const multi_target of multi_target_nodes) {
+            this.with_used(true, () => this.visit(multi_target));
+        }
+
         this.iseq.argument_options.lead_num = node.requireds.length;
         this.with_used(true, () => this.visitAll(node.optionals));
         this.iseq.argument_size += node.requireds.length + node.optionals.length;
@@ -1101,7 +1253,19 @@ export class Compiler extends Visitor {
     }
 
     override visitRequiredParameterNode(node: RequiredParameterNode) {
-        // no-op
+        this.iseq.local_table.plain(node.name);
+    }
+
+    override visitMultiTargetNode(node: MultiTargetNode) {
+        // MultiTargetNode represents nested destructuring in block parameters, e.g., |(a, b), c|
+        // We need to add all the nested parameters to the local table.
+        // The actual destructuring will be handled at the beginning of the block.
+
+        const locals = this.extractMultiTargetLocals(node);
+
+        for (const local of locals) {
+            this.iseq.local_table.plain(local);
+        }
     }
 
     override visitOptionalParameterNode(node: OptionalParameterNode) {
