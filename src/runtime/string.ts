@@ -18,6 +18,7 @@ import { Args } from "./arg-scanner";
 import { Kernel } from "./kernel";
 import { Enumerator } from "./enumerator";
 import { dump_string } from "./string-dump";
+import { Proc } from "./proc";
 
 // 7-bit strings are implicitly valid.
 // If both the valid _and_ 7bit bits are set, the string is broken.
@@ -1350,6 +1351,27 @@ export const init = () => {
         });
 
         await klass.alias_method("lines", "each_line");
+
+        klass.define_native_method("each_char", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const data = self.get_data<string>();
+
+            if (block) {
+                const proc = block.get_data<Proc>();
+                const ec = ExecutionContext.current;
+
+                for (let i = 0; i < data.length; i ++) {
+                    await proc.call(ec, [await RubyString.new(data.charAt(i))]);
+                }
+
+                return self;
+            } else {
+                return await Enumerator.for_native_generator(async function* () {
+                    for (let i = 0; i < data.length; i ++) {
+                        yield await RubyString.new(data.charAt(i));
+                    }
+                });
+            }
+        });
 
         klass.define_native_singleton_method("try_convert", async (_self: RValue, args: RValue[]): Promise<RValue> => {
             const obj = args[0];
