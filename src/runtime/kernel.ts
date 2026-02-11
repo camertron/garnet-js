@@ -1,7 +1,7 @@
 import { is_node } from "../env";
 import { ArgumentError, IRubyError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
 import { BreakError, CallingConvention, ExecutionContext, ReturnError, ThrowError } from "../execution_context";
-import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, Visibility, Callable, ObjectClass, InterpretedCallable, NativeCallable, STDERR, STDOUT, IO } from "../runtime";
+import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, Visibility, Callable, ObjectClass, InterpretedCallable, NativeCallable, STDERR, STDOUT, IO, NilClass } from "../runtime";
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
@@ -261,16 +261,18 @@ export const init = async () => {
         return self.klass;
     });
 
-    mod.define_native_method("Integer", async (self: RValue, args: RValue[]): Promise<RValue> => {
-        switch (args[0].klass) {
+    mod.define_native_method("Integer", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+        const [obj] = await Args.scan("1", args);
+
+        switch (obj.klass) {
             case await Integer.klass():
-                return args[0];
+                return obj;
 
             case await Float.klass():
-                return Integer.get(Math.floor(args[0].get_data<number>()));
+                return Integer.get(Math.floor(obj.get_data<number>()));
 
             case await RubyString.klass():
-                const str = args[0].get_data<string>();
+                const str = obj.get_data<string>();
 
                 if (str.match(/^\d+$/)) {
                     return Integer.get(parseInt(str));
@@ -281,6 +283,50 @@ export const init = async () => {
 
         const arg_str = (await Object.send(args[0], "inspect")).get_data<string>();
         throw new ArgumentError(`invalid value for Integer(): ${arg_str}`);
+    });
+
+    mod.define_native_method("Float", async (_self: RValue, args: RValue[], kwargs?: Hash): Promise<RValue> => {
+        const [obj] = await Args.scan("1", args);
+        const raise_exceptions_rval = await Args.get_kwarg("exception", kwargs, Qtrue);
+        const raise_exceptions = raise_exceptions_rval.is_truthy();
+
+        switch (obj.klass) {
+            case await Integer.klass():
+                return await Integer.get(obj.get_data<number>());
+
+            case await Float.klass():
+                return obj;
+
+            case await RubyString.klass():
+                const str = obj.get_data<string>();
+
+                if (str.match(/^\d+(\.\d+)?$/)) {
+                    return Float.new(parseFloat(str));
+                } else {
+                    if (raise_exceptions) {
+                        throw new ArgumentError(`invalid value for Float(): "${str}"`);
+                    } else {
+                        return Qnil;
+                    }
+                }
+
+            case NilClass:
+                if (raise_exceptions) {
+                    throw new TypeError("can't convert nil into Float");
+                } else {
+                    return Qnil;
+                }
+        }
+
+        if (await Object.respond_to(obj, "to_f")) {
+            return await Object.send(obj, "to_f");
+        } else {
+            if (raise_exceptions) {
+                throw new TypeError(`can't convert ${obj.klass.get_data<Class>().name} into Float`);
+            } else {
+                return Qnil;
+            }
+        }
     });
 
     mod.define_native_method("Array", async (self: RValue, args: RValue[]): Promise<RValue> => {
