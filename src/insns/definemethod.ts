@@ -4,7 +4,7 @@ import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
 import { ParameterMetadata } from "../runtime/parameter-meta";
 import { Object } from "../runtime/object"
-import { Runtime } from "../garnet";
+import { Runtime, ClassClass, ModuleClass } from "../garnet";
 
 export default class DefineMethod extends Instruction {
     public name: string;
@@ -21,15 +21,22 @@ export default class DefineMethod extends Instruction {
     }
 
     async call(context: ExecutionContext): Promise<ExecutionResult> {
+        const target = context.frame!.self;
+
         context.define_method(
-            context.frame!.self,
+            target,
             this.name,
             this.iseq,
             this.parameters_meta,
             this.lexical_scope
         );
 
-        await Object.send(context.frame!.self.klass, "method_added", [await Runtime.intern(this.name)]);
+        // call on the target's class where appropriate (ie. for methods on instance singleton classes)
+        const method_added_target = (target.klass === ClassClass || target.klass === ModuleClass)
+            ? target
+            : target.klass;
+
+        await Object.send(method_added_target, "method_added", [await Runtime.intern(this.name)]);
 
         return null;
     }
