@@ -1,6 +1,6 @@
 import { InstructionSequence } from "./instruction_sequence";
 import { Compiler, LexicalScope } from "./compiler";
-import { LoadError, TypeError, NoMethodError, NotImplementedError, NameError } from "./errors";
+import { ArgumentError, LoadError, TypeError, NoMethodError, NotImplementedError, NameError } from "./errors";
 import { ExecutionContext } from "./execution_context";
 import { init as array_init } from "./runtime/array";
 import { Integer, init as integer_init } from "./runtime/integer";
@@ -52,6 +52,7 @@ import { init as warning_init } from "./runtime/warning";
 import { init as bigdecimal_init } from "./lib/bigdecimal";
 import { init as strscan_init } from "./lib/strscan";
 import { init as argf_init } from "./runtime/argf";
+import { init as gc_init } from "./runtime/gc";
 import { obj_id_hash } from "./util/object_id";
 import { RubyString } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
@@ -60,6 +61,7 @@ import * as tty from "node:tty";
 import { ParameterMetadata } from "./runtime/parameter-meta";
 import { Hash } from "node:crypto";
 import { Mutex } from "./util/mutex";
+import { Args } from "./runtime/arg-scanner";
 
 type ModuleDefinitionCallback = (module: Module) => void;
 type ClassDefinitionCallback = (klass: Class) => void;
@@ -1387,6 +1389,41 @@ await (BasicObjectClass.get_data<Class>()).tap(async (klass: Class) => {
         return await proc.with_binding(binding).call(ExecutionContext.current, args, kwargs, undefined, block_call_data);
     });
 
+    klass.define_native_method("instance_eval", async (self: RValue, args: RValue[], _kwargs?: RubyHash, block?: RValue): Promise<RValue> => {
+        const ec = ExecutionContext.current;
+
+        if (block) {
+            await Args.scan("0", args);
+
+            const proc = block.get_data<Proc>();
+            const binding = proc.binding.with_self(self);
+            return await proc.with_binding(binding).call(ec, [self]);
+        } else {
+            // instance_eval(string, filename = nil, lineno = 1)
+            const [code_rval, filename_rval, lineno_rval] = await Args.scan("12", args);
+
+            await Runtime.assert_type(code_rval, await RubyString.klass());
+            const code = code_rval.get_data<string>();
+            let filename, lineno;
+
+            if (filename_rval) {
+                filename = (await Runtime.coerce_to_string(filename_rval)).get_data<string>();
+            } else {
+                filename = `(eval at ${ec.frame!.iseq.file}:${ec.frame!.line})`;
+            }
+
+            if (lineno_rval) {
+                await Runtime.assert_type(lineno_rval, await Integer.klass());
+                lineno = lineno_rval.get_data<number>();
+            } else {
+                lineno = 1;
+            }
+
+            const iseq = Compiler.compile_string(code, filename, filename, lineno);
+            return await ec.run_class_frame(iseq, self);
+        }
+    });
+
     klass.define_native_method("method_missing", (self: RValue, args: RValue[]): RValue => {
         // this is kinda broken until I can figure out how to inspect objects with cycles; for now,
         // just print out self's type
@@ -1590,9 +1627,10 @@ export const init = async () => {
     await fiber_init();
     await pathname_init();
     ruby_vm_init();
-    objectspace_init();
+    await objectspace_init();
     warning_init();
     argf_init();
+    await gc_init();
 
     ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"] = await (async () => {
         if (is_node) {
