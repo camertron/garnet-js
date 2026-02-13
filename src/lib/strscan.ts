@@ -85,11 +85,13 @@ export const init = () => {
     if (inited) return;
 
     Runtime.define_class("StringScanner", ObjectClass, async (klass: Class) => {
-        klass.define_native_singleton_method("new", async (self: RValue, args: RValue[], kwargs?: Hash): Promise<RValue> => {
+        klass.define_native_method("initialize", async (self: RValue, args: RValue[], kwargs?: Hash): Promise<RValue> => {
             const [str_rval] = await Args.scan("1", args);
             const str = await Runtime.coerce_to_string(str_rval);
             const fixed_anchor = await Args.get_kwarg("fixed_anchor", kwargs);
-            return await StringScanner.subclass_new(self, str, fixed_anchor || Qfalse);
+            const encoding = await RubyString.get_encoding(str);
+            self.data = new StringScanner(str.get_data<string>(), encoding, (fixed_anchor || Qfalse).is_truthy());
+            return Qnil;
         });
 
         klass.define_native_method("scan", async (self: RValue, args: RValue[]): Promise<RValue> => {
