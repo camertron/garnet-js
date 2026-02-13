@@ -7,7 +7,7 @@ import { Dir } from "./runtime/dir";
 import { ErrnoENOENT } from "./errors";
 
 export interface IFileHandle {
-    offset(): number;
+    get offset(): number;
     is_readable(): boolean;
     is_writable(): boolean;
     read(length: number, buffer: Uint8Array): number;
@@ -269,7 +269,7 @@ class NodeFileDescriptor implements IFileHandle {
         this.position = 0;
     }
 
-    offset(): number {
+    get offset(): number {
         return this.position;
     }
 

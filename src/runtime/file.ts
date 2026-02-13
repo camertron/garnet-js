@@ -1,5 +1,5 @@
 import { ErrnoENOENT, IOError, NameError } from "../errors";
-import { Class, IOClass, RValue, Runtime, Qtrue, Qfalse, Qnil } from "../runtime"
+import { Class, IO, IOClass, RValue, Runtime, Qtrue, Qfalse, Qnil } from "../runtime"
 import { IFileHandle, vmfs } from "../vmfs";
 import { Dir } from "./dir";
 import { RubyString } from "../runtime/string";
@@ -12,7 +12,7 @@ import { Integer } from "./integer";
 import { Encoding } from "../runtime/encoding";
 import { ExecutionContext } from "../execution_context";
 
-export class RubyFile {
+export class RubyFile implements IO {
     private static klass_: RValue;
 
     static subclass_new(klass: RValue, path: RValue, mode: RValue, perm: RValue, opts?: Hash): RValue {
@@ -66,6 +66,77 @@ export class RubyFile {
         }
 
         return this._buffer;
+    }
+
+    puts(val: string): void {
+        this.write(val + "\n");
+    }
+
+    write(val: string): void {
+        if (!this.descriptor) {
+            throw new IOError("closed stream");
+        }
+
+        const encoding = Encoding.default_external.get_data<Encoding>();
+        const bytes = encoding.string_to_bytes(val);
+
+        this.descriptor.write(bytes);
+    }
+
+    is_tty(): boolean {
+        return false; // Files are never TTYs
+    }
+
+    close(): void {
+        if (this.descriptor) {
+            this.descriptor.close();
+            this.descriptor = null;
+        }
+    }
+
+    pos(): number {
+        if (!this.descriptor) {
+            throw new IOError("closed stream");
+        }
+
+        return this.descriptor.offset;
+    }
+
+    set_pos(_pos: number): void {
+        throw new Error("pos= is not yet implemented for File objects");
+    }
+
+    seek(_offset: number, _whence: number): number {
+        throw new Error("seek is not yet implemented for File objects");
+    }
+
+    rewind(): void {
+        throw new Error("rewind is not yet implemented for File objects");
+    }
+
+    eof(): boolean {
+        return this.is_eof();
+    }
+
+    read(_length?: number): string | null {
+        // For now, this is a simplified implementation
+        // A full implementation would handle the length parameter
+        const chunks: Uint8Array[] = [];
+
+        while (!this.is_eof()) {
+            this.maybe_read_next_chunk();
+            const chunk = this.buffer.slice(this.buffer_offset, this.buffer_len);
+            chunks.push(chunk);
+            this.buffer_offset = this.buffer_len;
+        }
+
+        if (chunks.length === 0) {
+            return null;
+        }
+
+        const result = this.combine_buffers(chunks);
+        const encoding = Encoding.default_external.get_data<Encoding>();
+        return encoding.bytes_to_string(result);
     }
 
     gets(separator?: string): string | null {
@@ -444,21 +515,6 @@ export const init = async () => {
             return return_value;
         });
 
-        klass.define_native_method("close", (self: RValue, _args: RValue[]): RValue => {
-            const file = self.get_data<RubyFile>();
-
-            if (file && file.descriptor) {
-                file.descriptor.close();
-                file.descriptor = null;
-            }
-
-            return Qnil;
-        });
-
-        klass.define_native_method("gets", async (self: RValue, _args: RValue[]): Promise<RValue> => {
-            const file = self.get_data<RubyFile>();
-            const line = file.gets();
-            return line ? await RubyString.new(line) : Qnil;
-        });
+        // close and gets methods are now inherited from IOClass
     });
 };

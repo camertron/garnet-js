@@ -1473,6 +1473,15 @@ export interface IO {
     puts(val: string): void;
     write(val: string): void;
     is_tty(): boolean;
+    close?(): void;
+    flush?(): void;
+    pos?(): number;
+    set_pos?(pos: number): void;
+    seek?(offset: number, whence: number): number;
+    rewind?(): void;
+    eof?(): boolean;
+    read?(length?: number): string | null;
+    gets?(separator?: string): string | null;
 }
 
 export type ConsoleFn = (...data: string[]) => void;
@@ -1564,8 +1573,7 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, async (klass: Cla
         const io = self.get_data<IO>();
 
         for (const arg of args) {
-            // this shouldn't be necessary anymore?
-            if (arg.klass === await RubyArray.klass() && call_data?.has_flag(CallDataFlag.ARGS_SPLAT)) {
+            if (arg.klass === await RubyArray.klass()) {
                 for (const elem of arg.get_data<RubyArray>().elements) {
                     io.write((await Object.send(elem, "to_s")).get_data<string>());
                 }
@@ -1580,7 +1588,12 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, async (klass: Cla
     await klass.alias_method("print", "write");
 
     klass.define_native_method("flush", (self: RValue): RValue => {
-        // @TODO: what needs to be done here?
+        const io = self.get_data<IO>();
+
+        if (io.flush) {
+            io.flush();
+        }
+
         return self;
     });
 
@@ -1589,6 +1602,104 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, async (klass: Cla
     });
 
     await klass.alias_method("tty?", "isatty");
+
+    klass.define_native_method("close", (self: RValue): RValue => {
+        const io = self.get_data<IO>();
+
+        if (io.close) {
+            io.close();
+        }
+
+        return Qnil;
+    });
+
+    klass.define_native_method("pos", async (self: RValue): Promise<RValue> => {
+        const io = self.get_data<IO>();
+
+        if (io.pos) {
+            return await Integer.get(io.pos());
+        }
+
+        throw new NotImplementedError("pos is not implemented for this IO type");
+    });
+
+    await klass.alias_method("tell", "pos");
+
+    klass.define_native_method("pos=", (self: RValue, args: RValue[]): RValue => {
+        const io = self.get_data<IO>();
+
+        if (io.set_pos) {
+            const new_pos = args[0].get_data<number>();
+            io.set_pos(new_pos);
+            return args[0];
+        }
+
+        throw new NotImplementedError("pos= is not implemented for this IO type");
+    });
+
+    klass.define_native_method("seek", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const io = self.get_data<IO>();
+
+        if (io.seek) {
+            const [offset_rval, whence_rval] = await Args.scan("11", args);
+            const offset = offset_rval.get_data<number>();
+            const whence = whence_rval ? whence_rval.get_data<number>() : 0; // IO::SEEK_SET = 0
+            const result = io.seek(offset, whence);
+
+            return await Integer.get(result);
+        }
+
+        throw new NotImplementedError("seek is not implemented for this IO type");
+    });
+
+    klass.define_native_method("rewind", async (self: RValue): Promise<RValue> => {
+        const io = self.get_data<IO>();
+
+        if (io.rewind) {
+            io.rewind();
+            return await Integer.get(0);
+        }
+
+        throw new NotImplementedError("rewind is not implemented for this IO type");
+    });
+
+    klass.define_native_method("eof?", (self: RValue): RValue => {
+        const io = self.get_data<IO>();
+
+        if (io.eof) {
+            return io.eof() ? Qtrue : Qfalse;
+        }
+
+        throw new NotImplementedError("eof? is not implemented for this IO type");
+    });
+
+    await klass.alias_method("eof", "eof?");
+
+    klass.define_native_method("read", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const io = self.get_data<IO>();
+
+        if (io.read) {
+            const [length_rval] = await Args.scan("01", args);
+            const length = length_rval ? length_rval.get_data<number>() : undefined;
+            const result = io.read(length);
+            return result !== null ? await RubyString.new(result) : Qnil;
+        }
+
+        throw new NotImplementedError("read is not implemented for this IO type");
+    });
+
+    klass.define_native_method("gets", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const io = self.get_data<IO>();
+
+        if (io.gets) {
+            const [separator_rval] = await Args.scan("01", args);
+            const separator = separator_rval ? separator_rval.get_data<string>() : undefined;
+            const line = io.gets(separator);
+            return line ? await RubyString.new(line) : Qnil;
+        }
+
+        throw new NotImplementedError("gets is not implemented for this IO type");
+    });
 });
 
 export const STDOUT = ObjectClass.get_data<Class>().constants["STDOUT"] = is_node ? NodeIO.new(process.stdout) : BrowserIO.new(console.log);
