@@ -1481,7 +1481,7 @@ export interface IO {
     rewind?(): void;
     eof?(): boolean;
     read?(length?: number): string | null;
-    gets?(separator?: string): string | null;
+    gets?(separator: string, limit?: number, chomp?: boolean): string | null;
 }
 
 export type ConsoleFn = (...data: string[]) => void;
@@ -1691,14 +1691,34 @@ export const IOClass = Runtime.define_class("IO", ObjectClass, async (klass: Cla
     klass.define_native_method("gets", async (self: RValue, args: RValue[]): Promise<RValue> => {
         const io = self.get_data<IO>();
 
-        if (io.gets) {
-            const [separator_rval] = await Args.scan("01", args);
-            const separator = separator_rval ? separator_rval.get_data<string>() : undefined;
-            const line = io.gets(separator);
-            return line ? await RubyString.new(line) : Qnil;
+        if (!io.gets) {
+            throw new NotImplementedError("gets is not implemented for this IO type");
         }
 
-        throw new NotImplementedError("gets is not implemented for this IO type");
+        const default_separator = ExecutionContext.current.globals["$/"].get_data<string>() || "\n";
+        const [sep_or_limit_rval, limit_rval] = await Args.scan("02", args);
+        const chomp_rval = await Args.get_kwarg("chomp");
+        let separator: string = default_separator, limit: number = -1;
+
+        if (sep_or_limit_rval) {
+            if (limit_rval) {
+                await Runtime.assert_type(sep_or_limit_rval, await RubyString.klass(), NilClass);
+                separator = sep_or_limit_rval.get_data<string | null>() || default_separator;
+
+                await Runtime.assert_type(limit_rval, await Integer.klass());
+                limit = limit_rval.get_data<number>();
+            } else {
+                if (await Kernel.is_a(sep_or_limit_rval, await Integer.klass())) {
+                    limit = sep_or_limit_rval.get_data<number>();
+                } else {
+                    await Runtime.assert_type(sep_or_limit_rval, await RubyString.klass(), NilClass);
+                    separator = sep_or_limit_rval.get_data<string | null>() || default_separator;
+                }
+            }
+        }
+
+        const line = io.gets(separator, limit, chomp_rval ? chomp_rval.is_truthy() : false);
+        return line ? await RubyString.new(line) : Qnil;
     });
 });
 

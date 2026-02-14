@@ -105,8 +105,9 @@ export class StringIO implements IO {
         return result;
     }
 
-    gets(separator?: string): string | null {
-        separator ||= ExecutionContext.current.globals["$/"]?.get_data<string>() || "\n";
+    gets(separator: string, limit?: number, chomp?: boolean): string | null {
+        if (limit === undefined) limit = -1;
+        if (chomp === undefined) chomp = false;
 
         if (this.eof()) {
             return null;
@@ -119,13 +120,17 @@ export class StringIO implements IO {
 
         if (index === -1) {
             // no separator found, read to end
-            result = this.string.substring(start);
-            this.pos_value = this.string.length;
+            const end = limit > -1 ? Math.min(limit, this.string.length) : this.string.length;
+            result = this.string.substring(start, end);
+            this.pos_value = end;
         } else {
             // don't forget to include the separator in the result
-            result = this.string.substring(start, index + separator.length);
-            this.pos_value = index + separator.length;
+            const end = limit > -1 ? Math.min(limit, index + separator.length) : index + separator.length;
+            result = this.string.substring(start, end);
+            this.pos_value = end;
         }
+
+        if (chomp) result = result.trimEnd();
 
         return result;
     }
