@@ -320,10 +320,12 @@ export const init = () => {
                     chunk_strs = [];
                 }
 
+                // find the position after all the chunks and delimiters to see if there's any string left
                 const len = chunk_strs.reduce<number>((prev: number, cur: string) => prev + cur.length, 0) + delim.length * chunk_strs.length;
                 const last_chunk = str.slice(len);
 
                 if (limit === 0) {
+                    // when limit is 0, trailing empty strings are omitted
                     if (last_chunk.length !== 0) {
                         chunk_strs.push(last_chunk);
                     }
@@ -331,7 +333,13 @@ export const init = () => {
                     if (chunk_strs.length > 0 && chunk_strs[chunk_strs.length - 1].length === 0) {
                         delete chunk_strs[chunk_strs.length - 1];
                     }
+                } else if (limit === -1) {
+                    // When limit is -1, trailing empty strings are kept. JavaScript's split already
+                    // handles this, so we only need to add last_chunk if there's a remainder that
+                    // wasn't captured. For limit === -1, we don't use a limit in split, so last_chunk
+                    // should always be empty and we don't need to add it.
                 } else {
+                    // limit > 1
                     if (last_chunk.length > 0 || (chunk_strs.length > 0 && chunk_strs[chunk_strs.length - 1] !== '')) {
                         chunk_strs.push(last_chunk);
                     }
