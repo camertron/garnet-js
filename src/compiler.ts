@@ -19,6 +19,7 @@ import {
     BlockParametersNode,
     BreakNode,
     CallNode,
+    CallOperatorWriteNode,
     CaseNode,
     ClassNode,
     ClassVariableOrWriteNode,
@@ -1536,6 +1537,18 @@ export class Compiler extends Visitor {
 
         this.iseq.putspecialobject(SpecialObjectType.CONST_BASE);
         this.iseq.setconstant(node.name);
+    }
+
+    override visitCallOperatorWriteNode(node: CallOperatorWriteNode): void {
+        this.with_used(true, () => this.visit(node.receiver!));
+        this.iseq.dup();
+        this.iseq.send(MethodCallData.create(node.readName), null);
+        this.with_used(true, () => this.visit(node.value));
+        this.iseq.send(MethodCallData.create(node.binaryOperator, 1), null);
+        this.iseq.swap();
+        this.iseq.topn(1);
+        this.iseq.send(MethodCallData.create(node.writeName, 1), null);
+        this.iseq.pop();
     }
 
     override visitSymbolNode(node: SymbolNode) {

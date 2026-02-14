@@ -1,6 +1,8 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
+// `topn` pushes a single value onto the stack that is a copy of the value
+// within the stack that is the `index`th slot from the top.
 export default class TopN extends Instruction {
     public index: number;
 
