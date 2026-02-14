@@ -39,7 +39,7 @@ const slice = async (self: RValue, args: RValue[]): Promise<string | null> => {
         }
 
         if (start_pos! > end_pos!) {
-            return null;
+            return "";
         }
 
         if (range.exclude_end) {
@@ -77,7 +77,7 @@ export const mix_shared_string_methods_into = async (mod: Module) => {
     mod.define_native_method("slice!", async (self: RValue, args: RValue[]): Promise<RValue> => {
         const substring = await slice(self, args);
 
-        if (substring) {
+        if (substring !== null) {
             self.data = substring
             return self;
     }
@@ -87,7 +87,7 @@ export const mix_shared_string_methods_into = async (mod: Module) => {
 
     mod.define_native_method("slice", async (self: RValue, args: RValue[]): Promise<RValue> => {
         const substring = await slice(self, args);
-        return substring ? RubyString.new(substring) : Qnil;
+        return substring !== null ? RubyString.new(substring) : Qnil;
     });
 
     await mod.alias_method("[]", "slice");
