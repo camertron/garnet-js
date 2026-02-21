@@ -190,7 +190,7 @@ export { Proc } from "./runtime/proc";
 export { Argf } from "./runtime/argf";
 
 export { Object } from "./runtime/object";
-export { RubyError, LoadError } from "./errors";
+export { RubyError, LoadError, SystemExit } from "./errors";
 
 export { Encoding, UnicodeEncoding, register_encoding } from "./runtime/encoding"
 export { is_node } from "./env"
