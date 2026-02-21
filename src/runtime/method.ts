@@ -210,6 +210,10 @@ export const init = async () => {
                 return await Integer.get(-1);
             }
         });
+
+        klass.define_native_method("owner", (self: RValue): RValue => {
+            return self.get_data<Method>().callable.owner?.rval || Qnil;
+        });
     });
 
     Runtime.define_class("UnboundMethod", ObjectClass, (klass: Class) => {
