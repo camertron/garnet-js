@@ -124,7 +124,7 @@ export async function send(receiver: RValue, method_name: string, args: RValue[]
 export async function invoke_proc(proc: RValue, args: RValue[] = [], kwargs?: Hash, block?: RValue): Promise<RValue> {
     check_ec();
 
-    return ExecutionContext.current.gvl.run(async () => {
+    return await ExecutionContext.current.gvl.run(async () => {
         return await proc.get_data<Proc>().call(ExecutionContext.current, args, kwargs, block);
     });
 }
