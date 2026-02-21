@@ -53,18 +53,22 @@ export class StringScanner {
         const match = re.search(this.str, this.charpos);
         if (!match) return null;
 
-        this.charpos = match.end(0);
-        this.bytepos = match.end(0) * 2;
+        const matched_str = match.str;
+        const new_charpos = match.end(0);
 
-        return match.str;
+        // Update bytepos by adding the bytesize of the scanned portion
+        this.bytepos += this.encoding.bytesize(this.str.slice(this.charpos, new_charpos));
+        this.charpos = new_charpos;
+
+        return matched_str;
     }
 
     async scan_str(str: string): Promise<string | null> {
         const slice = this.str.slice(this.charpos, this.charpos + str.length);
 
         if (slice === str) {
+            this.bytepos += this.encoding.bytesize(slice);
             this.charpos += str.length;
-            this.bytepos += str.length * 2;
             return slice;
         }
 
@@ -76,8 +80,11 @@ export class StringScanner {
     }
 
     set_pos(new_bytepos: number) {
-        this.bytepos = new_bytepos;
-        this.charpos = Math.floor(new_bytepos / 2);
+        this.charpos = this.encoding.char_pos(new_bytepos, this.str);
+    }
+
+    eos(): boolean {
+        return this.charpos >= this.str.length;
     }
 }
 
