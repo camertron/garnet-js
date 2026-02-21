@@ -4,8 +4,8 @@ import { Integer } from "./integer";
 import { Object } from "./object";
 import { Proc } from "./proc";
 import { RubyArray } from "../runtime/array";
-import { ArgumentError, NameError } from "../errors";
-import { Lazy } from "./enumerator";
+import { ArgumentError, NameError, StopIteration } from "../errors";
+import { Enumerator, Lazy } from "./enumerator";
 import { Hash } from "./hash";
 import { schwartzian_quick_sort } from "../util/array_utils";
 
@@ -64,28 +64,28 @@ export const init = async () => {
 
     mod.define_native_method("find", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
         if (block) {
-            try {
-                const proc = block.get_data<Proc>();
+            const proc = block.get_data<Proc>();
+            const enumerator = (await Object.send(self, "each")).get_data<Enumerator>();
+            let found: RValue | null = null;
 
-                await Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, args: RValue[]): Promise<RValue> => {
-                    if ((await proc.call(ExecutionContext.current, args)).is_truthy()) {
-                        throw new BreakError(args[0]);
+            while (true) {
+                try {
+                    const next_val = await enumerator.next();
+
+                    if ((await proc.call(ExecutionContext.current, [next_val])).is_truthy()) {
+                        found = next_val;
+                        break;
+                    }
+                } catch (e) {
+                    if (e instanceof StopIteration) {
+                        break;
                     }
 
-                    return Qnil;
-                }));
-
-                // no match found
-                return Qnil;
-            } catch (e) {
-                if (e instanceof BreakError) {
-                    // match found, return value
-                    return e.value;
-                } else {
-                    // an error occurred
                     throw e;
                 }
             }
+
+            return found ? found : Qnil;
         } else {
             // @TODO: return an Enumerator
             return Qnil;
