@@ -333,7 +333,7 @@ export const init = async () => {
         }
     }
 
-    Runtime.define_class_under(await Enumerator.klass(), "Lazy", await Enumerator.klass(), (klass: Class) => {
+    await Runtime.define_class_under(await Enumerator.klass(), "Lazy", await Enumerator.klass(), (klass: Class) => {
         klass.define_native_method("select", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             check_block_given(block, "select");
             const proc = block!.get_data<Proc>();
