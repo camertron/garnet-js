@@ -4,7 +4,8 @@ import { is_browser, is_node } from "./env";
 
 import { Trie } from "./util/trie";
 import { Dir } from "./runtime/dir";
-import { ErrnoENOENT } from "./errors";
+import { ErrnoENOENT, NativeError } from "./errors";
+import { ExecutionContext } from "./execution_context";
 
 export interface IFileHandle {
     get offset(): number;
@@ -358,8 +359,16 @@ class NodeFileSystem extends FileSystem {
         try {
             return cb();
         } catch (e) {
-            if (e instanceof Error && "code" in e && e["code"] === "ENOENT") {
-                throw new ErrnoENOENT(`No such file or directory - ${(e as any).path}`);
+            if (e instanceof Error && "code" in e) {
+                const error_code = e["code"];
+
+                if (error_code === "ENOENT") {
+                    throw new ErrnoENOENT(`No such file or directory - ${(e as any).path}`);
+                }
+
+                // wrap in a NativeError for now, but there are a lot more of these
+                const backtrace = ExecutionContext.current?.create_backtrace() || [];
+                throw new NativeError(e, backtrace);
             }
 
             throw e;
@@ -379,8 +388,10 @@ class NodeFileSystem extends FileSystem {
     }
 
     read(path: string): Uint8Array {
-        /* @ts-ignore */
-        return fs.readFileSync(path);
+        return this.error_wrap(() => {
+            /* @ts-ignore */
+            return fs.readFileSync(path);
+        });
     }
 
     write(path: string, bytes: Uint8Array) {
