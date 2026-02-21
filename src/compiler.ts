@@ -2670,6 +2670,7 @@ export class Compiler extends Visitor {
 
             this.iseq.defined(DefinedType.CONST_FROM, val.name, this.iseq.make_string("constant", Encoding.us_ascii, true));
         } else if (type === "ConstantReadNode") {
+            this.iseq.putnil(); // defined instruction always pops one value
             this.iseq.defined(DefinedType.CONST, (value as ConstantReadNode).name, this.iseq.make_string("constant", Encoding.us_ascii, true));
         } else if (type === "FalseNode") {
             this.iseq.putobject({type: "RValue", value: this.iseq.make_string("true", Encoding.us_ascii, true)});
