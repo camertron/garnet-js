@@ -2,7 +2,7 @@ import { BlockCallData, CallDataFlag } from "../call_data";
 import { LocalJumpError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Module, Qnil, Qtrue } from "../runtime";
+import { Qnil } from "../runtime";
 import { Hash } from "../runtime/hash";
 import { Proc } from "../runtime/proc";
 
