@@ -1,5 +1,5 @@
 import { NameError } from "../errors";
-import { Class, ObjectClass, Qfalse, Qnil, Runtime, RValue } from "../runtime";
+import { Class, ObjectClass, Qfalse, Qnil, Qtrue, Runtime, RValue } from "../runtime";
 import { Args } from "../runtime/arg-scanner";
 import { Encoding } from "../runtime/encoding";
 import { Hash } from "../runtime/hash";
@@ -129,6 +129,14 @@ export const init = () => {
 
         klass.define_native_method("rest", async (self: RValue): Promise<RValue> => {
             return await RubyString.new(self.get_data<StringScanner>().rest());
+        });
+
+        klass.define_native_method("string", async (self: RValue): Promise<RValue> => {
+            return await RubyString.new(self.get_data<StringScanner>().str);
+        });
+
+        klass.define_native_method("eos?", async (self: RValue): Promise<RValue> => {
+            return self.get_data<StringScanner>().eos() ? Qtrue : Qfalse;
         });
     });
 
