@@ -895,21 +895,23 @@ export const init = () => {
         const leading_whitespace_re = /^[\0\t\n\v\f\r ]+/;
         const trailing_whitespace_re = /[\0\t\n\v\f\r ]+$/;
 
-        const strip = (str: string): string => {
-            return str
-                .replace(leading_whitespace_re, "")
-                .replace(trailing_whitespace_re, "");
+        const rstrip = (str: string): string => {
+            return str.replace(trailing_whitespace_re, "");
+        }
+
+        const lstrip = (str: string): string => {
+            return str.replace(leading_whitespace_re, "");
         }
 
         klass.define_native_method("strip", async (self: RValue): Promise<RValue> => {
-            return await RubyString.new(strip(self.get_data<string>()));
+            return await RubyString.new(lstrip(rstrip(self.get_data<string>())));
         });
 
         klass.define_native_method("strip!", async (self: RValue): Promise<RValue> => {
             await RubyObject.check_frozen(self);
 
             const old_str = self.get_data<string>();
-            const new_str = strip(old_str);
+            const new_str = lstrip(rstrip(old_str));
 
             if (new_str === old_str) {
                 return Qnil;
@@ -917,6 +919,14 @@ export const init = () => {
                 self.data = new_str;
                 return self;
             }
+        });
+
+        klass.define_native_method("rstrip", async (self: RValue): Promise<RValue> => {
+            return await RubyString.new(rstrip(self.get_data<string>()));
+        });
+
+        klass.define_native_method("lstrip", async (self: RValue): Promise<RValue> => {
+            return await RubyString.new(lstrip(self.get_data<string>()));
         });
 
         klass.define_native_method("upcase", async (self: RValue): Promise<RValue> => {
