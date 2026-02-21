@@ -1196,6 +1196,42 @@ export const init = () => {
                 return await RubyArray.new(all_results);
             }
         });
+
+        klass.define_native_method("min", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const [count_rval] = await Args.scan("01", args);
+            const elements = self.get_data<RubyArray>().elements;
+            const sorted = [...elements];
+
+            if (block) {
+                const proc = block.get_data<Proc>();
+
+                await quick_sort(sorted, async (a: RValue, b: RValue) => {
+                    const cmp_result = await proc.call(ExecutionContext.current, [a, b]);
+                    const result_is_int = await Object.send(cmp_result, "is_a?", [await Integer.klass()]);
+
+                    if (!result_is_int.is_truthy()) {
+                        throw new ArgumentError(`comparision of ${cmp_result.klass.get_data<Class>().name} with 0 failed`);
+                    }
+
+                    return cmp_result.get_data<number>();
+                });
+            } else {
+                await quick_sort(sorted);
+            }
+
+            if (count_rval) {
+                await Runtime.assert_type(count_rval, await Numeric.klass());
+                const count = count_rval.get_data<number>();
+
+                if (count < 0) {
+                    throw new ArgumentError(`negative size (${count})`);
+                }
+
+                return await RubyArray.new(sorted.slice(0, count));
+            } else {
+                return sorted[0] || Qnil;
+            }
+        });
     });
 
     inited = true;
