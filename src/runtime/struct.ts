@@ -23,8 +23,7 @@ export const init = () => {
             // added as a constant on Struct::, eg: Struct.new("Foo")  # => Struct::Foo
             if (args[0].klass === await RubyString.klass()) {
                 const class_name = args[0].get_data<string>();
-                new_class = new Class(class_name, struct_class.rval);
-                struct_class.constants[class_name] = new_class.rval;
+                new_class = new Class(class_name, struct_class.rval, false, struct_class.rval);
                 field_start_index = 1;
 
                 for (let i = 1; i < args.length; i ++) {
