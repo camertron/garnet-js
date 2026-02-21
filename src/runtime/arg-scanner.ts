@@ -146,7 +146,7 @@ export const Args = {
 
         const optional_args: Array<RValue | undefined> = args.splice(0, signature.optional_args);
 
-        // fill in missing optional args with nil
+        // fill in missing optional args with undefined
         for (let i = 0; i < signature.optional_args - optional_args.length; i ++) {
             optional_args.push(undefined);
         }
