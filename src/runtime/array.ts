@@ -529,14 +529,36 @@ export const init = () => {
             }
         });
 
-        // @TODO: fill array with Qnils
         klass.define_native_method("[]=", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const elements = self.get_data<RubyArray>().elements;
-            const [index_rval, new_value] = await Args.scan("2", args);
+            const [index_rval, length_or_new_value_rval, new_value_rval] = await Args.scan("12", args);
             await Runtime.assert_type(index_rval, await Integer.klass());
             const index = index_rval.get_data<number>();
+            let length: number, new_value: RValue;
 
-            elements[index] = new_value;
+            if (length_or_new_value_rval && new_value_rval) {
+                new_value = new_value_rval;
+                await Runtime.assert_type(length_or_new_value_rval, await Integer.klass());
+                length = length_or_new_value_rval.get_data<number>();
+            } else {
+                new_value = length_or_new_value_rval!;
+                length = 1;
+            }
+
+            if (index >= elements.length) {
+                for (let i = elements.length; i < index; i ++) {
+                    elements.push(Qnil);
+                }
+            }
+
+            // When length > 1, we're replacing a range, so we splice in the array elements.
+            // When length == 1, we're setting a single element, so we insert the array as-is.
+            if (length > 1 && await Kernel.is_a(new_value, await RubyArray.klass())) {
+                elements.splice(index, length, ...new_value.get_data<RubyArray>().elements);
+            } else {
+                elements.splice(index, length, new_value);
+            }
+
             return new_value;
         });
 
