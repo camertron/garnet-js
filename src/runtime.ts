@@ -56,7 +56,7 @@ import { init as gc_init } from "./runtime/gc";
 import { obj_id_hash } from "./util/object_id";
 import { RubyString } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
-import { Symbol } from "./runtime/symbol";
+import { Symbol as RubySymbol } from "./runtime/symbol";
 import * as tty from "node:tty";
 import { ParameterMetadata } from "./runtime/parameter-meta";
 import { Hash } from "node:crypto";
@@ -68,18 +68,14 @@ type ClassDefinitionCallback = (klass: Class) => void;
 
 export type NativeMethod = (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData) => RValue | Promise<RValue>;
 
-// used as the type for keys of the symbols weak map
-type SymbolType = {
-    name: string
-}
-
 type NativeExtension = {
     init_fn: () => void,
     inited: boolean
 }
 
 export class Runtime {
-    static symbols: WeakMap<SymbolType, RValue> = new WeakMap();
+    static symbols: Map<string, WeakRef<RValue>> = new Map();
+    static symbol_registry: FinalizationRegistry<string>;
     static native_extensions: {[key: string]: NativeExtension} = {};
     static require_mutex: Mutex = new Mutex();
     static load_mutex: Mutex = new Mutex();
@@ -171,12 +167,20 @@ export class Runtime {
     // the runtime, it essentially exists as a convenient way to memoize strings so we don't
     // have to incur the overhead of making a bunch of new RValues all over the place.
     static async intern(value: string): Promise<RValue> {
-        const key = {name: value};
-        let symbol = this.symbols.get(key);
+        let weak_ref = this.symbols.get(value);
+        let symbol = weak_ref?.deref();
 
         if (!symbol) {
-            symbol = new RValue(await Symbol.klass(), value);
-            this.symbols.set(key, symbol);
+            symbol = new RValue(await RubySymbol.klass(), value);
+            this.symbols.set(value, new WeakRef(symbol));
+
+            if (!this.symbol_registry) {
+                this.symbol_registry = new FinalizationRegistry((key: string) => {
+                    this.symbols.delete(key);
+                });
+            }
+
+            this.symbol_registry.register(symbol, value);
         }
 
         return symbol;
@@ -262,7 +266,7 @@ export class Runtime {
     static async coerce_to_string(obj: RValue): Promise<RValue> {
         switch (obj.klass) {
             case await RubyString.klass():
-            case await Symbol.klass():
+            case await RubySymbol.klass():
                 return obj;
             default:
                 if (await Object.respond_to(obj, "to_str")) {
