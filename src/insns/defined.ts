@@ -118,8 +118,13 @@ export default class Defined extends Instruction {
                 break;
 
             case DefinedType.CONST_FROM:
-                if (await object.get_data<Module>().find_constant(this.name)) {
-                    result = this.message;
+                try {
+                    if (await object.get_data<Module>().find_constant(this.name)) {
+                        result = this.message;
+                    }
+                } catch (e) {
+                    // defined? should return nil, not raise an error
+                    result = null;
                 }
 
                 break;
