@@ -766,10 +766,11 @@ export class InstructionSequence {
         });
 
         let length = 0;
+        let label_counter = 0;
 
         this.insns.each((insn) => {
             if (insn instanceof Label) {
-                insn.patch(`label_${length}`);
+                insn.patch(`label_${label_counter++}`);
             } else if (typeof insn === 'number' || insn instanceof StackPosition) {
                 // skip
             } else if (insn instanceof DefineClass) {
