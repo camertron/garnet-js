@@ -119,7 +119,15 @@ export class BlockFrame extends Frame implements IFrameWithOwner {
             stack_index = context.frame!.stack_index + index;
         }
 
-        return context.stack[stack_index].rval;
+        const stack_entry = context.stack[stack_index];
+
+        if (!stack_entry) {
+            // initialize empty stack entries with nil
+            context.stack[stack_index] = new RValuePointer(Qnil);
+            return Qnil;
+        }
+
+        return stack_entry.rval;
     }
 
     local_set(context: ExecutionContext, index: number, depth: number, value: RValue) {
@@ -131,7 +139,7 @@ export class BlockFrame extends Frame implements IFrameWithOwner {
             stack_index = context.frame!.stack_index + index;
         }
 
-        if (!this.binding.stack[stack_index]) {
+        if (!context.stack[stack_index]) {
             context.stack[stack_index] = new RValuePointer(value);
         } else {
             context.stack[stack_index].rval = value;
