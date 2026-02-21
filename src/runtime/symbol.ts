@@ -5,7 +5,6 @@ import { Integer } from "./integer";
 import { Object } from "./object";
 import { Proc } from "./proc";
 import { RubyString } from "../runtime/string";
-import { Regexp } from "./regexp";
 import { NameError } from "../errors";
 import { mix_shared_string_methods_into } from "./string-shared";
 
