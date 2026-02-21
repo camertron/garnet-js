@@ -1,4 +1,4 @@
-import { ArgumentError, EncodingConverterNotFoundError, IndexError, NameError, NotImplementedError, RangeError, TypeError } from "../errors";
+import { ArgumentError, EncodingConverterNotFoundError, IndexError, NameError, NotImplementedError, RangeError, RuntimeError, TypeError } from "../errors";
 import { Class, Qnil, RValue, Runtime, Qtrue, Qfalse, ObjectClass } from "../runtime";
 import { hash_string, is_alpha_num, strlen } from "../util/string_utils";
 import { Integer } from "./integer";
@@ -1494,6 +1494,29 @@ export const init = () => {
         klass.define_native_method("valid_encoding?", async (self: RValue): Promise<RValue> => {
             const encoding = await RubyString.get_encoding(self);
             return encoding.is_representable(self.get_data<string>()) ? Qtrue : Qfalse;
+        });
+
+        klass.define_native_method("each_codepoint", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            if (block) {
+                const data = self.get_data<string>();
+                const encoding = await RubyString.get_encoding(self);
+                const proc = block.get_data<Proc>();
+
+                for (let i = 0; i < data.length; i ++) {
+                    const code = encoding.codepoint_at(i, data);
+
+                    if (!code) {
+                        throw new RuntimeError(`could not determine codepoint at position ${i}`);
+                    }
+
+                    await proc.call(ExecutionContext.current, [await Integer.get(code)]);
+                }
+
+                return self;
+            } else {
+                // @TODO: return an Enumerator
+                return Qnil;
+            }
         });
     });
 
