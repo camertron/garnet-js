@@ -1,5 +1,5 @@
 import { ArgumentError, NameError, RangeError } from "../errors";
-import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
+import { Class, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { obj_id_hash } from "../util/object_id";
 import { Encoding } from "./encoding";
 import { RubyString } from "../runtime/string";
@@ -67,7 +67,7 @@ export const init = async () => {
         });
 
         klass.define_native_method("hash", async (self: RValue): Promise<RValue> => {
-            return await Integer.get(obj_id_hash(self.get_data<number>()));
+            return await Integer.get(obj_id_hash(self.object_id));
         });
 
         // Normally multiplication of two ints/floats is handled by the opt_mult instruction. This
