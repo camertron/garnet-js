@@ -40,6 +40,13 @@ export const init = () => {
             }
 
             const new_class_rval = new RValue(ClassClass, new_class);
+            new_class.rval = new_class_rval;
+
+            // add the constant to Struct's child class list
+            if (args[0].klass === await RubyString.klass()) {
+                const class_name = args[0].get_data<string>();
+                struct_class.constants[class_name] = new_class_rval;
+            }
 
             new_class.define_native_singleton_method("new", (self: RValue, args: RValue[]): RValue => {
                 const new_instance = new RValue(new_class_rval);
