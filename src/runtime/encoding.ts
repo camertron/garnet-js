@@ -153,13 +153,23 @@ export abstract class Encoding {
         return null;
     }
 
+    abstract codepoint_at(char_pos: number, str: string): number | undefined;
     abstract codepoint_valid(codepoint: number): boolean;
     abstract codepoint_to_utf16(codepoint: number): string;
     abstract unicode_to_codepoint(unicode_cp: number): number;
     abstract bytesize(str: string): number;
+    abstract bytesize_for_range(char_offset: number, char_length: number, str: string): number;
     abstract string_to_bytes(str: string): Uint8Array;
     abstract bytes_to_string(bytes: Uint8Array): string;
     abstract is_representable(str: string): boolean;
+    abstract byte_pos(char_pos: number, str: string): number;
+    abstract char_pos(byte_pos: number, str: string): number;
+
+    charsize_for_range(byte_offset: number, byte_length: number, str: string): number {
+        const start = Math.min(this.char_pos(byte_offset, str), str.length);
+        const end = Math.min(this.char_pos(byte_offset + byte_length, str), str.length);
+        return end - start;
+    }
 
     abstract conversion_targets: string[];
 
@@ -183,6 +193,10 @@ export class USASCIIEncoding extends Encoding {
         super(1, 1);
     }
 
+    codepoint_at(char_pos: number, str: string): number | undefined {
+        return str.codePointAt(char_pos);
+    }
+
     codepoint_valid(codepoint: number): boolean {
         return codepoint >= 0x0 && codepoint < 0x100;
     }
@@ -197,6 +211,10 @@ export class USASCIIEncoding extends Encoding {
 
     bytesize(str: string): number {
         return str.length;
+    }
+
+    bytesize_for_range(char_offset: number, char_length: number, str: string): number {
+        return Math.min(char_offset + char_length, str.length);
     }
 
     string_to_bytes(str: string): Uint8Array {
@@ -232,6 +250,14 @@ export class USASCIIEncoding extends Encoding {
 
         return true;
     }
+
+    byte_pos(char_pos: number, _str: string): number {
+        return char_pos;
+    }
+
+    char_pos(byte_pos: number, _str: string): number {
+        return byte_pos;
+    }
 }
 
 export class ASCII8BitEncoding extends Encoding {
@@ -241,6 +267,10 @@ export class ASCII8BitEncoding extends Encoding {
 
     constructor() {
         super(1, 1);
+    }
+
+    codepoint_at(char_pos: number, str: string): number | undefined {
+        return str.codePointAt(char_pos);
     }
 
     codepoint_valid(codepoint: number): boolean {
@@ -257,6 +287,10 @@ export class ASCII8BitEncoding extends Encoding {
 
     bytesize(str: string): number {
         return str.length;
+    }
+
+    bytesize_for_range(char_offset: number, char_length: number, str: string): number {
+        return Math.min(char_offset + char_length, str.length);
     }
 
     string_to_bytes(str: string): Uint8Array {
@@ -291,6 +325,14 @@ export class ASCII8BitEncoding extends Encoding {
 
         return true;
     }
+
+    byte_pos(char_pos: number, _str: string): number {
+        return char_pos;
+    }
+
+    char_pos(byte_pos: number, _str: string): number {
+        return byte_pos;
+    }
 }
 
 export abstract class UnicodeEncoding extends Encoding {
@@ -311,6 +353,19 @@ export abstract class UnicodeEncoding extends Encoding {
     is_representable(str: string): boolean {
         // This is not strictly correct but it's fine for now
         return true;
+    }
+
+    codepoint_at(char_pos: number, str: string): number | undefined {
+        const code = str.codePointAt(char_pos);
+        if (!code) return undefined;
+
+        if (0xd800 <= code && code <= 0xdbff) {
+            const hi = code;
+            const low = str.charCodeAt(char_pos + 1);
+            return (hi - 0xd800) * 0x400 + (low - 0xdc00) + 0x10000;
+        }
+
+        return code;
     }
 }
 
@@ -338,18 +393,36 @@ export class UTF8Encoding extends UnicodeEncoding {
 
         for (let i = 0; i < str.length; i ++) {
             const cp = str.codePointAt(i)!;
+            size += this.cp_bytesize(cp);
+        }
 
-            if (cp < 0x80) {
-                size ++;
-            } else if (cp < 0x800) {
-                size += 2;
-            } else if (cp < 0x10000) {
-                size += 3;
-            } else if (cp < 0x110000) {
-                size += 4;
-            } else {
-                throw new RangeError(`invalid codepoint 0xD800 in UTF-8`)
-            }
+        return size;
+    }
+
+    bytesize_for_range(char_offset: number, char_length: number, str: string): number {
+        let size = 0;
+
+        for (let i = char_offset; i < Math.min(char_offset + char_length, str.length); i ++) {
+            const cp = str.codePointAt(i)!;
+            size += this.cp_bytesize(cp);
+        }
+
+        return size;
+    }
+
+    private cp_bytesize(cp: number): number {
+        let size = 0;
+
+        if (cp < 0x80) {
+            size ++;
+        } else if (cp < 0x800) {
+            size += 2;
+        } else if (cp < 0x10000) {
+            size += 3;
+        } else if (cp < 0x110000) {
+            size += 4;
+        } else {
+            throw new RangeError(`invalid codepoint 0xD800 in UTF-8`)
         }
 
         return size;
@@ -378,6 +451,36 @@ export class UTF8Encoding extends UnicodeEncoding {
 
         return this._decoder;
     }
+
+    byte_pos(char_pos: number, str: string): number {
+        let byte_pos = 0;
+
+        for (let i = 0; i < char_pos; i ++) {
+            const cp = str.codePointAt(i)!;
+            byte_pos += this.cp_bytesize(cp);
+        }
+
+        return byte_pos;
+    }
+
+    char_pos(byte_pos: number, str: string): number {
+        let char_pos = 0;
+        let cur_byte_pos = 0;
+
+        while (cur_byte_pos < byte_pos && char_pos < str.length) {
+            const cp = str.codePointAt(char_pos)!;
+            const char_bytesize = this.cp_bytesize(cp);
+
+            if (cur_byte_pos + char_bytesize > byte_pos) {
+                break;
+            }
+
+            cur_byte_pos += char_bytesize;
+            char_pos ++;
+        }
+
+        return char_pos;
+    }
 }
 
 export class UTF16LEEncoding extends UnicodeEncoding {
@@ -390,6 +493,10 @@ export class UTF16LEEncoding extends UnicodeEncoding {
 
     bytesize(str: string): number {
         return str.length * 2;
+    }
+
+    bytesize_for_range(char_offset: number, char_length: number, str: string): number {
+        return Math.min(char_offset + char_length, str.length) * 2;
     }
 
     string_to_bytes(str: string): Uint8Array {
@@ -405,7 +512,7 @@ export class UTF16LEEncoding extends UnicodeEncoding {
     }
 
     bytes_to_string(bytes: Uint8Array): string {
-        return this._decoder.decode(bytes);
+        return this.decoder.decode(bytes);
     }
 
     private get decoder() {
@@ -414,6 +521,14 @@ export class UTF16LEEncoding extends UnicodeEncoding {
         }
 
         return this._decoder;
+    }
+
+    byte_pos(char_pos: number, _str: string): number {
+        return char_pos * 2;
+    }
+
+    char_pos(byte_pos: number, _str: string): number {
+        return byte_pos / 2;
     }
 }
 
@@ -427,6 +542,10 @@ export class UTF16BEEncoding extends UnicodeEncoding {
 
     bytesize(str: string): number {
         return str.length * 2;
+    }
+
+    bytesize_for_range(char_offset: number, char_length: number, str: string): number {
+        return Math.min(char_offset + char_length, str.length) * 2;
     }
 
     string_to_bytes(str: string): Uint8Array {
@@ -452,6 +571,14 @@ export class UTF16BEEncoding extends UnicodeEncoding {
 
         return this._decoder;
     }
+
+    byte_pos(char_pos: number, _str: string): number {
+        return char_pos * 2;
+    }
+
+    char_pos(byte_pos: number, _str: string): number {
+        return byte_pos / 2;
+    }
 }
 
 export class UTF32Encoding extends UnicodeEncoding {
@@ -465,9 +592,9 @@ export class UTF32Encoding extends UnicodeEncoding {
         let length = 0;
 
         for (let i = 0; i < str.length; i ++) {
-            const code_unit = str.charCodeAt(i);
+            const cp = str.charCodeAt(i);
 
-            if (code_unit >= 0xD800 && code_unit <= 0xDBFF) {
+            if (cp >= 0xD800 && cp <= 0xDBFF) {
                 i ++; // Skip the low surrogate
             }
 
@@ -475,6 +602,22 @@ export class UTF32Encoding extends UnicodeEncoding {
         }
 
         return length;
+    }
+
+    bytesize_for_range(char_offset: number, char_length: number, str: string): number {
+        let result = 0;
+
+        for (let i = char_offset; i < Math.min(char_offset + char_length, str.length); i ++) {
+            const cp = str.charCodeAt(i);
+
+            if (cp >= 0xD800 && cp <= 0xDBFF) {
+                i ++; // Skip the low surrogate
+            }
+
+            result += 4;
+        }
+
+        return result;
     }
 
     string_to_bytes(str: string): Uint8Array {
@@ -521,6 +664,14 @@ export class UTF32Encoding extends UnicodeEncoding {
         }
 
         return String.fromCodePoint(...code_points);
+    }
+
+    byte_pos(char_pos: number, _str: string): number {
+        return char_pos * 4;
+    }
+
+    char_pos(byte_pos: number, _str: string): number {
+        return byte_pos / 4;
     }
 }
 
