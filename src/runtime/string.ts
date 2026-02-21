@@ -353,6 +353,41 @@ export const init = () => {
             return await RubyArray.new(chunks);
         });
 
+        klass.define_native_method("byteslice", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const data = self.get_data<string>();
+            const [byte_pos_or_range, length_rval] = await Args.scan("11", args);
+            let byte_pos: number, length: number = 1;
+
+            if (await Kernel.is_a(byte_pos_or_range, await Range.klass())) {
+                const range = byte_pos_or_range.get_data<Range>();
+                const begin_is_num = await Kernel.is_a(range.begin, await Integer.klass());
+                const end_is_num = await Kernel.is_a(range.end, await Integer.klass());
+
+                if (begin_is_num && end_is_num) {
+                    byte_pos = range.begin.get_data<number>();
+                    length = range.end.get_data<number>() - range.begin.get_data<number>() + 1;
+                    if (range.exclude_end) length -= 1;
+                } else {
+                    await Runtime.assert_type(byte_pos_or_range, await Integer.klass());
+                    return Qnil; // should never get here because assert_type should raise
+                }
+            } else {
+                await Runtime.assert_type(byte_pos_or_range, await Integer.klass());
+                byte_pos = byte_pos_or_range.get_data<number>();
+
+                if (length_rval) {
+                    await Runtime.assert_type(length_rval, await Integer.klass());
+                    length = length_rval.get_data<number>();
+                }
+            }
+
+            const encoding = await RubyString.get_encoding(self);
+            const char_pos = encoding.char_pos(byte_pos, data);
+            const char_length = encoding.charsize_for_range(byte_pos, length, data);
+
+            return await RubyString.new(data.slice(char_pos, char_pos + char_length));
+        });
+
         // a count of 0 means replace all matches, > 0 means only replace max n times
         const gsub = async (str: string, pattern: Regexp | string, replacements: RValue | undefined, count: number = 0): Promise<string> => {
             const matches: [number, number, string][] = [];
