@@ -388,8 +388,8 @@ class NodeFileSystem extends FileSystem {
     }
 
     read(path: string): Uint8Array {
+        /* @ts-ignore */
         return this.error_wrap(() => {
-            /* @ts-ignore */
             return fs.readFileSync(path);
         });
     }
