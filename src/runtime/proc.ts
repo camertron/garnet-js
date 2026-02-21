@@ -2,14 +2,15 @@ import { BlockCallData, MethodCallData } from "../call_data";
 import { CallingConvention, ExecutionContext } from "../execution_context";
 import { BlockFrame } from "../frame";
 import { InstructionSequence } from "../instruction_sequence";
-import { RValue, Class, NativeMethod, ObjectClass, Runtime, Module, Qtrue, Qfalse } from "../runtime";
+import { RValue, Class, NativeMethod, ObjectClass, Runtime, Module, Qtrue, Qfalse, Qnil } from "../runtime";
 import { Binding } from "./binding";
 import { Object } from "../runtime/object";
 import { Integer } from "./integer";
 import { ArgumentError, NameError } from "../errors";
 import { Hash } from "./hash";
-import { RubyString } from "./string";
 import { warn } from "./warning";
+import { RubyString } from "./string";
+import { RubyArray } from "./array";
 
 export abstract class Proc {
     public binding: Binding;
@@ -181,6 +182,18 @@ export const init = () => {
 
             proc.ruby2_keywords = true;
             return self;
+        });
+
+        klass.define_native_method("source_location", async (self: RValue): Promise<RValue> => {
+            const proc = self.get_data<Proc>();
+
+            if (proc instanceof InterpretedProc) {
+                const path = await RubyString.new(proc.iseq.absolute_path);
+                const lineno = await Integer.get(proc.iseq.line);
+                return RubyArray.new([path, lineno]);
+            } else {
+                return Qnil;
+            }
         });
     });
 
