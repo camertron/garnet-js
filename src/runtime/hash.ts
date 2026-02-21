@@ -797,6 +797,26 @@ export const init = () => {
             self.get_data<Hash>().clear();
             return self;
         });
+
+        klass.define_native_method("reject", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            if (block) {
+                const proc = block.get_data<Proc>();
+                const hash = self.get_data<Hash>();
+                const new_hash_rval = await Hash.new();
+                const new_hash = new_hash_rval.get_data<Hash>();
+
+                await hash.each(async (k: RValue, v: RValue) => {
+                    if (!(await proc.call(ExecutionContext.current, [k, v])).is_truthy()) {
+                        await new_hash.set(k, v);
+                    }
+                });
+
+                return new_hash_rval;
+            } else {
+                // @TODO: return an Enumerator
+                return Qnil;
+            }
+        });
     });
 
     inited = true;
