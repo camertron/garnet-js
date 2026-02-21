@@ -115,4 +115,23 @@ try {
     process.exit(1);
 }
 
-await Garnet.deinit();
+try {
+    await Garnet.deinit();
+} catch (e) {
+    // SystemExit should exit silently
+    if (e instanceof Garnet.SystemExit) {
+        process.exit(e.status);
+    } else if (e && typeof e === 'object' && 'data' in e && e.data instanceof Garnet.SystemExit) {
+        process.exit(e.data.status);
+    }
+
+    if (e instanceof Garnet.RubyError) {
+        Garnet.ExecutionContext.print_backtrace(e);
+    } else if (e && typeof e === 'object' && 'data' in e && e.data instanceof Garnet.RubyError) {
+        await Garnet.ExecutionContext.print_backtrace(e.data);
+    } else {
+        console.error(e);
+    }
+
+    process.exit(1);
+}
