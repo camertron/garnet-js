@@ -1121,7 +1121,12 @@ export class Compiler extends Visitor {
         if (node.rest) {
             this.iseq.argument_options.rest_start = this.iseq.argument_size
             this.with_used(true, () => this.visit(node.rest!));
-            this.iseq.argument_size ++;
+
+            // only increment argument_size if the rest parameter has a name, since
+            // anonymous splats don't get a local
+            if ((node.rest as RestParameterNode).name) {
+                this.iseq.argument_size ++;
+            }
         }
 
         // posts are of type RequiredParameterNode
@@ -1294,7 +1299,9 @@ export class Compiler extends Visitor {
     }
 
     override visitRestParameterNode(node: RestParameterNode) {
-        // no-op
+        if (node.name) {
+            this.iseq.local_table.plain(node.name);
+        }
     }
 
     override visitSplatNode(node: SplatNode) {
