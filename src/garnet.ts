@@ -109,7 +109,7 @@ export async function evaluate(code: string, path?: string, absolute_path?: stri
             console.error(e);
         }
 
-        return Qnil;
+        throw e;
     }
 }
 
