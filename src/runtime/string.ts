@@ -1415,7 +1415,16 @@ export const init = () => {
             }
         });
 
-        await klass.alias_method("lines", "each_line");
+        klass.define_native_method("lines", async (self: RValue, args: RValue[], kwargs?: Hash): Promise<RValue> => {
+            const lines: RValue[] = [];
+
+            await RubyObject.send(self, "each_line", args, kwargs, await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, args: RValue[]) => {
+                lines.push(args[0]);
+                return Qnil;
+            }));
+
+            return await RubyArray.new(lines);
+        });
 
         klass.define_native_method("each_char", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             const data = self.get_data<string>();
