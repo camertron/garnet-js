@@ -1471,6 +1471,10 @@ await (BasicObjectClass.get_data<Class>()).tap(async (klass: Class) => {
 
         return Object.send(self, send_call_data, args.slice(1), kwargs, block);
     });
+
+    klass.define_native_method("__id__", async (self: RValue): Promise<RValue> => {
+        return await Integer.get(self.object_id);
+    });
 });
 
 export interface IO {
