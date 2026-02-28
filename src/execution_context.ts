@@ -283,14 +283,6 @@ export class ExecutionContext {
 
                     try {
                         result = await (insn as Instruction).call(this);
-
-                        // @TODO: remove me
-                        // @ts-ignore
-                        // for (const elem of this.stack) {
-                        //     if (!elem.rval) {
-                        //         debugger;
-                        //     }
-                        // }
                     } catch (error) {
                         if (error instanceof ThrowNoneError) {
                             // ThrowNoneError is used to signal the end of a rescue or ensure block
