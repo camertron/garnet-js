@@ -1599,6 +1599,11 @@ export class NodeIO implements IO {
     is_tty(): boolean {
         return this.stream.isTTY;
     }
+
+    flush(): void {
+        // Node.js streams don't have a synchronous flush, but we can use cork/uncork
+        // or just rely on the fact that write() is synchronous for TTYs
+    }
 }
 
 export const IOClass = Runtime.define_class("IO", ObjectClass, async (klass: Class) => {
