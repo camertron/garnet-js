@@ -36,7 +36,7 @@ export default class InvokeSuper extends Instruction {
             owner = owning_frame.owner;
             mid = (owning_frame.call_data as MethodCallData).mid;
         } else {
-            owning_frame = context.topmost_method_frame_matching_current_lexical_scope();
+            owning_frame = context.closest_method_frame_matching_current_lexical_scope();
             owner = owning_frame ? owning_frame.owner : undefined;
             mid = owning_frame ? owning_frame.iseq.name : undefined;
         }

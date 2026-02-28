@@ -622,20 +622,21 @@ export class ExecutionContext {
       return current;
     }
 
-    topmost_method_frame_matching_current_lexical_scope(): MethodFrame | null {
+    closest_method_frame_matching_current_lexical_scope(): MethodFrame | null {
         const lexical_scope = this.frame!.iseq.lexical_scope;
         let current_frame = this.frame;
-        let topmost_matching: MethodFrame | null = null;
 
+        // Find the closest (innermost) matching method frame. When a return statement is
+        // executed inside a block, it should return from the immediately enclosing method.
         while (current_frame) {
             if (current_frame instanceof MethodFrame && current_frame.iseq.lexical_scope.id === lexical_scope.id) {
-                topmost_matching = current_frame;
+                return current_frame;
             }
 
             current_frame = current_frame.parent;
         }
 
-        return topmost_matching;
+        return null;
     }
 
     async run_top_frame(iseq: InstructionSequence, stack_index?: number): Promise<RValue> {

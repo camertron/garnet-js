@@ -31,7 +31,7 @@ export default class Throw extends Instruction {
                 }
 
             case ThrowType.RETURN:
-                const frame = context.topmost_method_frame_matching_current_lexical_scope();
+                const frame = context.closest_method_frame_matching_current_lexical_scope();
 
                 if (!frame) {
                     throw new LocalJumpError("unexpected return");
