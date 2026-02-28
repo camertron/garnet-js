@@ -265,7 +265,7 @@ export class ExecutionContext {
 
             switch (insn.constructor) {
                 case Number:
-                    this.frame.line = insn as number;
+                    this.frame!.line = insn as number;
                     frame.pc += 1;
                     break;
 
