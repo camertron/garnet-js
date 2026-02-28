@@ -107,8 +107,8 @@ export abstract class Encoding {
         if (enc1 == enc2) return enc1;
 
         if (obj2.klass === await RubyString.klass() && (obj2.get_data<string>().length == 0)) return enc1;
-        if (obj1.klass === await RubyString.klass() && (obj1.get_data<string>().length == 0)) {
-            return enc1.get_data<Encoding>().ascii_compatible && obj2.klass === await RubyString.klass() && (await RubyString.ascii_only(obj2)) ? enc1 : enc2;
+        if (obj1.klass === await RubyString.klass() && obj2.klass === await RubyString.klass() && (obj1.get_data<string>().length == 0)) {
+            return enc1.get_data<Encoding>().ascii_compatible && (await RubyString.ascii_only(obj2)) ? enc1 : enc2;
         }
 
         if (!enc1.get_data<Encoding>().ascii_compatible || !enc2.get_data<Encoding>().ascii_compatible) return null;
