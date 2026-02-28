@@ -1,6 +1,6 @@
 import { InstructionSequence } from "./instruction_sequence";
 import { Compiler, LexicalScope } from "./compiler";
-import { ArgumentError, LoadError, TypeError, NoMethodError, NotImplementedError, NameError } from "./errors";
+import { LoadError, TypeError, NoMethodError, NotImplementedError, NameError } from "./errors";
 import { ExecutionContext } from "./execution_context";
 import { init as array_init } from "./runtime/array";
 import { Integer, init as integer_init } from "./runtime/integer";
@@ -320,7 +320,18 @@ export class Runtime {
         require_path = vmfs.normalize_path(require_path);
 
         const ec = ExecutionContext.current;
-        const absolute_path = vmfs.is_relative(require_path) ? this.find_on_load_path(require_path, false) : require_path;
+        let absolute_path: string | null;
+
+        if (vmfs.is_relative(require_path)) {
+            absolute_path = this.find_on_load_path(require_path, false);
+        } else {
+            absolute_path = require_path;
+
+            if (!vmfs.is_file(absolute_path) && !absolute_path.endsWith(".rb")) {
+                absolute_path = `${absolute_path}.rb`;
+            }
+        }
+
         const loaded_features = ec.globals['$"'].get_data<RubyArray>().elements;
 
         if (absolute_path) {
