@@ -1506,7 +1506,11 @@ export class BrowserIO implements IO {
     }
 
     puts(val: string): void {
-        this.console_fn(val);
+        if (val.endsWith("\n")) {
+            this.console_fn(val);
+        } else {
+            this.console_fn(val + "\n");
+        }
     }
 
     write(val: string): void {
@@ -1530,8 +1534,12 @@ export class NodeIO implements IO {
     }
 
     puts(val: string): void {
-        this.stream.write(val);
-        this.stream.write("\n");
+        if (val.endsWith("\n")) {
+            this.stream.write(val);
+        } else {
+            this.stream.write(val);
+            this.stream.write("\n");
+        }
     }
 
     write(val: string): void {
