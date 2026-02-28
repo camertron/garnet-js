@@ -1056,7 +1056,7 @@ export const init = () => {
         });
 
         const sort = async (elements: RValue[], block?: Proc) => {
-            let compare_fn = spaceship_compare;
+            let compare_fn: (x: RValue, y: RValue) => Promise<number>;
 
             if (block) {
                 compare_fn = async (x: RValue, y: RValue): Promise<number> => {
@@ -1069,6 +1069,10 @@ export const init = () => {
                         const y_class_name = y.klass.get_data<Module>().name;
                         throw new ArgumentError(`comparison of ${x_class_name} with ${y_class_name} failed`);
                     }
+                };
+            } else {
+                compare_fn = async (x: RValue, y: RValue): Promise<number> => {
+                    return await spaceship_compare(x, y, true);
                 };
             }
 

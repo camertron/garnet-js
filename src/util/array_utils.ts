@@ -29,7 +29,7 @@ const partition = async (
 
 export const quick_sort = async (
     array: RValue[],
-    compare_fn: (a: RValue, b: RValue) => Promise<number> = spaceship_compare,
+    compare_fn: (a: RValue, b: RValue) => Promise<number> = async (a: RValue, b: RValue) => spaceship_compare(a, b, true),
     left: number = 0,
     right: number = array.length - 1
 ) => {
@@ -69,7 +69,7 @@ const schwartzian_partition = async (
 
 export const schwartzian_quick_sort = async (
     array: [RValue, RValue][],
-    compare_fn: (a: RValue, b: RValue) => Promise<number> = spaceship_compare,
+    compare_fn: (a: RValue, b: RValue) => Promise<number> = async (a: RValue, b: RValue) => spaceship_compare(a, b, true),
     left: number = 0,
     right: number = array.length - 1
 ) => {

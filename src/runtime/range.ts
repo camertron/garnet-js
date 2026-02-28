@@ -59,8 +59,8 @@ export const init = () => {
 
         klass.define_native_method("include?", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const range = self.get_data<Range>();
-            const begin_cmp = await spaceship_compare(range.begin, args[0]);
-            const end_cmp = await spaceship_compare(range.end, args[0]);
+            const begin_cmp = await spaceship_compare(range.begin, args[0], true);
+            const end_cmp = await spaceship_compare(range.end, args[0], true);
 
             if (range.exclude_end) {
                 return begin_cmp <= 0 && end_cmp > 0 ? Qtrue : Qfalse;
