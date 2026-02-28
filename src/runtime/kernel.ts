@@ -274,7 +274,6 @@ export const init = async () => {
             case await RubyString.klass():
                 const str = obj.get_data<string>();
 
-                if (str.match(/^\d+$/)) {
                 if (str.match(/^[-+]?\d+$/)) {
                     return Integer.get(parseInt(str));
                 }
