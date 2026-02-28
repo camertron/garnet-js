@@ -239,6 +239,10 @@ export const init = async () => {
         }
     });
 
+    mod.define_native_method("respond_to_missing?", async (): Promise<RValue> => {
+        return Qfalse;
+    });
+
     mod.define_native_method("at_exit", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
         if (block) {
             Kernel.exit_handlers.unshift(block);
