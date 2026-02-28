@@ -779,6 +779,10 @@ export const init = async () => {
         klass.define_native_method("dummy?", (self: RValue): RValue => {
             return Qfalse;
         });
+
+        klass.define_native_method("name", (self: RValue): Promise<RValue> => {
+            return RubyString.new(self.get_data<Encoding>().name);
+        });
     });
 
     await register_encoding("ascii", ["us-ascii"], new USASCIIEncoding());
