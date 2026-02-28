@@ -381,6 +381,7 @@ export class Runtime {
         // Garnet does not support loading code in other encodings
         const code = new TextDecoder('utf8').decode(vmfs.read(absolute_path));
         const insns = Compiler.compile_string(code.toString(), require_path, absolute_path);
+
         await ec.run_top_frame(insns, ec.stack_len);
 
         return true;
@@ -893,7 +894,38 @@ export class Module {
     }
 }
 
-let next_object_id = 0;
+// In MRI, immediate values (nil, true, false, integers) have special object_ids:
+// - false: 0
+// - true: 20
+// - nil: 8
+// - integers: (value << 1) | 1  (always odd)
+//
+// To avoid collisions with immediate values (which produce odd numbers for integers),
+// non-immediate objects get sequential IDs that are multiples of 8 (always even).
+// This matches MRI's approach where OBJ_ID_INCREMENT = RUBY_IMMEDIATE_MASK + 1 = 8.
+const OBJ_ID_INCREMENT = 8;
+let next_object_id_counter = 1;
+
+function calculate_immediate_object_id(data: any): number | null {
+    if (data === null) {
+        return 8;
+    } else if (data === true) {
+        return 20;
+    } else if (data === false) {
+        return 0;
+    } else if (typeof data === 'number' && Number.isInteger(data)) {
+        return (data << 1) | 1;
+    }
+
+    return null;
+}
+
+function get_next_object_id(): number {
+    // Non-immediate objects get IDs that are multiples of 8 (always even)
+    const id = next_object_id_counter * OBJ_ID_INCREMENT;
+    next_object_id_counter ++;
+    return id;
+}
 
 export class RValue {
     public klass: RValue;
@@ -908,9 +940,16 @@ export class RValue {
     constructor(klass: RValue, data?: any) {
         this.klass = klass;
         this.data = data;
-        this.object_id = next_object_id;
+
+        const immediate_id = calculate_immediate_object_id(data);
+
+        if (immediate_id !== null) {
+            this.object_id = immediate_id;
+        } else {
+            this.object_id = get_next_object_id();
+        }
+
         this.frozen = false;
-        next_object_id ++;
     }
 
     get_data<T>(): T {
