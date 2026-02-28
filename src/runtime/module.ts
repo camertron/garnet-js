@@ -425,7 +425,7 @@ export const init = async () => {
             return UnboundMethod.new(method_name.get_data<string>(), callable);
         }
 
-        throw new NameError(`undefined method \`${method_name}' for class ${self.get_data<Module>().name}`);
+        throw new NameError(`undefined method \`${method_name.get_data<string>()}' for class ${self.get_data<Module>().name}`);
     });
 
     mod.define_native_method("method_added", (): RValue => {
