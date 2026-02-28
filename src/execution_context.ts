@@ -460,6 +460,48 @@ export class ExecutionContext {
                                         // Re-throw the BreakError so it can be handled by the outer catch block
                                         // which will propagate it up to the parent frame
                                         throw e;
+                                    } else if (e instanceof RubyError || e instanceof RValue) {
+                                        // A Ruby exception was raised from within a rescue block, so search for
+                                        // another rescue block in the current frame to handle it
+
+                                        // run any ensure blocks from the current begin/rescue first
+                                        if (ensure_entry) {
+                                            await this.run_ensure_frame(ensure_entry.iseq!, frame, Qnil);
+                                        }
+
+                                        // search for another rescue entry in the current frame
+                                        const outer_catch_entry = this.find_catch_entry(frame, CatchRescue);
+                                        const outer_ensure_entry = this.find_catch_entry(frame, CatchEnsure);
+
+                                        let e_rval: RValue;
+
+                                        if (e instanceof RValue) {
+                                            e_rval = e;
+                                        } else {
+                                            e_rval = await e.to_rvalue();
+                                        }
+
+                                        if (!outer_catch_entry) {
+                                            // no outer rescue block, run any outer ensure and re-throw
+                                            if (outer_ensure_entry) {
+                                                await this.run_ensure_frame(outer_ensure_entry.iseq!, frame, e_rval);
+                                            }
+
+                                            throw e;
+                                        }
+
+                                        // found an outer rescue block, handle the exception there
+                                        this.stack.splice(frame.stack_index + frame.iseq.local_table.size() + outer_catch_entry.restore_sp);
+                                        this.frame = frame;
+                                        frame.pc = frame.iseq.compiled_insns.indexOf(outer_catch_entry.cont_label);
+
+                                        result = await this.run_rescue_frame(outer_catch_entry.iseq!, frame, e_rval);
+
+                                        if (outer_ensure_entry) {
+                                            await this.run_ensure_frame(outer_ensure_entry.iseq!, frame, Qnil);
+                                        }
+
+                                        this.stack.push(new RValuePointer(result));
                                     } else {
                                         throw e;
                                     }
