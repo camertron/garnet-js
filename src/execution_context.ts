@@ -380,6 +380,12 @@ export class ExecutionContext {
                                     error.backtrace ||= this.create_backtrace();
                                 }
 
+                                // If we're in a rescue or ensure frame, propagate the error up to the parent frame
+                                if (frame.iseq.type === "rescue" || frame.iseq.type === "ensure") {
+                                    this.frame = previous || frame.parent;
+                                    throw error;
+                                }
+
                                 const catch_entry = this.find_catch_entry(frame, CatchRescue)
                                 const ensure_entry = this.find_catch_entry(frame, CatchEnsure);
                                 let error_rval;
