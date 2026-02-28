@@ -1340,9 +1340,11 @@ export const init = () => {
             return await RubyArray.new(bytes);
         });
 
-        klass.define_native_method("each_line", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+        klass.define_native_method("each_line", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
             const data = self.get_data<string>();
             let separator: string;
+
+            const chomp = (await Args.get_kwarg("chomp", kwargs, Qfalse)).is_truthy();
 
             if (args.length > 0 && args[0] !== Qnil) {
                 separator = args[0].get_data<string>();
@@ -1387,7 +1389,13 @@ export const init = () => {
                         break;
                     } else {
                         // yield the line (including the separator)
-                        lines.push(await RubyString.new(data.substring(pos, next_sep + separator.length)));
+                        let str = data.substring(pos, next_sep + separator.length);
+
+                        if (chomp) {
+                            str = str.substring(0, str.length - separator.length);
+                        }
+
+                        lines.push(await RubyString.new(str));
                         pos = next_sep + separator.length;
                     }
                 }
