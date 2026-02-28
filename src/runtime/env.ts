@@ -31,13 +31,17 @@ export class Env {
     async has(k: RValue): Promise<boolean> {
         return await this.entries.has(k);
     }
+
+    async delete(k: RValue): Promise<void> {
+        await this.entries.delete(k);
+    }
 }
 
 export const init = () => {
     if (inited) return;
 
     const env = new Env();
-const env_rval = new RValue(ObjectClass, env);
+    const env_rval = new RValue(ObjectClass, env);
 
     env_rval.get_singleton_class().get_data<Class>().define_native_method("[]", async (_self: RValue, args: RValue[]): Promise<RValue> => {
         await Runtime.assert_type(args[0], await RubyString.klass());
@@ -59,8 +63,14 @@ const env_rval = new RValue(ObjectClass, env);
 
     env_rval.get_singleton_class().get_data<Class>().define_native_method("[]=", async (_self: RValue, args: RValue[]): Promise<RValue> => {
         await Runtime.assert_type(args[0], await RubyString.klass());
-        await Runtime.assert_type(args[1], await RubyString.klass());
-        await env.set(args[0], args[1]);
+        await Runtime.assert_type(args[1], Qnil.klass, await RubyString.klass());
+
+        if (args[1] === Qnil) {
+            await env.delete(args[0]);
+        } else {
+            await env.set(args[0], args[1]);
+        }
+
         return args[1];
     });
 
