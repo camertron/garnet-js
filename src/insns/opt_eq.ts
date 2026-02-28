@@ -1,5 +1,6 @@
 import { MethodCallData } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
+import { Encoding, Float } from "../garnet";
 import Instruction from "../instruction";
 import { Qfalse, Qtrue } from "../runtime";
 import { Integer } from "../runtime/integer";
@@ -24,10 +25,19 @@ export default class OptEq extends Instruction {
         const receiver_class = receiver.klass;
         const arg0_class = args[0].klass;
 
-        if ((receiver_class === await Integer.klass() && arg0_class === await Integer.klass()) ||
-            (receiver_class === await RubyString.klass() && arg0_class === await RubyString.klass()) ||
+        if ((receiver_class === await RubyString.klass() && arg0_class === await RubyString.klass()) ||
             (receiver_class === await Symbol.klass() && arg0_class === await Symbol.klass())) {
-            if (receiver.get_data<number | string>() == args[0].get_data<number | string>()) {
+            const enc_compat = await Encoding.are_compatible(receiver, args[0]);
+
+            if (enc_compat?.is_truthy() && receiver.get_data<string>() == args[0].get_data<string>()) {
+                context.push(Qtrue);
+            } else {
+                context.push(Qfalse);
+            }
+        } else if (
+            (receiver_class === await Integer.klass() && arg0_class === await Integer.klass()) ||
+            (receiver_class === await Float.klass() && arg0_class === await Float.klass())) {
+            if (receiver.get_data<number>() == args[0].get_data<number>()) {
                 context.push(Qtrue);
             } else {
                 context.push(Qfalse);

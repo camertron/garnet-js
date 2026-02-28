@@ -609,11 +609,15 @@ export const init = () => {
         });
 
         klass.define_native_method("==", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            if (args[0].klass !== await RubyString.klass()) {
+            const [other_rval] = await Args.scan("1", args);
+
+            if (!await Kernel.is_a(other_rval, await RubyString.klass())) {
                 return Qfalse;
             }
 
-            if (self.get_data<string>() === args[0].get_data<string>()) {
+            const enc_compat = await Encoding.are_compatible(self, other_rval);
+
+            if (enc_compat?.is_truthy() && self.get_data<string>() === other_rval.get_data<string>()) {
                 return Qtrue;
             } else {
                 return Qfalse;
