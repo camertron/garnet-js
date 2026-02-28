@@ -1232,6 +1232,30 @@ export const init = () => {
                 return sorted[0] || Qnil;
             }
         });
+
+        klass.define_native_method("*", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [separator_or_n] = await Args.scan("1", args);
+            await Runtime.assert_type(separator_or_n, await Integer.klass(), await RubyString.klass());
+
+            if (await Kernel.is_a(separator_or_n, await Integer.klass())) {
+                const n = separator_or_n.get_data<number>();
+
+                if (n < 0) {
+                    throw new ArgumentError("negative argument");
+                }
+
+                const elements = self.get_data<RubyArray>().elements;
+                const result: RValue[] = [];
+
+                for (let i = 0; i < n; i ++) {
+                    result.push(...elements);
+                }
+
+                return RubyArray.new(result);
+            } else {
+                return Object.send(self, "join", args);
+            }
+        });
     });
 
     inited = true;
