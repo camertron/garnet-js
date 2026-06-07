@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
@@ -23,5 +24,11 @@ export default class TopN extends Instruction {
 
     pushes(): number {
         return 1;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("topn", [
+            fmt.object(this.index)
+        ]);
     }
 }

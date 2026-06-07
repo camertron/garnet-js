@@ -26,6 +26,40 @@ export abstract class CallData {
     has_flag(flag: CallDataFlag): boolean {
         return (this.flag & flag) != 0;
     }
+
+    includes_block(): boolean {
+        return this.has_flag(CallDataFlag.ARGS_BLOCKARG) || this.has_flag(CallDataFlag.BLOCKISEQ);
+    }
+
+    to_s() {
+        const names = this.names();
+        const parts = [];
+
+        parts.push(`argc:${this.argc}`);
+
+        if (this.kw_arg) parts.push(`kw:[${this.kw_arg.join(", ")}]`);
+        if (names.length > 0) parts.push(names.join("|"));
+
+        return `<calldata!${parts.join(", ")}>`
+    }
+
+    names(): string[] {
+        const names = [];
+        if (this.has_flag(CallDataFlag.ARGS_SPLAT)) names.push("ARGS_SPLAT");
+        if (this.has_flag(CallDataFlag.ARGS_BLOCKARG)) names.push("ARGS_BLOCKARG");
+        if (this.has_flag(CallDataFlag.FCALL)) names.push("FCALL");
+        if (this.has_flag(CallDataFlag.VCALL)) names.push("VCALL");
+        if (this.has_flag(CallDataFlag.ARGS_SIMPLE)) names.push("ARGS_SIMPLE");
+        if (this.has_flag(CallDataFlag.KWARG)) names.push("KWARG");
+        if (this.has_flag(CallDataFlag.KW_SPLAT)) names.push("KW_SPLAT");
+        if (this.has_flag(CallDataFlag.TAILCALL)) names.push("TAILCALL");
+        if (this.has_flag(CallDataFlag.SUPER)) names.push("SUPER");
+        if (this.has_flag(CallDataFlag.ZSUPER)) names.push("ZSUPER");
+        if (this.has_flag(CallDataFlag.OPT_SEND)) names.push("OPT_SEND");
+        if (this.has_flag(CallDataFlag.KW_SPLAT_MUT)) names.push("KW_SPLAT_MUT");
+
+        return names;
+    }
 }
 
 export class MethodCallData extends CallData {
@@ -41,6 +75,19 @@ export class MethodCallData extends CallData {
         this.argc = argc;
         this.flag = flag;
         this.kw_arg = kw_arg;
+    }
+
+    to_s() {
+        const names = this.names();
+        const parts = [];
+
+        parts.push(`mid:${this.mid}`);
+        parts.push(`argc:${this.argc}`);
+
+        if (this.kw_arg && this.kw_arg.length > 0) parts.push(`kw:[${this.kw_arg.join(", ")}]`);
+        if (names.length > 0) parts.push(names.join("|"));
+
+        return `<calldata!${parts.join(", ")}>`
     }
 
     static create(method: string, argc: number = 0, flags: number = CallDataFlag.ARGS_SIMPLE, kw_arg: string[] | null = null) {

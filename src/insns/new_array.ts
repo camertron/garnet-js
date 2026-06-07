@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { RubyArray } from "../runtime/array";
@@ -27,5 +28,11 @@ export default class NewArray extends Instruction {
 
     length(): number {
         return 2;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("newarray", [
+            fmt.object(this.size)
+        ]);
     }
 }

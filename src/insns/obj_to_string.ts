@@ -1,4 +1,5 @@
 import { MethodCallData } from "../call_data";
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Object } from "../runtime/object"
@@ -30,5 +31,11 @@ export default class ObjToString extends Instruction {
 
     length(): number {
         return 2;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("objtostring", [
+            fmt.calldata(this.calldata)
+        ]);
     }
 }

@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
@@ -13,5 +14,9 @@ export default class Pop extends Instruction {
 
     pushes(): number {
         return 0;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("pop");
     }
 }

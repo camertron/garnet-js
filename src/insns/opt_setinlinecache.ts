@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
@@ -14,5 +15,9 @@ export default class OptSetInlineCache extends Instruction {
         // Since we're not actually populating inline caches in YARV, we don't need
         // to do anything in this instruction.
         return null;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("opt_setinline_cache");
     }
 }

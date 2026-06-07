@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
@@ -16,5 +17,9 @@ export default class Swap extends Instruction {
 
     length(): number {
         return 2;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("swap");
     }
 }

@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import { Class, Object, RValue, RubyArray } from "../garnet";
 import Instruction from "../instruction";
@@ -49,5 +50,9 @@ export default class ConcatArray extends Instruction {
 
     pushes(): number {
         return 1;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("concatarray");
     }
 }

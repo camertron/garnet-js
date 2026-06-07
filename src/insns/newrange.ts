@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Range } from "../runtime/range";
@@ -27,5 +28,11 @@ export default class NewRange extends Instruction {
 
     length(): number {
         return 2;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("newrange", [
+            fmt.object(this.exclude_end)
+        ]);
     }
 }

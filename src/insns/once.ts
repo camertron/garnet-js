@@ -1,18 +1,17 @@
 import { BlockCallData } from "../call_data";
+import { Disassembler } from "../disassembler";
 import { CallingConvention, ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
 
 export default class Once extends Instruction {
     public iseq: InstructionSequence;
-    public cache: number;
     private executed: boolean = false;
 
-    constructor(iseq: InstructionSequence, cache: number) {
+    constructor(iseq: InstructionSequence) {
         super();
 
         this.iseq = iseq;
-        this.cache = cache;
     }
 
     async call(context: ExecutionContext): Promise<ExecutionResult> {
@@ -35,5 +34,13 @@ export default class Once extends Instruction {
 
     pushes(): number {
         return 1;
+    }
+
+    disasm(fmt: Disassembler): string {
+        fmt.enqueue(this.iseq);
+
+        return fmt.instruction("once", [
+            this.iseq.name
+        ]);
     }
 }

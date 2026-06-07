@@ -2,6 +2,7 @@ import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Class, ClassClass, Qnil } from "../runtime";
 import { ClassFrame, IFrameWithOwner } from "../frame";
+import { Disassembler } from "../disassembler";
 
 export default class GetClassVariable extends Instruction {
     public name: string;
@@ -66,5 +67,13 @@ export default class GetClassVariable extends Instruction {
 
     pops(): number {
         return 1;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction(
+            "getclassvariable", [
+                fmt.object(this.name)
+            ]
+        );
     }
 }

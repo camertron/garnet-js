@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { RubyString } from "../runtime/string";
@@ -28,5 +29,9 @@ export default class ConcatStrings extends Instruction {
 
     length(): number {
         return 2;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("concatstrings", [fmt.object(this.count)]);
     }
 }

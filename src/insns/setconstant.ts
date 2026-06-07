@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Module } from "../runtime";
@@ -26,5 +27,11 @@ export default class SetConstant extends Instruction {
 
     length(): number {
         return 2;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("setconstant", [
+            fmt.object(this.name)
+        ]);
     }
 }

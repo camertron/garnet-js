@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Label } from "../instruction_sequence";
@@ -29,5 +30,9 @@ export class Jump extends Instruction {
 
     branch_targets() {
         return [this.label];
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("jump", [fmt.label(this.label)]);
     }
 }

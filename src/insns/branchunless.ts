@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Label } from "../instruction_sequence";
@@ -31,5 +32,9 @@ export default class BranchUnless extends Instruction {
 
     pops(): number {
         return 1;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("branchunless", [fmt.label(this.label)]);
     }
 }

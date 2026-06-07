@@ -4,6 +4,7 @@ import { Class, Qnil, RValue } from "../runtime";
 import { Object } from "../runtime/object";
 import { TypeError } from "../errors";
 import { RubyArray } from "../runtime/array";
+import { Disassembler } from "../disassembler";
 
 // `splatarray` coerces the array object at the top of the stack into Array
 // by calling `to_a`. It pushes a duplicate of the array if there is a flag,
@@ -54,5 +55,11 @@ export default class SplatArray extends Instruction {
 
     length(): number {
         return 2;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("splatarray", [
+            fmt.object(this.flag)
+        ]);
     }
 }

@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import GetLocal from "./getlocal";
@@ -21,5 +22,11 @@ export default class GetLocalWC0 extends Instruction {
 
     pushes(): number {
         return 1;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("getlocal_WC_0", [
+            fmt.local(this.index, 0, 0)
+        ]);
     }
 }

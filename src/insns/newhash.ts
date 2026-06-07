@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Hash } from "../runtime/hash";
@@ -34,5 +35,9 @@ export default class NewHash extends Instruction {
 
     length(): number {
         return 2;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("newhash", [fmt.object(this.size)]);
     }
 }

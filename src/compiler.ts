@@ -1,6 +1,6 @@
 import { ParseResult } from "@ruby/prism/src/deserialize";
 import { MethodCallData, BlockCallData, CallDataFlag, CallData } from "./call_data";
-import { CatchBreak, InstructionSequence, Label, CatchTableStack, CatchNext, StackPosition } from "./instruction_sequence";
+import { CatchBreak, InstructionSequence, Label, CatchTableStack, CatchNext } from "./instruction_sequence";
 import { CompilerOptions } from "./compiler_options";
 import { Node as InsnNode } from "./instruction_sequence"
 import {
@@ -144,8 +144,7 @@ export type ParseOptions = {
 
 export class LexicalScope {
     private file: string;
-    private start_line: number;
-    private end_line: number;
+    private location: SourceLocation | null;
     private parent?: LexicalScope;
     public id: number;
 
@@ -161,10 +160,9 @@ export class LexicalScope {
         return this.id;
     }
 
-    constructor(file: string, start_line: number, end_line: number, parent?: LexicalScope) {
+    constructor(file: string, location: SourceLocation | null, parent?: LexicalScope) {
         this.file = file;
-        this.start_line = start_line;
-        this.end_line = end_line;
+        this.location = location;
         this.parent = parent;
         this.id = LexicalScope.next_id();
     }
@@ -196,6 +194,13 @@ class LexicalScopeStack {
 }
 
 type NodeWithBlock = CallNode | SuperNode;
+
+export type SourceLocation = {
+    start_line: number
+    start_column: number
+    end_line: number
+    end_column: number
+}
 
 export class Compiler extends Visitor {
     private compiler_options: CompilerOptions;
@@ -236,13 +241,13 @@ export class Compiler extends Visitor {
         })
     }
 
-    static compile_string(source: string, require_path: string, absolute_path: string, line_offset: number = 0, compiler_options?: CompilerOptions) {
+    static compile_string(source: string, require_path: string, absolute_path: string, line_offset: number = 0, compiler_options?: CompilerOptions): InstructionSequence {
         const ast = Compiler.parse(source);
         return this.compile(source, require_path, absolute_path, ast, line_offset, compiler_options);
     }
 
     visit(node: Node) {
-        let line = this.start_line_for_loc(node.location)
+        let line = this.location_to_source_location(node.location)?.start_line;
 
         if (line && line != this.current_line) {
             this.iseq.push(line + this.line_offset);
@@ -276,12 +281,20 @@ export class Compiler extends Visitor {
         const lexical_scope = this.lexical_scope_stack.push(
             new LexicalScope(
                 this.path,
-                this.start_line_for_loc(node.location)!,
-                this.end_line_for_loc(node.location)!
+                this.location_to_source_location(node.location)!
             )
         );
 
-        const top_iseq = new InstructionSequence("<main>", this.path, this.absolute_path, this.start_line_for_loc(node.location)!, "top", lexical_scope, null, this.compiler_options);
+        const top_iseq = new InstructionSequence(
+            "<main>",
+            this.path,
+            this.absolute_path,
+            this.location_to_source_location(node.location)!,
+            "top",
+            lexical_scope,
+            null,
+            this.compiler_options,
+        );
 
         node.locals.forEach((local: string) => {
             top_iseq.local_table.plain(local);
@@ -324,7 +337,7 @@ export class Compiler extends Visitor {
             this.iseq.leave();
         });
 
-        top_iseq.compile()
+        top_iseq.compile();
         return top_iseq;
     }
 
@@ -353,7 +366,7 @@ export class Compiler extends Visitor {
         }
     }
 
-    private populateCallDataArgs(node: ArgumentsNode, call_data: CallData) {
+    private populate_call_data_args(node: ArgumentsNode, call_data: CallData) {
         const kw_arg = [];
         let found_splat = false;
         let found_kwsplat = false;
@@ -419,7 +432,7 @@ export class Compiler extends Visitor {
         call_data.kw_arg = kw_arg;
     }
 
-    private populateCallDataBlock(node: NodeWithBlock, call_data: CallData) {
+    private populate_call_data_block(node: NodeWithBlock, call_data: CallData) {
         let block_iseq = null;
 
         switch (node.block?.constructor.name) {
@@ -457,10 +470,10 @@ export class Compiler extends Visitor {
         const call_data = MethodCallData.create(node.name);
 
         if (node.arguments_) {
-            this.populateCallDataArgs(node.arguments_, call_data);
+            this.populate_call_data_args(node.arguments_, call_data);
         }
 
-        const block_iseq = this.populateCallDataBlock(node, call_data);
+        const block_iseq = this.populate_call_data_block(node, call_data);
 
         if (!node.receiver) {
             call_data.flag |= CallDataFlag.FCALL;
@@ -470,7 +483,22 @@ export class Compiler extends Visitor {
             call_data.flag |= CallDataFlag.VCALL;
         }
 
-        this.iseq.send(call_data, block_iseq);
+        if (call_data.argc == 1 && !block_iseq) {
+            switch (call_data.mid) {
+                case "+":
+                    this.iseq.opt_plus(call_data);
+                    break;
+                case "*":
+                    this.iseq.opt_mult(call_data);
+                    break;
+                default:
+                    this.iseq.send(call_data, block_iseq);
+            }
+        } else if (block_iseq) {
+            this.iseq.send(call_data, block_iseq);
+        } else {
+            this.iseq.send_without_block(call_data);
+        }
 
         if (safe_label) {
             this.iseq.jump(safe_label);
@@ -524,7 +552,7 @@ export class Compiler extends Visitor {
 
         this.iseq.push(block_begin_label);
 
-        const block_iseq = this.with_child_iseq(this.iseq.block_child_iseq(this.start_line_for_loc(node.location)!, this.lexical_scope_stack.current()!), () => {
+        const block_iseq = this.with_child_iseq(this.iseq.block_child_iseq(this.location_to_source_location(node.location)!, this.lexical_scope_stack.current()!), () => {
             const begin_label = this.iseq.label();
             const end_label = this.iseq.label();
 
@@ -984,18 +1012,22 @@ export class Compiler extends Visitor {
     }
 
     override visitDefNode(node: DefNode) {
+        const end_offset =
+            (node.endKeywordLoc ? node.endKeywordLoc.startOffset + node.endKeywordLoc.length : null) ||
+            (node.body && node.body.location ? node.body!.location.startOffset + node.body!.location.length : null);
+
+        const start_coords = this.offset_to_coords(node.defKeywordLoc.startOffset);
+        const end_coords = this.offset_to_coords(end_offset);
+
         const lexical_scope = this.lexical_scope_stack.push(
             new LexicalScope(
                 this.iseq.file,
-                this.start_line_for_loc(node.defKeywordLoc)!,
-                this.start_line_for_loc(
-                    (node.endKeywordLoc || node.body?.location)!
-                )!
+                this.coords_to_source_location(start_coords, end_coords)
             )
         );
 
         const name = node.name;
-        const method_iseq = this.iseq.method_child_iseq(name, this.start_line_for_loc(node.location)!, lexical_scope);
+        const method_iseq = this.iseq.method_child_iseq(name, this.location_to_source_location(node.location)!, lexical_scope);
 
         this.with_child_iseq(method_iseq, () => {
             node.locals.forEach((local) => {
@@ -1431,13 +1463,12 @@ export class Compiler extends Visitor {
         const lexical_scope = this.lexical_scope_stack.push(
             new LexicalScope(
                 this.iseq.file,
-                this.start_line_for_loc(node.classKeywordLoc)!,
-                this.start_line_for_loc(node.endKeywordLoc)!,
+                this.locations_to_source_location(node.classKeywordLoc, node.endKeywordLoc)!,
                 this.lexical_scope_stack.current()
             )
         );
 
-        const class_iseq = this.iseq.class_child_iseq(node.name, this.start_line_for_loc(node.location)!, lexical_scope);
+        const class_iseq = this.iseq.class_child_iseq(node.name, this.location_to_source_location(node.location)!, lexical_scope);
 
         this.with_child_iseq(class_iseq, () => {
             node.locals.forEach((local) => {
@@ -1484,13 +1515,12 @@ export class Compiler extends Visitor {
         const lexical_scope = this.lexical_scope_stack.push(
             new LexicalScope(
                 this.iseq.file,
-                this.start_line_for_loc(node.moduleKeywordLoc)!,
-                this.start_line_for_loc(node.endKeywordLoc)!,
+                this.locations_to_source_location(node.moduleKeywordLoc, node.endKeywordLoc)!,
                 this.lexical_scope_stack.current()
             )
         );
 
-        const module_iseq = this.iseq.module_child_iseq(node.name, this.start_line_for_loc(node.location)!, lexical_scope);
+        const module_iseq = this.iseq.module_child_iseq(node.name, this.location_to_source_location(node.location)!, lexical_scope);
 
         this.with_child_iseq(module_iseq, () => {
             node.locals.forEach((local) => {
@@ -1649,7 +1679,7 @@ export class Compiler extends Visitor {
         this.local_depth ++;
 
         if (node.rescueClause) {
-            const rescue_iseq = this.iseq.rescue_child_iseq(this.start_line_for_loc(node.location)!, this.lexical_scope_stack.current());
+            const rescue_iseq = this.iseq.rescue_child_iseq(this.location_to_source_location(node.location)!, this.lexical_scope_stack.current());
 
             this.with_child_iseq(rescue_iseq, () => {
                 this.with_used(true, () => this.visit(node.rescueClause!));
@@ -1673,7 +1703,7 @@ export class Compiler extends Visitor {
             this.local_depth ++;
 
             const ensure_iseq = this.iseq.ensure_child_iseq(
-                this.start_line_for_loc(node.ensureClause.location)!,
+                this.location_to_source_location(node.ensureClause.location)!,
                 this.lexical_scope_stack.current()
             );
 
@@ -1779,7 +1809,7 @@ export class Compiler extends Visitor {
 
         // Create a rescue child iseq that handles StandardError by default
         const rescue_iseq = this.iseq.rescue_child_iseq(
-            this.start_line_for_loc(node.location)!,
+            this.location_to_source_location(node.location)!,
             this.lexical_scope_stack.current()
         );
 
@@ -2202,8 +2232,7 @@ export class Compiler extends Visitor {
         const lexical_scope = this.lexical_scope_stack.push(
             new LexicalScope(
                 this.iseq.file,
-                this.start_line_for_loc(node.classKeywordLoc)!,
-                this.start_line_for_loc(node.endKeywordLoc)!,
+                this.locations_to_source_location(node.classKeywordLoc, node.endKeywordLoc)!,
                 this.lexical_scope_stack.current()
             )
         );
@@ -2211,7 +2240,7 @@ export class Compiler extends Visitor {
         this.with_used(true, () => this.visit(node.expression));
         this.iseq.putnil()
 
-        const singleton_iseq = this.iseq.singleton_class_child_iseq(this.start_line_for_loc(node.location)!, lexical_scope);
+        const singleton_iseq = this.iseq.singleton_class_child_iseq(this.location_to_source_location(node.location)!, lexical_scope);
 
         this.with_child_iseq(singleton_iseq, () => {
             node.locals.forEach((local) => {
@@ -2416,13 +2445,12 @@ export class Compiler extends Visitor {
         const lexical_scope = this.lexical_scope_stack.push(
             new LexicalScope(
                 this.iseq.file,
-                this.start_line_for_loc(node.openingLoc)!,
-                this.start_line_for_loc(node.closingLoc)!,
+                this.locations_to_source_location(node.openingLoc, node.closingLoc)!,
                 this.lexical_scope_stack.current()
             )
         );
 
-        const lambda_iseq = this.iseq.block_child_iseq(this.start_line_for_loc(node.location)!, lexical_scope);
+        const lambda_iseq = this.iseq.block_child_iseq(this.location_to_source_location(node.location)!, lexical_scope);
 
         this.with_child_iseq(lambda_iseq, () => {
             if (node.parameters) {
@@ -2530,14 +2558,14 @@ export class Compiler extends Visitor {
         call_data.flag |= CallDataFlag.FCALL | CallDataFlag.SUPER;
 
         if (node.arguments_) {
-            this.populateCallDataArgs(node.arguments_, call_data);
+            this.populate_call_data_args(node.arguments_, call_data);
         }
 
         if (!node.arguments_ && !node.lparenLoc) {
             call_data.flag |= CallDataFlag.ZSUPER;
         }
 
-        const block_iseq = this.populateCallDataBlock(node, call_data);
+        const block_iseq = this.populate_call_data_block(node, call_data);
 
         this.iseq.putself();
         this.iseq.invokesuper(call_data, block_iseq);
@@ -2779,26 +2807,54 @@ export class Compiler extends Visitor {
         return current_iseq.local_table.find_or_throw(name, depth + this.local_depth);
     }
 
-    private start_line_for_loc(location: Location): number | null {
-        return this.start_line_for_offset(location.startOffset);
+    private location_to_source_location(location: Location | null): SourceLocation | null {
+        if (!location) return null;
+
+        const start_coords = this.offset_to_coords(location.startOffset);
+        const end_coords = this.offset_to_coords(location.startOffset + location.length);
+        if (!start_coords || !end_coords) return null;
+
+        return this.coords_to_source_location(start_coords, end_coords);
     }
 
-    private end_line_for_loc(location: Location): number | null {
-        return this.start_line_for_offset(location.startOffset + location.length);
-    }
+    private offset_to_coords(offset: number | null): { line: number, column: number } | null {
+        if (offset === null) return null;
 
-    private start_line_for_offset(offset: number) {
         let last_line_offset = 0;
 
         for (let i = 0; i < this.line_offsets.length; i ++) {
-            if (offset > last_line_offset && offset <= this.line_offsets[i]) {
-                return i;
+            if (offset >= last_line_offset && offset <= this.line_offsets[i]) {
+                return { line: i + 1, column: this.line_offsets[i] - offset };
             }
 
             last_line_offset = this.line_offsets[i];
         }
 
+        if (offset <= this.source.length) {
+            return { line: this.line_offsets.length, column: offset - last_line_offset };
+        }
+
         return null;
+    }
+
+    private coords_to_source_location(start_coords: { line: number, column: number } | null, end_coords: { line: number, column: number } | null): SourceLocation | null {
+        if (!start_coords || !end_coords) return null
+
+        return {
+            start_line: start_coords.line,
+            start_column: start_coords.column,
+            end_line: end_coords.line,
+            end_column: end_coords.column,
+        }
+    }
+
+    private locations_to_source_location(start_location: Location | null, end_location: Location | null): SourceLocation | null {
+        if (!start_location || !end_location) return null;
+
+        const start_coords = this.offset_to_coords(start_location.startOffset);
+        const end_coords = this.offset_to_coords(end_location.startOffset + end_location.length);
+
+        return this.coords_to_source_location(start_coords, end_coords);
     }
 
     private get line_offsets(): number[] {

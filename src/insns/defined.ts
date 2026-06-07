@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { NotImplementedError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
@@ -140,5 +141,71 @@ export default class Defined extends Instruction {
 
     pushes(): number {
         return 2;
+    }
+
+    disasm(fmt: Disassembler): string {
+        let type_name: string;
+
+        switch (this.type) {
+            case DefinedType.NIL:
+                type_name = "nil";
+                break;
+            case DefinedType.IVAR:
+                type_name = "ivar";
+                break;
+            case DefinedType.LVAR:
+                type_name = "lvar";
+                break;
+            case DefinedType.GVAR:
+                type_name = "gvar";
+                break;
+            case DefinedType.CVAR:
+                type_name = "cvar";
+                break;
+            case DefinedType.CONST:
+                type_name = "const";
+                break;
+            case DefinedType.METHOD:
+                type_name = "method";
+                break;
+            case DefinedType.YIELD:
+                type_name = "yield";
+                break;
+            case DefinedType.ZSUPER:
+                type_name = "zsuper";
+                break;
+            case DefinedType.SELF:
+                type_name = "self";
+                break;
+            case DefinedType.TRUE:
+                type_name = "true";
+                break;
+            case DefinedType.FALSE:
+                type_name = "false";
+                break;
+            case DefinedType.ASGN:
+                type_name = "asgn";
+                break;
+            case DefinedType.EXPR:
+                type_name = "expr";
+                break;
+            case DefinedType.REF:
+                type_name = "ref";
+                break;
+            case DefinedType.FUNC:
+                type_name = "func";
+                break;
+            case DefinedType.CONST_FROM:
+                type_name = "constant-from";
+                break;
+        }
+
+        return fmt.instruction(
+            "defined", [
+                type_name,
+                fmt.object(this.name),
+                fmt.object(this.message),
+            ]
+        );
     }
 }

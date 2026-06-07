@@ -140,7 +140,7 @@ export class LocalTable {
 
     // This is the offset from the top of the stack where this local variable
     // lives.
-    offset(index: number) {
-        this.size() - (index - 3) - 1;
+    offset(index: number): number {
+        return this.size() - (index - 3) - 1;
     }
 }

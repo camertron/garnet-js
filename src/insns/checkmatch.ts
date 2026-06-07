@@ -4,6 +4,7 @@ import { Class, Qfalse, Qtrue, RValue } from "../runtime";
 import { RubyArray } from "../runtime/array";
 import { MethodCallData } from "../call_data";
 import { Object } from "../runtime/object";
+import { Disassembler } from "../disassembler";
 
 export enum CheckMatchType {
     TYPE_WHEN = 1,
@@ -87,5 +88,8 @@ export default class CheckMatch extends Instruction {
     length(): number {
         return 2;
     }
-}
 
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("checkmatch", [fmt.object(this.flag)]);
+    }
+}

@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
@@ -58,5 +59,17 @@ export default class DefineClass extends Instruction {
 
     length(): number {
         return 4;
+    }
+
+    disasm(fmt: Disassembler): string {
+        fmt.enqueue(this.iseq);
+
+        return fmt.instruction(
+            "defineclass", [
+                fmt.object(this.name),
+                this.iseq.name,
+                fmt.object(this.flags)
+            ]
+        )
     }
 }

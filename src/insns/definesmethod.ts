@@ -1,8 +1,8 @@
 import { LexicalScope } from "../compiler";
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { Module } from "../runtime";
 import { ParameterMetadata } from "../runtime/parameter-meta";
 
 export default class DefineSMethod extends Instruction {
@@ -35,5 +35,16 @@ export default class DefineSMethod extends Instruction {
 
     length(): number {
         return 3;
+    }
+
+    disasm(fmt: Disassembler): string {
+        fmt.enqueue(this.iseq);
+
+        return fmt.instruction(
+            "definesmethod", [
+                fmt.object(this.name),
+                this.iseq.name
+            ]
+        );
     }
 }

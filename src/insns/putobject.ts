@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction, { ValueType } from "../instruction";
 
@@ -24,5 +25,15 @@ export default class PutObject extends Instruction {
 
     pushes(): number {
         return 1;
+    }
+
+    length(): number {
+        return 2;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("putobject", [
+            fmt.object(this.object)
+        ]);
     }
 }

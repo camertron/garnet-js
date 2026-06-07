@@ -5,8 +5,10 @@ import { InstructionSequence } from "../instruction_sequence";
 import { ParameterMetadata } from "../runtime/parameter-meta";
 import { Object } from "../runtime/object"
 import { Runtime, ClassClass, ModuleClass } from "../garnet";
+import { Disassembler } from "../disassembler";
 
 export default class DefineMethod extends Instruction {
+
     public name: string;
     public iseq: InstructionSequence;
     public parameters_meta: ParameterMetadata[];
@@ -43,5 +45,16 @@ export default class DefineMethod extends Instruction {
 
     length(): number {
         return 3;
+    }
+
+    disasm(fmt: Disassembler): string {
+        fmt.enqueue(this.iseq);
+
+        return fmt.instruction(
+            "definemethod", [
+                fmt.object(this.name),
+                this.iseq.name
+            ]
+        );
     }
 }

@@ -9,6 +9,7 @@ import { InstructionSequence } from "../instruction_sequence";
 import { Hash } from "../runtime/hash";
 import { Object } from "../runtime/object";
 import { Proc } from "../runtime/proc";
+import { Disassembler } from "../disassembler";
 
 export default class InvokeSuper extends Instruction {
     public call_data: MethodCallData;
@@ -115,5 +116,16 @@ export default class InvokeSuper extends Instruction {
 
     pushes(): number {
         return 1;
+    }
+
+    disasm(fmt: Disassembler): string {
+        if (this.block_iseq) fmt.enqueue(this.block_iseq);
+
+        return fmt.instruction(
+            "invokesuper", [
+                fmt.calldata(this.call_data),
+                this.block_iseq?.name || "nil"
+            ]
+        );
     }
 }

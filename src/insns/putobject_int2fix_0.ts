@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Integer } from "../runtime/integer";
@@ -18,5 +19,9 @@ export default class PutObjectInt2Fix0 extends Instruction {
 
     override has_side_effects(): boolean {
         return false;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("putobject_INT2FIX_0_");
     }
 }

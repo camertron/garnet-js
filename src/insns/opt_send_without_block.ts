@@ -4,6 +4,7 @@ import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Object } from "../runtime/object"
 import { Hash } from "../runtime/hash";
+import { Disassembler } from "../disassembler";
 
 export default class OptSendWithoutBlock extends Instruction {
     public call_data: MethodCallData;
@@ -39,5 +40,11 @@ export default class OptSendWithoutBlock extends Instruction {
 
     length(): number {
         return this.call_data.argc + 1;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("opt_send_without_block", [
+            fmt.calldata(this.call_data)
+        ]);
     }
 }

@@ -1,4 +1,5 @@
 import { MethodCallData } from "../call_data";
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Qfalse, Qtrue } from "../runtime";
@@ -43,5 +44,11 @@ export default class OptLt extends Instruction {
 
     length(): number {
         return this.call_data.argc + 1;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("opt_lt", [
+            fmt.calldata(this.call_data)
+        ]);
     }
 }

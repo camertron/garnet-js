@@ -41,7 +41,7 @@ export class Frame implements IFrame {
         this.nesting = nesting;
 
         this.svars = {};
-        this.line = iseq.line;
+        this.line = iseq.location?.start_line ?? 1;
         this.pc = 0;
     }
 

@@ -3,6 +3,7 @@ import { BreakError, ExecutionContext, ExecutionResult, NextError, RetryError, R
 import { NilClass, Qnil } from "../runtime";
 import Instruction from "../instruction";
 import { Object } from "../runtime/object";
+import { Disassembler } from "../disassembler";
 
 const THROW_STATE_MASK = 0xff;
 
@@ -68,5 +69,11 @@ export default class Throw extends Instruction {
 
     length(): number {
         return 2;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("throw", [
+            fmt.object(this.type)
+        ]);
     }
 }

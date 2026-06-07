@@ -1,3 +1,4 @@
+import { Disassembler } from "./disassembler";
 import { ExecutionContext, ExecutionResult } from "./execution_context";
 import { Qfalse, Qnil, Qtrue, Runtime, RValue } from "./runtime";
 import { Float } from "./runtime/float";
@@ -34,6 +35,7 @@ export default abstract class Instruction {
     }
 
     abstract call(context: ExecutionContext): Promise<ExecutionResult>;
+    abstract disasm(fmt: Disassembler): string;
 
     // Whether or not this instruction is a branch instruction.
     does_branch(): boolean {
@@ -65,7 +67,7 @@ export default abstract class Instruction {
     // it occupies in the instruction sequence. Effectively this is 1 plus the
     // number of operands.
     length() {
-        return 0;
+        return 1;
     }
 
     // Does the instruction have side effects? Control-flow counts as a

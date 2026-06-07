@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
@@ -22,5 +23,13 @@ export default class GetBlockParamProxy extends Instruction {
 
     length(): number {
         return 3;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction(
+            "getblockparamproxy", [
+                fmt.local(this.index, this.depth)
+            ]
+        );
     }
 }

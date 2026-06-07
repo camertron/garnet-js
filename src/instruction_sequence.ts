@@ -63,9 +63,12 @@ import SplatArray from "./insns/splatarray";
 import GetBlockParamProxy from "./insns/getblockparamproxy";
 import ConcatArray from "./insns/concatarray";
 import { ParameterMetadata } from "./runtime/parameter-meta";
-import { LexicalScope } from "./compiler";
-import { Encoding } from "./runtime/encoding";
+import { SourceLocation, LexicalScope } from "./compiler";
 import { ThrowType } from "./execution_context";
+import { Disassembler } from "./disassembler";
+import OptSendWithoutBlock from "./insns/opt_send_without_block";
+import OptPlus from "./insns/opt_plus";
+import OptMult from "./insns/opt_mult";
 
 export class Node {
     public instruction: Instruction;
@@ -84,7 +87,7 @@ export class StackPosition {
 // When the list of instructions is first being created, it's stored as a
 // linked list. This is to make it easier to perform peephole optimizations
 // and other transformations like instruction specialization.
-class InstructionList {
+export class InstructionList {
     public head_node: Node | null;
     public tail_node: Node | null;
 
@@ -373,7 +376,7 @@ export class InstructionSequence {
     public name: string;
     public file: string;
     public absolute_path: string;
-    public line: number;
+    public location: SourceLocation | null;
     public type: string;
     public lexical_scope: LexicalScope;
     public parent_iseq: InstructionSequence | null;
@@ -389,11 +392,11 @@ export class InstructionSequence {
     public storage_index: number;
     public stack: Stack;
 
-    constructor(name: string, file: string, absolute_path: string, line: number, type: string, lexical_scope: LexicalScope, parent_iseq: InstructionSequence | null = null, options: CompilerOptions) {
+    constructor(name: string, file: string, absolute_path: string, location: SourceLocation | null, type: string, lexical_scope: LexicalScope, parent_iseq: InstructionSequence | null = null, options: CompilerOptions) {
         this.name = name;
         this.file = file;
         this.absolute_path = absolute_path;
-        this.line = line;
+        this.location = location;
         this.type = type;
         this.lexical_scope = lexical_scope;
         this.parent_iseq = parent_iseq;
@@ -457,9 +460,9 @@ export class InstructionSequence {
 
     putobject(object: ValueType) {
         if (this.options.operands_unification) {
-            if (object.value === 0) {
+            if (object.value === 0 && object.type === "Integer") {
                 this.push(new PutObjectInt2Fix0());
-            } else if (object.value === 1) {
+            } else if (object.value === 1 && object.type === "Integer") {
                 this.push(new PutObjectInt2Fix1());
             } else {
                 this.push(new PutObject(object));
@@ -517,12 +520,12 @@ export class InstructionSequence {
 
     setinstancevariable(name: string) {
         // @TODO figure out inline storage
-        this.push(new SetInstanceVariable(name, 0));
+        this.push(new SetInstanceVariable(name));
     }
 
     getinstancevariable(name: string) {
         // @TODO figure out inline storage
-        this.push(new GetInstanceVariable(name, 0))
+        this.push(new GetInstanceVariable(name))
     }
 
     setclassvariable(name: string) {
@@ -587,6 +590,18 @@ export class InstructionSequence {
 
     send(calldata: MethodCallData, block_iseq: InstructionSequence | null) {
         this.push(new Send(calldata, block_iseq));
+    }
+
+    send_without_block(calldata: MethodCallData) {
+        this.push(new OptSendWithoutBlock(calldata));
+    }
+
+    opt_plus(calldata: MethodCallData) {
+        this.push(new OptPlus(calldata));
+    }
+
+    opt_mult(calldata: MethodCallData) {
+        this.push(new OptMult(calldata));
     }
 
     definemethod(name: string, method_iseq: InstructionSequence, parameters_meta: ParameterMetadata[], lexical_scope: LexicalScope) {
@@ -717,15 +732,15 @@ export class InstructionSequence {
         this.push(new GetBlockParamProxy(index, depth));
     }
 
-    private child_iseq(name: string, line: number, type: string, lexical_scope: LexicalScope): InstructionSequence {
-        return new InstructionSequence(name, this.file, this.absolute_path, line, type, lexical_scope, this, this.options);
+    private child_iseq(name: string, coords: SourceLocation, type: string, lexical_scope: LexicalScope): InstructionSequence {
+        return new InstructionSequence(name, this.file, this.absolute_path, coords, type, lexical_scope, this, this.options);
     }
 
-    method_child_iseq(name: string, line: number, lexical_scope: LexicalScope) {
-        return this.child_iseq(name, line, "method", lexical_scope);
+    method_child_iseq(name: string, coords: SourceLocation, lexical_scope: LexicalScope) {
+        return this.child_iseq(name, coords, "method", lexical_scope);
     }
 
-    block_child_iseq(line: number, lexical_scope: LexicalScope): InstructionSequence {
+    block_child_iseq(coords: SourceLocation, lexical_scope: LexicalScope): InstructionSequence {
         let current: InstructionSequence = this;
 
         while (current.type == "block") {
@@ -733,27 +748,27 @@ export class InstructionSequence {
             current = current.parent_iseq;
         }
 
-        return this.child_iseq(`block in ${current.name}`, line, "block", lexical_scope);
+        return this.child_iseq(`block in ${current.name}`, coords, "block", lexical_scope);
     }
 
-    class_child_iseq(name: string, line: number, lexical_scope: LexicalScope): InstructionSequence {
-        return this.child_iseq(`<class:${name}>`, line, "class", lexical_scope);
+    class_child_iseq(name: string, coords: SourceLocation, lexical_scope: LexicalScope): InstructionSequence {
+        return this.child_iseq(`<class:${name}>`, coords, "class", lexical_scope);
     }
 
-    module_child_iseq(name: string, line: number, lexical_scope: LexicalScope) {
-        return this.child_iseq(`<module:${name}>`, line, "class", lexical_scope);
+    module_child_iseq(name: string, coords: SourceLocation, lexical_scope: LexicalScope) {
+        return this.child_iseq(`<module:${name}>`, coords, "class", lexical_scope);
     }
 
-    singleton_class_child_iseq(line: number, lexical_scope: LexicalScope) {
-        return this.child_iseq("singleton class", line, "class", lexical_scope);
+    singleton_class_child_iseq(coords: SourceLocation, lexical_scope: LexicalScope) {
+        return this.child_iseq("singleton class", coords, "class", lexical_scope);
     }
 
-    rescue_child_iseq(line: number, lexical_scope: LexicalScope): InstructionSequence {
-        return this.child_iseq(`rescue in ${this.name}`, line, "rescue", lexical_scope);
+    rescue_child_iseq(coords: SourceLocation, lexical_scope: LexicalScope): InstructionSequence {
+        return this.child_iseq(`rescue in ${this.name}`, coords, "rescue", lexical_scope);
     }
 
-    ensure_child_iseq(line: number, lexical_scope: LexicalScope): InstructionSequence {
-        return this.child_iseq(`ensure in ${this.name}`, line, "ensure", lexical_scope);
+    ensure_child_iseq(coords: SourceLocation, lexical_scope: LexicalScope): InstructionSequence {
+        return this.child_iseq(`ensure in ${this.name}`, coords, "ensure", lexical_scope);
     }
 
     compile() {
@@ -794,5 +809,21 @@ export class InstructionSequence {
         });
 
         this.compiled_insns = this.insns.to_array();
+    }
+
+    disasm(): string {
+        const fmt = new Disassembler();
+        fmt.enqueue(this);
+        fmt.format_bang();
+        return fmt.output;
+    }
+
+    inspect(): string {
+        const start_line = this.location?.start_line ?? 1;
+        const start_column = this.location?.start_column ?? 0;
+        const end_line = this.location?.end_line ?? 1;
+        const end_column = this.location?.end_column ?? 0;
+
+        return `#<ISeq:${this.name}@${this.file}:1 (${start_line},${start_column})-(${end_line},${end_column})>`;
     }
 }

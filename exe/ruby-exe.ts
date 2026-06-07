@@ -15,6 +15,7 @@ let code: string | null = null;
 let code_path: string = "<code>";
 let script_argv: string[] = [];
 let script_path_index: number | null = null;
+let dump_type: string | null = null;
 
 // current directory
 await ExecutionContext.current.push_onto_load_path(process.env.PWD!);
@@ -62,6 +63,9 @@ for (let i = 2; i < argv.length; i ++) {
         process.chdir(dir);
 
         i ++;
+    } else if (argv[i] == "--dump") {
+        dump_type = argv[i + 1];
+        i ++;
     } else if (argv[i] === "--") {
         // everything after "--" gets passed to the script in ARGV
         script_argv = argv.slice(i + 1);
@@ -104,6 +108,21 @@ if (code) {
 }
 
 if (!code) {
+    process.exit(0);
+}
+
+if (dump_type) {
+    switch (dump_type) {
+        case "insns":
+            const insns = Garnet.Compiler.compile_string(code!, code_path || "<code>", absolute_code_path || "<code>");
+            console.log(insns.disasm());
+            break;
+
+        default:
+            console.error(`don't know how to dump '${dump_type}'`);
+            console.error(`but only [insns]`);
+    }
+
     process.exit(0);
 }
 

@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Qnil } from "../runtime";
@@ -18,5 +19,9 @@ export default class PutNil extends Instruction {
 
     has_side_effects(): boolean {
         return false;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("putnil");
     }
 }

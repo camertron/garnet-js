@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { RubyArray } from "../runtime/array";
@@ -25,5 +26,14 @@ export default class CheckKeyword extends Instruction {
 
     length(): number {
         return 3;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction(
+            "checkkeyword", [
+                fmt.object(this.keyword_bits_index),
+                fmt.object(this.keyword_index)
+            ]
+        );
     }
 }

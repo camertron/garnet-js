@@ -1,4 +1,5 @@
 import { MethodCallData } from "../call_data";
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Integer } from "../runtime/integer";
@@ -40,5 +41,11 @@ export default class OptMult extends Instruction {
 
     length(): number {
         return this.call_data.argc + 1;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("opt_mult", [
+            fmt.calldata(this.call_data)
+        ]);
     }
 }

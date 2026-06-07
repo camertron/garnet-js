@@ -1,4 +1,5 @@
 import { MethodCallData } from "../call_data";
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Object } from "../runtime/object"
@@ -28,5 +29,9 @@ export default class Intern extends Instruction {
             this.calldata_ = MethodCallData.create("to_sym", 0);
             return this.calldata_;
         }
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("intern");
     }
 }

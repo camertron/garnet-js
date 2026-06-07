@@ -1,13 +1,13 @@
 import { MethodCallData, CallDataFlag } from "../call_data";
 import { extract_kwargs_from_forwarded_args } from "../util/kwargs_utils";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
-import { Qnil, Qtrue, RubyArray } from "../garnet";
+import { Qnil } from "../garnet";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { RValue } from "../runtime";
 import { Hash } from "../runtime/hash";
 import { Object } from "../runtime/object"
 import { Proc } from "../runtime/proc";
+import { Disassembler } from "../disassembler";
 
 export default class Send extends Instruction {
     public call_data: MethodCallData;
@@ -68,5 +68,20 @@ export default class Send extends Instruction {
 
     pushes(): number {
         return 1;
+    }
+
+    length(): number {
+        return 3;
+    }
+
+    disasm(fmt: Disassembler): string {
+        if (this.block_iseq) fmt.enqueue(this.block_iseq);
+
+        return fmt.instruction(
+            "send", [
+                fmt.calldata(this.call_data),
+                this.block_iseq?.name || "nil"
+            ]
+        );
     }
 }

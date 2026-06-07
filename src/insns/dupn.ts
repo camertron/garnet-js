@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
@@ -22,5 +23,9 @@ export default class DupN extends Instruction {
 
     pushes(): number {
         return this.size;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("dupn", [fmt.object(this.size)]);
     }
 }

@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { Regexp } from "../runtime/regexp";
@@ -33,5 +34,11 @@ export default class ToRegexp extends Instruction {
 
     pops(): number {
         return this.size;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("toregexp", [
+            fmt.object(this.flags), fmt.object(this.size)
+        ]);
     }
 }

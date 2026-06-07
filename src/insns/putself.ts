@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
@@ -17,5 +18,9 @@ export default class PutSelf extends Instruction {
 
     has_side_effects(): boolean {
         return false;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("putself");
     }
 }

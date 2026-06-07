@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
@@ -24,5 +25,11 @@ export default class SetGlobal extends Instruction {
 
     pops(): number {
         return 1;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("setglobal", [
+            fmt.object(this.name)
+        ]);
     }
 }

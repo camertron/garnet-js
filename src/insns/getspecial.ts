@@ -1,3 +1,4 @@
+import { Disassembler } from "../disassembler";
 import { NotImplementedError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
@@ -92,5 +93,11 @@ export default class GetSpecial extends Instruction {
 
     pushes(): number {
         return 1;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("getspecial", [
+            fmt.object(this.type), fmt.object(this.number)
+        ]);
     }
 }

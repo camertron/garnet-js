@@ -1,4 +1,5 @@
 import { BlockCallData, CallDataFlag } from "../call_data";
+import { Disassembler } from "../disassembler";
 import { LocalJumpError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
@@ -53,5 +54,11 @@ export default class InvokeBlock extends Instruction {
 
     pops(): number {
         return this.call_data.argc;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("invokeblock", [
+            fmt.calldata(this.call_data)
+        ]);
     }
 }

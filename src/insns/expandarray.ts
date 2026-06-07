@@ -3,6 +3,7 @@ import Instruction from "../instruction";
 import { Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { Object } from "../runtime/object"
 import { RubyArray } from "../runtime/array";
+import { Disassembler } from "../disassembler";
 
 export enum ExpandArrayFlag {
     SPLAT_FLAG = 0x01,
@@ -104,5 +105,12 @@ export default class ExpandArray extends Instruction {
 
     pops(): number {
         return 1;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("expandarray", [
+            fmt.object(this.size),
+            fmt.object(this.flags)
+        ]);
     }
 }

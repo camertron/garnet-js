@@ -1,14 +1,13 @@
+import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 
 export default class GetInstanceVariable extends Instruction {
     public name: string;
-    public cache: number;
 
-    constructor(name: string, cache: number) {
+    constructor(name: string) {
         super();
         this.name = name;
-        this.cache = cache;
     }
 
     async call(context: ExecutionContext): Promise<ExecutionResult> {
@@ -25,5 +24,13 @@ export default class GetInstanceVariable extends Instruction {
 
     writes(): number {
         return 1;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction(
+            "getinstancevariable", [
+                fmt.object(this.name)
+            ]
+        );
     }
 }

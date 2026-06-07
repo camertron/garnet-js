@@ -2,6 +2,7 @@ import { RubyArray } from "../runtime/array";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction, { ValueType } from "../instruction";
 import { RValue } from "../runtime";
+import { Disassembler } from "../disassembler";
 
 export default class DupArray extends Instruction {
     public orig_values: any[];
@@ -36,5 +37,9 @@ export default class DupArray extends Instruction {
 
     pushes(): number {
         return 1;
+    }
+
+    disasm(fmt: Disassembler): string {
+        return fmt.instruction("duparray", [fmt.object(this.orig_values)]);
     }
 }

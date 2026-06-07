@@ -189,7 +189,7 @@ export const init = () => {
 
             if (proc instanceof InterpretedProc) {
                 const path = await RubyString.new(proc.iseq.absolute_path);
-                const lineno = await Integer.get(proc.iseq.line);
+                const lineno = await Integer.get(proc.iseq.location?.start_line ?? 1);
                 return RubyArray.new([path, lineno]);
             } else {
                 return Qnil;
