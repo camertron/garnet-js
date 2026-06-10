@@ -1,10 +1,20 @@
-import { argv } from "process";
+import { argv as process_argv } from "process";
 import * as Garnet from "../src/garnet";
 import { ExecutionContext, Runtime, vmfs, RubyArray, String as RubyString, Argf } from "../src/garnet";
 import path from "path";
 import { fileURLToPath } from 'url';
 import fs from "fs";
 import { Dir } from "../src/runtime/dir";
+
+const argv = (process_argv as string[])
+    .flatMap(arg => {
+        if (/^--?[\w-]+=/.test(arg)) {
+            return arg.split(/^(--?[\w-]+)=(.*)/);
+        } else {
+            return [arg];
+        }
+    })
+    .filter(arg => arg.length > 0);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -115,6 +125,7 @@ if (dump_type) {
     switch (dump_type) {
         case "insns":
             const insns = Garnet.Compiler.compile_string(code!, code_path || "<code>", absolute_code_path || "<code>");
+            insns.compile();
             console.log(insns.disasm());
             break;
 
