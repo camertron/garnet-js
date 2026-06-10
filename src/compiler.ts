@@ -228,7 +228,7 @@ export class Compiler extends Visitor {
         this.local_depth = 0;
         this.local_catch_table_stack = new CatchTableStack();
         this.line_offset = line;
-        this.current_line = 1;
+        this.current_line = 0;
         this.used_stack = [];
         this.lexical_scope_stack = new LexicalScopeStack();
     }
@@ -247,18 +247,22 @@ export class Compiler extends Visitor {
     }
 
     visit(node: Node) {
-        let line = this.location_to_source_location(node.location)?.start_line;
-
-        if (line && line != this.current_line) {
-            this.iseq.push(line + this.line_offset);
-            this.current_line = line;
-        }
+        this.emit_line_for(node);
 
         if (Object.getOwnPropertyNames(Compiler.prototype).indexOf(`visit${node.constructor.name}`) === -1) {
             throw new Error(`I don't know how to handle ${node.constructor.name} nodes yet, please help me!`);
         }
 
         super.visit(node);
+    }
+
+    private emit_line_for(node: Node) {
+        let line = this.location_to_source_location(node.location)?.start_line;
+
+        if (line && line != this.current_line) {
+            this.iseq.push(line + this.line_offset);
+            this.current_line = line;
+        }
     }
 
     // The current instruction sequence that we're compiling is always stored
@@ -278,18 +282,17 @@ export class Compiler extends Visitor {
     }
 
     override visitProgramNode(node: ProgramNode): InstructionSequence {
+        const location = this.location_to_source_location(node.location);
+
         const lexical_scope = this.lexical_scope_stack.push(
-            new LexicalScope(
-                this.path,
-                this.location_to_source_location(node.location)!
-            )
+            new LexicalScope(this.path, location)
         );
 
         const top_iseq = new InstructionSequence(
             "<main>",
             this.path,
             this.absolute_path,
-            this.location_to_source_location(node.location)!,
+            location,
             "top",
             lexical_scope,
             null,
@@ -301,6 +304,8 @@ export class Compiler extends Visitor {
         });
 
         this.with_child_iseq(top_iseq, () => {
+            this.emit_line_for(node);
+
             if (node.statements == null) {
                 this.iseq.putnil()
             } else {
@@ -492,7 +497,7 @@ export class Compiler extends Visitor {
                     this.iseq.opt_mult(call_data);
                     break;
                 default:
-                    this.iseq.send(call_data, block_iseq);
+                    this.iseq.send_without_block(call_data);
             }
         } else if (block_iseq) {
             this.iseq.send(call_data, block_iseq);
@@ -2819,12 +2824,13 @@ export class Compiler extends Visitor {
 
     private offset_to_coords(offset: number | null): { line: number, column: number } | null {
         if (offset === null) return null;
+        if (offset === 0) return { line: 1, column: 0 };
 
         let last_line_offset = 0;
 
         for (let i = 0; i < this.line_offsets.length; i ++) {
             if (offset >= last_line_offset && offset <= this.line_offsets[i]) {
-                return { line: i + 1, column: this.line_offsets[i] - offset };
+                return { line: i, column: offset - last_line_offset };
             }
 
             last_line_offset = this.line_offsets[i];

@@ -144,6 +144,10 @@ export class InstructionList {
 export class Label {
     public name: string | null;
 
+    // The slot position of this label in the containing sequence.
+    // Only used in disasm output.
+    public pos: number = -1;
+
     // When we're serializing the instruction sequence, we need to be able to
     // look up the label from the branch instructions and then access the
     // subsequent node. So we'll store the reference here.
@@ -153,8 +157,9 @@ export class Label {
         this.name = name;
     }
 
-    patch(name: string) {
+    patch(name: string, pos: number) {
         this.name = name;
+        this.pos = pos;
     }
 
     equals(other: Label) {
@@ -785,25 +790,30 @@ export class InstructionSequence {
 
         this.insns.each((insn) => {
             if (insn instanceof Label) {
-                insn.patch(`label_${label_counter++}`);
+                insn.patch(`label_${label_counter++}`, length);
             } else if (typeof insn === 'number' || insn instanceof StackPosition) {
                 // skip
             } else if (insn instanceof DefineClass) {
                 insn.iseq.compile();
+                insn.patch(length);
                 length += insn.length();
             } else if (insn instanceof DefineMethod || insn instanceof DefineSMethod) {
-                insn.iseq.compile!()
+                insn.iseq.compile!();
+                insn.patch(length);
                 length += insn.length();
             } else if (insn instanceof InvokeSuper || insn instanceof Send) {
                 if (insn.block_iseq) {
                     insn.block_iseq.compile();
                 }
 
+                insn.patch(length);
                 length += insn.length();
             } else if (insn instanceof Once) {
                 insn.iseq.compile();
+                insn.patch(length);
                 length += insn.length();
             } else {
+                insn.patch(length);
                 length += insn.length();
             }
         });

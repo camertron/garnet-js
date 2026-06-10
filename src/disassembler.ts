@@ -1,6 +1,9 @@
 import { CallData } from "./call_data";
+import { Class, ExecutionContext, RValue } from "./garnet";
 import Instruction, { ValueType } from "./instruction";
 import { CatchBreak, CatchNext, CatchRedo, CatchRescue, InstructionList, InstructionSequence, Label, StackPosition } from "./instruction_sequence";
+import { RubyString } from "./runtime/string";
+import { Symbol } from "./runtime/symbol";
 
 // This class is another object that handles disassembling a YARV
 // instruction sequence but it renders it without any of the extra spacing
@@ -60,6 +63,7 @@ export class Disassembler {
         this.queue.push(iseq);
     }
 
+    // tracepoint events, which we do not support
     event(name: string): string {
         switch(name) {
             case "RUBY_EVENT_B_CALL":
@@ -90,8 +94,7 @@ export class Disassembler {
     }
 
     label(label: Label): string {
-        const name = label.name;
-        return name ? name.slice("label_".length) : "?"
+        return label.pos.toString();
     }
 
     local(index: number, explicit: number | null = null, implicit: number | null = null): string {
@@ -109,7 +112,20 @@ export class Disassembler {
 
     object(object: any) {
         if (object.type) {
-            return (object as ValueType).value.toString();
+            switch (object.type) {
+                case "String":
+                    return RubyString.inspect((object as ValueType).value);
+                case "Symbol":
+                    return Symbol.inspect((object as ValueType).value);
+                default:
+                    return (object as ValueType).value.toString();
+            }
+        } else if (object instanceof RValue) {
+            if (object.klass.get_data<Class>().full_name === "String") {
+                return RubyString.inspect(object.get_data<string>());
+            } else {
+                return object.toString();
+            }
         } else {
             return object.toString();
         }
@@ -120,11 +136,9 @@ export class Disassembler {
     // #######################################################################
 
     format_bang() {
-        let current_iseq;
-
-        while (current_iseq = this.queue.shift()) {
+        while (this.current_iseq = this.queue.shift() ?? null) {
             if (this.output.length > 0) this.output = `${this.output}\n`;
-            this.format_iseq(current_iseq);
+            this.format_iseq(this.current_iseq);
         }
     }
 
@@ -140,7 +154,7 @@ export class Disassembler {
             } else if (insn instanceof StackPosition) {
                 // what do we do here?
             } else {
-                this.output += `${this.current_prefix}${length.toString().padStart(4, "0")} `;
+                this.output += `${this.current_prefix}${insn.pos.toString().padStart(4, "0")} `;
 
                 const disasm = insn.disasm(this);
                 this.output += disasm;
@@ -157,12 +171,12 @@ export class Disassembler {
 
                 if (lines.length > 0) {
                     this.output += `(${lines[lines.length - 1].toString().padStart(4, " ")})`;
-                    lines.splice(0, -1);
+                    lines.splice(0);
                 }
 
                 if (events.length > 0) {
                     this.output += `[${events.join("")}]`;
-                    events.splice(0, -1);
+                    events.splice(0);
                 }
 
                 // A hook here to allow for custom formatting of instructions after
@@ -211,7 +225,7 @@ export class Disassembler {
                 for (const entry of iseq.catch_table.entries) {
                     if (entry instanceof CatchBreak) {
                         this.output += `${this.current_prefix}catch type: break\n`;
-                        this.format_iseq(entry.iseq!);
+                        if (entry.iseq) this.format_iseq(entry.iseq);
                     } else if (entry instanceof CatchNext) {
                         this.output += `${this.current_prefix}catch type: next\n`;
                     } else if (entry instanceof CatchRedo) {

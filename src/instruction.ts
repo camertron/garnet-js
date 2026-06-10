@@ -12,6 +12,10 @@ export type ValueType = {
 
 // Abstract base instruction.
 export default abstract class Instruction {
+    // The slot position of this instruction in the containing sequence.
+    // Only used in disasm output.
+    public pos: number = -1;
+
     static async to_ruby(object: ValueType): Promise<RValue> {
         switch (object.type) {
             case "String":
@@ -36,6 +40,10 @@ export default abstract class Instruction {
 
     abstract call(context: ExecutionContext): Promise<ExecutionResult>;
     abstract disasm(fmt: Disassembler): string;
+
+    patch(pos: number) {
+        this.pos = pos;
+    }
 
     // Whether or not this instruction is a branch instruction.
     does_branch(): boolean {
