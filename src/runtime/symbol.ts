@@ -1,6 +1,6 @@
 import { ExecutionContext } from "../execution_context";
 import { Class, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
-import { hash_string } from "../util/string_utils";
+import { hash_string, requires_quotes } from "../util/string_utils";
 import { Integer } from "./integer";
 import { Object } from "./object";
 import { Proc } from "./proc";
@@ -39,6 +39,11 @@ export class Symbol {
 
         return this.klass_;
     }
+
+    static inspect(str: string): string {
+        const escaped_str = str.replace(/\"/g, "\\\"");
+        return requires_quotes(str) ? `:"${escaped_str}"` : `:${escaped_str}`;
+    }
 }
 
 let inited = false;
@@ -52,10 +57,7 @@ export const init = () => {
 
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const str = self.get_data<string>();
-            const quote = !/^\w+$/.test(str);
-            const escaped_str = str.replace(/\"/g, "\\\"");
-
-            return await RubyString.new(quote ? `:"${escaped_str}"` : `:${escaped_str}`);
+            return await RubyString.new(Symbol.inspect(str));
         });
 
         klass.define_native_method("hash", async (self: RValue): Promise<RValue> => {
