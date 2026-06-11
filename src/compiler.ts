@@ -2475,6 +2475,13 @@ export class Compiler extends Visitor {
                 if (argument instanceof SplatNode) {
                     flags = CallDataFlag.ARGS_SPLAT;
                 } else if (argument instanceof KeywordHashNode) {
+                    // Check if this is a keyword splat (**kwargs)
+                    for (const element of argument.elements) {
+                        if (element instanceof AssocSplatNode) {
+                            flags |= CallDataFlag.KW_SPLAT;
+                            break;
+                        }
+                    }
                 }
             }
 
