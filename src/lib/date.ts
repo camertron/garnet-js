@@ -215,5 +215,5 @@ export const init = async () => {
         });
     });
 
-    Runtime.define_class_under(await RubyDate.klass(), "Error", (await Object.find_constant("ArgumentError"))!);
+    await Runtime.define_class_under(await RubyDate.klass(), "Error", (await Object.find_constant("ArgumentError"))!);
 };
