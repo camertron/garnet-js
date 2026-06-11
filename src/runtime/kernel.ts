@@ -668,6 +668,8 @@ export const init = async () => {
 
         const proc = block.get_data<Proc>();
 
+        ExecutionContext.current.catch_tags.push(tag);
+
         try {
             return await proc.call(ExecutionContext.current, [tag]);
         } catch (e) {
@@ -678,6 +680,8 @@ export const init = async () => {
             }
 
             throw e;
+        } finally {
+            ExecutionContext.current.catch_tags.pop();
         }
     });
 
