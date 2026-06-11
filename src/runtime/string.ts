@@ -659,12 +659,9 @@ export const init = () => {
 
         klass.define_native_method("to_i", async (self: RValue): Promise<RValue> => {
             const str = self.get_data<string>();
+            return await Integer.get(Math.round(parseInt(str)));
+        });
 
-            if (str.indexOf(".") > 0) {
-                return await Float.new(parseFloat(str));
-            } else {
-                return await Integer.get(parseInt(str));
-            }
         });
 
         klass.define_native_method("to_sym", async (self: RValue, args: RValue[]): Promise<RValue> => {
