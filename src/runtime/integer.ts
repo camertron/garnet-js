@@ -11,6 +11,7 @@ import { Proc } from "./proc";
 import { Hash } from "./hash";
 import { BreakError, ExecutionContext, NextError } from "../execution_context";
 import { Args } from "./arg-scanner";
+import { RubyArray } from "./array";
 
 export class Integer {
     static INT2FIX0: RValue;
@@ -198,6 +199,27 @@ export const init = async () => {
             }
 
             return Qnil;
+        });
+
+        klass.define_native_method("coerce", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [other_rval] = await Args.scan("1", args);
+            let other;
+
+            switch (other_rval.klass) {
+                case await Float.klass():
+                    other = other_rval.get_data<number>();
+                    break;
+                case await Rational.klass():
+                    other = other_rval.get_data<Rational>().to_f();
+                    break;
+                case await Integer.klass():
+                    other = other_rval.get_data<number>();
+                    break;
+                default:
+                    throw new TypeError(`${other_rval.klass.get_data<Class>().full_name} can't be coerced into Float`);
+            }
+
+            return RubyArray.new([await Integer.get(other), self]);
         });
 
         klass.define_native_method("==", (self: RValue, args: RValue[]): RValue => {
