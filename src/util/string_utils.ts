@@ -65,10 +65,47 @@ export function *each_code_point(input: string) {
     return length;
 }
 
-export const is_alpha_num = (code: number) => {
+export const is_alpha_num = (code: number): boolean => {
     return (
         (code > 47 && code < 58) ||  // numeric (0-9)
         (code > 64 && code < 91) ||  // upper alpha (A-Z)
         (code > 96 && code < 123)    // lower alpha (a-z)
     );
 };
+
+const identifier_re = /^[a-zA-Z_]\w+[?!=]?$/;
+const variable_re = /^(?:$|@@|@)?[a-zA-Z_]\w+[?!=]?$/;
+const numbered_special_re = /^\$[0-9]$/;
+const special_vars = new Set([
+    "$!", "$@", "$&", "$`", "$'", "$+", "$~", "$=",
+    "$/", "$\\", "$,", "$;", "$.", "$<", "$>", "$_",
+    "$*", "$$", "$?", "$:", "$\"",
+])
+const operators = new Set([
+    "!", "~", "+", "**", "-", "*", "/", "%", "+", "-",
+    "<<", ">>", "&", "|", "^", "<", "<=", ">", ">=",
+    "==", "===", "!=", "=~", "!~", "<=>", "&&", "||",
+    "..", "...", "?:", "=", "**=", "*=", "/=", "%=",
+    "+=", "-=", "<<=", ">>=", "&&=", "&=", "||=",
+    "|=", "^=",
+]);
+
+export const is_identifier = (str: string): boolean => {
+    return identifier_re.test(str);
+}
+
+export const is_variable_name = (str: string): boolean => {
+    if (variable_re.test(str)) return true;
+    if (numbered_special_re.test(str)) return true;
+    if (special_vars.has(str)) return true;
+
+    return false;
+}
+
+export const is_operator = (str: string): boolean => {
+    return operators.has(str);
+}
+
+export const requires_quotes = (str: string): boolean => {
+    return !is_identifier(str) && !is_variable_name(str) && !is_operator(str);
+}
