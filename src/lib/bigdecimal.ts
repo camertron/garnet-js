@@ -5,10 +5,11 @@ import { Float } from "../runtime/float";
 import { Object as RubyObject } from "../runtime/object";
 import { Numeric } from "../runtime/numeric";
 import { Rational } from "../runtime/rational";
-import { ArgumentError } from "../errors";
+import { TypeError } from "../errors";
 import { RubyString } from "../runtime/string";
 import Big from "./big.mjs";
 import { Kernel } from "../runtime/kernel";
+import { RubyArray } from "../runtime/array";
 
 export class BigDecimal {
     private static klass_: RValue;
@@ -61,13 +62,12 @@ export const init = () => {
             case await Integer.klass():
                 return numeric.get_data<number>();
             default:
-                throw new ArgumentError("Unreachable");
+                throw new TypeError(`${numeric.klass.get_data<Class>().full_name} can't be coerced into BigDecimal`);
         }
     }
 
     Runtime.define_class("BigDecimal", ObjectClass, async (klass: Class): Promise<void> => {
         klass.define_native_method("to_f", (self: RValue): Promise<RValue> => {
-            // fake it till you make it
             return Float.new(self.get_data<BigDecimal>().to_f());
         });
 
@@ -177,6 +177,10 @@ export const init = () => {
 
         await klass.alias_method("to_s", "inspect");
 
+        klass.define_native_method("coerce", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [other_rval] = await Args.scan("1", args);
+            const other_coerced = await coerce_to_big_source(other_rval);
+            return RubyArray.new([await BigDecimal.new(other_coerced), self]);
         });
     });
 
