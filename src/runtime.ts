@@ -53,6 +53,7 @@ import { init as bigdecimal_init } from "./lib/bigdecimal";
 import { init as strscan_init } from "./lib/strscan";
 import { init as argf_init } from "./runtime/argf";
 import { init as gc_init } from "./runtime/gc";
+import { init as math_init } from "./runtime/math";
 import { obj_id_hash } from "./util/object_id";
 import { RubyString } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
@@ -1833,6 +1834,7 @@ export const init = async () => {
     warning_init();
     argf_init();
     await gc_init();
+    math_init();
 
     ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"] = await (async () => {
         if (is_node) {
