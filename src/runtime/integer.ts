@@ -11,6 +11,7 @@ import { Proc } from "./proc";
 import { Hash } from "./hash";
 import { BreakError, ExecutionContext, NextError } from "../execution_context";
 import { Args } from "./arg-scanner";
+import { Kernel } from "./kernel";
 import { RubyArray } from "./array";
 
 export class Integer {
@@ -183,10 +184,10 @@ export const init = async () => {
         });
 
         klass.define_native_method("<=>", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            const other = args[0];
+            const [other_rval] = await Args.scan("1", args);
 
-            if (other.klass === await Integer.klass() || other.klass === await Float.klass()) {
-                const other_num = other.get_data<number>();
+            if (other_rval.klass === await Integer.klass() || other_rval.klass === await Float.klass()) {
+                const other_num = other_rval.get_data<number>();
                 const num = self.get_data<number>();
 
                 if (num < other_num) {
@@ -196,6 +197,24 @@ export const init = async () => {
                 } else {
                     return Integer.get(0);
                 }
+            }
+
+            if (await Object.respond_to(other_rval, "coerce")) {
+                const coerced = await Object.send(other_rval, "coerce", [self]);
+
+                if (!await Kernel.is_a(coerced, await RubyArray.klass())) {
+                    throw new TypeError("coerce must return [x, y]");
+                }
+
+                const coerced_elems = coerced.get_data<RubyArray>().elements;
+
+                if (coerced_elems.length !== 2) {
+                    throw new TypeError("coerce must return [x, y]");
+                }
+
+                const [coerced_self, coerced_other] = coerced_elems;
+
+                return Object.send(coerced_self, "<=>", [coerced_other]);
             }
 
             return Qnil;
