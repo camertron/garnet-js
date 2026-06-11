@@ -131,7 +131,7 @@ export class RubyString {
         return cr;
     }
 
-    static inspect(str: string) {
+    static inspect(str: string): string {
         const escaped_str = str
             .replace(/\"/g, "\\\"")
             .replace(/\r/g, "\\r")
@@ -388,13 +388,81 @@ export const init = () => {
             return await RubyString.new(data.slice(char_pos, char_pos + char_length));
         });
 
+        // Process backreferences and special sequences in replacement strings
+        const process_replacement = (replacement: string, str: string, match_data: MatchData | null, match_begin: number, match_end: number): string => {
+            let result = "";
+            let i = 0;
+
+            while (i < replacement.length) {
+                if (replacement[i] === '\\' && i + 1 < replacement.length) {
+                    const next_char = replacement[i + 1];
+
+                    // Handle \\ -> \
+                    if (next_char === '\\') {
+                        result += '\\';
+                        i += 2;
+                    }
+                    // Handle \0 or \& -> entire match
+                    else if (next_char === '0' || next_char === '&') {
+                        result += str.slice(match_begin, match_end);
+                        i += 2;
+                    }
+                    // Handle \` -> everything before match
+                    else if (next_char === '`') {
+                        result += str.slice(0, match_begin);
+                        i += 2;
+                    }
+                    // Handle \' -> everything after match
+                    else if (next_char === "'") {
+                        result += str.slice(match_end);
+                        i += 2;
+                    }
+                    // Handle \+ -> last capture that matched
+                    else if (next_char === '+') {
+                        if (match_data) {
+                            // Find the last non-nil capture
+                            let last_capture = "";
+                            for (let j = match_data.captures.length - 1; j >= 1; j--) {
+                                const capture = match_data.match(j);
+                                if (capture !== null) {
+                                    last_capture = capture;
+                                    break;
+                                }
+                            }
+                            result += last_capture;
+                        }
+                        i += 2;
+                    }
+                    // Handle \1 through \9 -> capture groups
+                    else if (next_char >= '1' && next_char <= '9') {
+                        const capture_num = parseInt(next_char, 10);
+                        if (match_data && capture_num < match_data.captures.length) {
+                            const capture = match_data.match(capture_num);
+                            result += capture !== null ? capture : "";
+                        }
+                        i += 2;
+                    }
+                    // Unknown escape sequence - leave as-is
+                    else {
+                        result += '\\' + next_char;
+                        i += 2;
+                    }
+                } else {
+                    result += replacement[i];
+                    i++;
+                }
+            }
+
+            return result;
+        };
+
         // a count of 0 means replace all matches, > 0 means only replace max n times
         const gsub = async (str: string, pattern: Regexp | string, replacements: RValue | undefined, count: number = 0): Promise<string> => {
-            const matches: [number, number, string][] = [];
+            const matches: [number, number, string, MatchData | null][] = [];
 
             if (pattern instanceof Regexp) {
                 await pattern.scan(str, async (match_data: MatchData): Promise<boolean> => {
-                    matches.push([match_data.begin(0), match_data.end(0), match_data.match(0) || ""]);
+                    matches.push([match_data.begin(0), match_data.end(0), match_data.match(0) || "", match_data]);
                     await Regexp.set_svars(match_data);
 
                     if (count > 0 && matches.length === count) {
@@ -413,7 +481,7 @@ export const init = () => {
                     current_pos = str.indexOf(pattern, last_pos);
 
                     if (current_pos > -1) {
-                        matches.push([current_pos, current_pos + pattern.length, pattern]);
+                        matches.push([current_pos, current_pos + pattern.length, pattern, null]);
 
                         if (count > 0 && matches.length === count) {
                             // exit early
@@ -431,7 +499,7 @@ export const init = () => {
             if (replacements && replacements.klass === await Hash.klass()) {
                 const replacement_hash = replacements.get_data<Hash>();
 
-                for (const [begin, end, match] of matches) {
+                for (const [begin, end, match, _] of matches) {
                     chunks.push(str.slice(last_pos, begin));
                     const replacement = await replacement_hash.get(await RubyString.new(match))
                     chunks.push(replacement.get_data<string>());
@@ -440,9 +508,9 @@ export const init = () => {
             } else if (replacements) {
                 const replacement = replacements.get_data<string>();
 
-                for (const [begin, end, _] of matches) {
+                for (const [begin, end, _, match_data] of matches) {
                     chunks.push(str.slice(last_pos, begin));
-                    chunks.push(replacement);
+                    chunks.push(process_replacement(replacement, str, match_data, begin, end));
                     last_pos = end;
                 }
             }
