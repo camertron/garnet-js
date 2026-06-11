@@ -21,6 +21,7 @@ import { Method, UnboundMethod } from "./method";
 import { sprintf } from "./printf";
 import { Compiler } from "../compiler";
 import { Args } from "./arg-scanner";
+import { Dir } from "./dir";
 
 export class Kernel {
     public static exit_handlers: RValue[] = [];
@@ -244,7 +245,9 @@ export const init = async () => {
                 // @TODO: avoid all this error-prone string processing
                 const [path, line_and_label] = element.get_data<string>().split(":");
                 const [line, label] = line_and_label.split(" in ");
-                locations.push(await BacktraceLocation.new(path, parseInt(line), label));
+                const lineno = parseInt(line);
+                // If parseInt returns NaN (e.g., from "null"), default to 0
+                locations.push(await BacktraceLocation.new(path, isNaN(lineno) ? 0 : lineno, label));
             }
 
             ruby_error.backtrace = backtrace.get_data<string[]>();
@@ -644,7 +647,9 @@ export const init = async () => {
             // @TODO: avoid splitting a string here, maybe we can store backtraces as tuples?
             const [path, line_and_label] = element.split(":");
             const [line, label] = line_and_label.split(" in ");
-            locations.push(await BacktraceLocation.new(path, parseInt(line), label));
+            const lineno = parseInt(line);
+            // If parseInt returns NaN (e.g., from "null"), default to 0
+            locations.push(await BacktraceLocation.new(path, isNaN(lineno) ? 0 : lineno, label));
         }
 
         return RubyArray.new(locations);
