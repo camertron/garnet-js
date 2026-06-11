@@ -98,7 +98,17 @@ export const init = async () => {
     mod.define_native_method("load", async (_self: RValue, args: RValue[]): Promise<RValue> => {
         const path = args[0];
         await Runtime.assert_type(path, await RubyString.klass());
-        return await Runtime.load(path.get_data<string>(), path.get_data<string>()) ? Qtrue : Qfalse;
+        const path_str = path.get_data<string>();
+
+        // load resolves relative paths relative to the current working directory
+        let absolute_path: string;
+        if (vmfs.is_relative(path_str)) {
+            absolute_path = vmfs.join_paths(Dir.getwd(), path_str);
+        } else {
+            absolute_path = path_str;
+        }
+
+        return await Runtime.load(path_str, absolute_path) ? Qtrue : Qfalse;
     });
 
     mod.define_native_method("eval", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
