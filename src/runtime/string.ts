@@ -662,6 +662,9 @@ export const init = () => {
             return await Integer.get(Math.round(parseInt(str)));
         });
 
+        klass.define_native_method("to_f", async (self: RValue): Promise<RValue> => {
+            const str = self.get_data<string>();
+            return await Float.new(parseFloat(str));
         });
 
         klass.define_native_method("to_sym", async (self: RValue, args: RValue[]): Promise<RValue> => {
