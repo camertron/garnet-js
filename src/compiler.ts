@@ -2939,59 +2939,66 @@ export class Compiler extends Visitor {
     override visitDefinedNode(node: DefinedNode) {
         if (!this.used) return;
 
-        const value = node.value;
-        const type = value.constructor.name;
+        const finish: [Label | null] = [null];
+        this.compile_defined(node.value, finish);
 
-        if (type === "CallNode") {
+        // Eventually there needs to be a begin/rescue around this that jumps to finish,
+        // since defined?() calls accept certain types of expressions that can raise.
+        // For now we just push the label.
+        if (finish[0]) {
+            this.iseq.push(finish[0]);
+        }
+    }
+
+    private compile_defined(node: Node, finish: [Label | null]) {
+        if (node instanceof CallNode) {
             this.iseq.putself();
-            this.iseq.defined(DefinedType.FUNC, (value as CallNode).name, this.iseq.make_string("method"));
-        } else if (type === "ClassVariableReadNode") {
-            this.iseq.defined(DefinedType.CVAR, (value as ClassVariableReadNode).name, this.iseq.make_string("class variable"));
-        } else if (type === "ConstantPathNode") {
-            const val = value as ConstantPathNode;
-
-            if (!val.name) {
+            this.iseq.defined(DefinedType.FUNC, node.name, this.iseq.make_string("method"));
+        } else if (node instanceof ClassVariableReadNode) {
+            this.iseq.defined(DefinedType.CVAR, node.name, this.iseq.make_string("class variable"));
+        } else if (node instanceof ConstantPathNode) {
+            if (!node.name) {
                 this.iseq.putnil();
-                return;
+                return null;
             }
 
-            if (val.parent == null) {
+            if (node.parent == null) {
                 this.iseq.putobject({type: "RValue", value: ObjectClass});
-                this.iseq.defined(DefinedType.CONST_FROM, val.name, this.iseq.make_string("constant", Encoding.us_ascii, true));
+                this.iseq.defined(DefinedType.CONST_FROM, node.name, this.iseq.make_string("constant", Encoding.us_ascii, true));
             } else {
-                // 1. Check if the parent (DidYouMean) is defined
-                this.with_used(true, () => this.visit(val.parent!));
+                if (!finish[0]) finish[0] = this.iseq.label();
+                this.compile_defined(node.parent, finish);
+                this.iseq.branchunless(finish[0]);
+                this.visit(node.parent);
             }
-                this.iseq.defined(DefinedType.CONST_FROM, val.name, this.iseq.make_string("constant", Encoding.us_ascii, true));
 
-            this.iseq.defined(DefinedType.CONST_FROM, val.name, this.iseq.make_string("constant", Encoding.us_ascii, true));
-                this.iseq.push(end_label);
-        } else if (type === "ConstantReadNode") {
+            this.iseq.defined(DefinedType.CONST_FROM, node.name, this.iseq.make_string("constant", Encoding.us_ascii, true));
+        } else if (node instanceof ConstantReadNode) {
             this.iseq.putnil(); // defined instruction always pops one value
-            this.iseq.defined(DefinedType.CONST, (value as ConstantReadNode).name, this.iseq.make_string("constant", Encoding.us_ascii, true));
-        } else if (type === "FalseNode") {
+            this.iseq.defined(DefinedType.CONST, node.name, this.iseq.make_string("constant", Encoding.us_ascii, true));
+        } else if (node instanceof FalseNode) {
             this.iseq.putobject({type: "RValue", value: this.iseq.make_string("true", Encoding.us_ascii, true)});
-        } else if (type === "ForwardingSuperNode") {
+        } else if (node instanceof ForwardingSuperNode) {
             this.iseq.putself();
             this.iseq.defined(DefinedType.ZSUPER, "", this.iseq.make_string("super", Encoding.us_ascii, true));
-        } else if (type === "GlobalVariableReadNode") {
-            this.iseq.defined(DefinedType.GVAR, (value as GlobalVariableReadNode).name, this.iseq.make_string("global-variable", Encoding.us_ascii, true));
-        } else if (type === "LocalVariableReadNode") {
+        } else if (node instanceof GlobalVariableReadNode) {
+            this.iseq.defined(DefinedType.GVAR, node.name, this.iseq.make_string("global-variable", Encoding.us_ascii, true));
+        } else if (node instanceof LocalVariableReadNode) {
             this.iseq.putobject({type: "RValue", value: this.iseq.make_string("local-variable", Encoding.us_ascii, true)});
-        } else if (type === "LocalVariableWriteNode" || type === "InstanceVariableWriteNode") {
+        } else if (node instanceof LocalVariableWriteNode || node instanceof InstanceVariableWriteNode) {
             this.iseq.putobject({type: "RValue", value: this.iseq.make_string("assignment", Encoding.us_ascii, true)});
-        } else if (type === "NilNode") {
+        } else if (node instanceof NilNode) {
             this.iseq.putobject({type: "NilClass", value: Qnil});
-        } else if (type === "SelfNode") {
+        } else if (node instanceof SelfNode) {
             this.iseq.putobject({type: "RValue", value: this.iseq.make_string("self", Encoding.us_ascii, true)});
-        } else if (type === "TrueNode") {
+        } else if (node instanceof TrueNode) {
             this.iseq.putobject({type: "RValue", value: this.iseq.make_string("true", Encoding.us_ascii, true)});
-        } else if (type === "YieldNode") {
+        } else if (node instanceof YieldNode) {
             this.iseq.putnil();
             this.iseq.defined(DefinedType.YIELD, "", this.iseq.make_string("yield", Encoding.us_ascii, true));
-        } else if (type === "InstanceVariableReadNode") {
+        } else if (node instanceof InstanceVariableReadNode) {
             this.iseq.putself();
-            this.iseq.defined(DefinedType.IVAR, (value as InstanceVariableReadNode).name, this.iseq.make_string("instance-variable", Encoding.us_ascii, true));
+            this.iseq.defined(DefinedType.IVAR, node.name, this.iseq.make_string("instance-variable", Encoding.us_ascii, true));
         } else {
             this.iseq.putobject({type: "RValue", value: this.iseq.make_string("expression", Encoding.us_ascii, true)});
         }
