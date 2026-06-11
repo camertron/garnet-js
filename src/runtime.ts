@@ -845,7 +845,7 @@ export class Module {
             let cur_parent_rval: RValue | undefined = this.rval;
             const parts = [];
 
-            while (cur_parent_rval && cur_parent_rval != ObjectClass) {
+            do {
                 const cur_parent: Module = cur_parent_rval.get_data<Module>();
 
                 if (cur_parent.name) {
@@ -855,7 +855,7 @@ export class Module {
                 }
 
                 cur_parent_rval = cur_parent.nesting_parent;
-            }
+            } while (cur_parent_rval && cur_parent_rval != ObjectClass);
 
             this.full_name_ = parts.join("::");
         }
