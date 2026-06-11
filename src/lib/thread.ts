@@ -241,7 +241,7 @@ export const init = async () => {
         // });
     });
 
-    Runtime.define_class_under(BacktraceClass, "Location", ObjectClass, (klass: Class) => {
+    await Runtime.define_class_under(BacktraceClass, "Location", ObjectClass, (klass: Class) => {
         klass.define_native_method("path", async (self: RValue): Promise<RValue> => {
             return await self.get_data<BacktraceLocation>().path_rval();
         });
