@@ -152,11 +152,31 @@ export const init = () => {
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const big = self.get_data<BigDecimal>();
 
-            if (big.digits) {
-                return await RubyString.new(big.value.toFixed(big.digits));
-            } else {
-                return await RubyString.new(big.value.toExponential());
+            if (big.value.eq(0)) {
+                if (big.value.s === 1) {
+                    return RubyString.new("0.0");
+                } else {
+                    return RubyString.new("-0.0");
+                }
             }
+
+            const digits = [...big.value.c];
+
+            if (big.digits) {
+                while (digits.length < big.digits) {
+                    digits.push(0);
+                }
+            }
+
+            const e = big.value.e + 1;
+
+            return RubyString.new(
+                `${big.value.s < 0 ? "-" : ""}0.${digits.join("")}e${e}`
+            );
+        });
+
+        await klass.alias_method("to_s", "inspect");
+
         });
     });
 
