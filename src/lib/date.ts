@@ -30,7 +30,7 @@ export class DateError extends RubyError {
 
     constructor(message: string) {
         super(message);
-        this.name = "Error";
+        this.name = "Date::Error";
     }
 
     async ruby_class() {
