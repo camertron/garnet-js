@@ -214,6 +214,45 @@ export const init = async () => {
         klass.define_native_method("owner", (self: RValue): RValue => {
             return self.get_data<Method>().callable.owner?.rval || Qnil;
         });
+
+        klass.define_native_method("==", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [other_rval] = await Args.scan("1", args);
+
+            if (other_rval.klass !== self.klass) {
+                return Qfalse;
+            }
+
+            const method = self.get_data<Method>();
+            const other = other_rval.get_data<Method>();
+
+            if (method.receiver !== other.receiver) return Qfalse;
+            if (method.callable !== other.callable) return Qfalse;
+
+            return Qtrue;
+        });
+
+        klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
+            const method = self.get_data<Method>();
+            const pieces = [`#<Method: ${method.receiver.klass.get_data<Class>().full_name}`];
+            const receiver_klass = method.receiver.klass.get_data<Class>();
+
+            if (method.callable.owner && method.callable.owner !== receiver_klass) {
+                pieces.push(`(${method.callable.owner.full_name})`);
+            }
+
+            if (receiver_klass.is_singleton_class) {
+                pieces.push(".");
+            } else {
+                pieces.push("#");
+            }
+
+            pieces.push(method.name);
+            pieces.push("()");  // @TODO: handle aliases here
+            // @TODO: add file and line info
+            pieces.push(">");
+
+            return RubyString.new(pieces.join(""));
+        });
     });
 
     Runtime.define_class("UnboundMethod", ObjectClass, (klass: Class) => {
