@@ -1,5 +1,5 @@
 import { ArgumentError, NameError } from "../errors";
-import { Callable, Class, InterpretedCallable, ObjectClass, RValue, Runtime } from "../runtime";
+import { Callable, Class, InterpretedCallable, ObjectClass, RValue, Runtime, Qfalse, Qtrue } from "../runtime";
 import { Object } from "../runtime/object"
 import { RubyArray } from "../runtime/array"
 import { ExecutionContext, Qnil } from "../garnet";
@@ -7,6 +7,8 @@ import { Proc } from "./proc";
 import { MethodCallData } from "../call_data";
 import { Hash } from "./hash";
 import { Integer } from "./integer";
+import { Args } from "./arg-scanner";
+import { RubyString } from "./string";
 
 export class Method {
     private static klass_: RValue;
@@ -255,9 +257,78 @@ export const init = async () => {
         });
     });
 
-    Runtime.define_class("UnboundMethod", ObjectClass, (klass: Class) => {
+    Runtime.define_class("UnboundMethod", ObjectClass, async (klass: Class) => {
         klass.define_native_method("owner", (self: RValue): RValue => {
             return self.get_data<UnboundMethod>().callable.owner?.rval || Qnil;
+        });
+
+        klass.define_native_method("bind", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const unbound_method = self.get_data<UnboundMethod>();
+            const receiver = args[0];
+
+            // TODO: Add type checking to ensure receiver is kind_of? the owner class
+
+            return await Method.new(unbound_method.name, unbound_method.callable, receiver);
+        });
+
+        klass.define_native_method("bind_call", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
+            const unbound_method = self.get_data<UnboundMethod>();
+            const receiver = args[0];
+            const method_args = args.slice(1);
+
+            // TODO: Add type checking to ensure receiver is kind_of? the owner class
+
+            // Create a temporary Method object and call it
+            const method = new Method(unbound_method.name, unbound_method.callable, receiver);
+
+            let mtd_call_data;
+            if (call_data) {
+                mtd_call_data = MethodCallData.create(
+                    method.name,
+                    call_data.argc - 1,  // Subtract 1 because first arg is the receiver
+                    call_data.flag,
+                    call_data.kw_arg
+                );
+            } else {
+                mtd_call_data = MethodCallData.from_args(method.name, method_args, kwargs);
+            }
+
+            return await method.callable.call(
+                ExecutionContext.current,
+                receiver,
+                method_args,
+                kwargs,
+                block,
+                mtd_call_data
+            );
+        });
+
+        klass.define_native_method("==", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [other_rval] = await Args.scan("1", args);
+
+            if (other_rval.klass !== self.klass) {
+                return Qfalse;
+            }
+
+            const method = self.get_data<UnboundMethod>();
+            const other = other_rval.get_data<UnboundMethod>();
+
+            if (method.callable !== other.callable) return Qfalse;
+
+            return Qtrue;
+        });
+
+        klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
+            const method = self.get_data<UnboundMethod>();
+            const pieces = [`#<UnboundMethod: ${method.callable.owner!.full_name}`];
+
+            pieces.push("#");
+            pieces.push(method.name);
+            pieces.push("()");  // @TODO: handle aliases here
+            // @TODO: add file and line info
+            pieces.push(">");
+
+            return RubyString.new(pieces.join(""));
         });
     });
 
