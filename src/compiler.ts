@@ -2,7 +2,6 @@ import { ParseResult } from "@ruby/prism/src/deserialize";
 import { MethodCallData, BlockCallData, CallDataFlag, CallData } from "./call_data";
 import { CatchBreak, InstructionSequence, Label, CatchTableStack, CatchNext } from "./instruction_sequence";
 import { CompilerOptions } from "./compiler_options";
-import { Node as InsnNode } from "./instruction_sequence"
 import {
     AliasGlobalVariableNode,
     AliasMethodNode,
@@ -20,14 +19,18 @@ import {
     BreakNode,
     CallNode,
     CallOperatorWriteNode,
+    CallTargetNode,
     CaseNode,
     ClassNode,
     ClassVariableOrWriteNode,
     ClassVariableReadNode,
+    ClassVariableTargetNode,
     ClassVariableWriteNode,
     ConstantPathNode,
+    ConstantPathTargetNode,
     ConstantPathWriteNode,
     ConstantReadNode,
+    ConstantTargetNode,
     ConstantWriteNode,
     DefNode,
     DefinedNode,
@@ -116,8 +119,8 @@ import { Visitor } from "@ruby/prism/src/visitor";
 import { Lookup } from "./local_table";
 import { Module, ObjectClass, Qnil, Qtrue, RValue } from "./runtime";
 import { DefineClassFlags } from "./insns/defineclass";
-import { SpecialObjectType } from "./insns/putspecialobject";
-import { ExpandArrayFlag } from "./insns/expandarray";
+import PutSpecialObject, { SpecialObjectType } from "./insns/putspecialobject";
+import ExpandArray, { ExpandArrayFlag } from "./insns/expandarray";
 import { Regexp } from "./runtime/regexp";
 import { DefinedType } from "./insns/defined";
 import { GetSpecialType } from "./insns/getspecial";
@@ -127,6 +130,23 @@ import Instruction from "./instruction";
 import { Encoding } from "./runtime/encoding";
 import { ThrowType } from "./execution_context";
 import { CheckMatchType } from "./insns/checkmatch";
+import { MultiTargetState, MultiTargetStateNode } from "./insns/compiler/multi_targets";
+import Dup from "./insns/dup";
+import SetN from "./insns/setn";
+import TopN from "./insns/topn";
+import SetLocal from "./insns/setlocal";
+import SetClassVariable from "./insns/setclassvariable";
+import SetConstant from "./insns/setconstant";
+import SetGlobal from "./insns/set_global";
+import SetInstanceVariable from "./insns/setinstancevariable";
+import PutObject from "./insns/putobject";
+import Swap from "./insns/swap";
+import Pop from "./insns/pop";
+import { BranchNil } from "./insns/branchnil";
+import Send from "./insns/send";
+import NewArray from "./insns/new_array";
+import ConcatArray from "./insns/concatarray";
+import { InsnNode, InstructionList } from "./instruction_list";
 
 export type ParseLocal = {
     name: string
@@ -793,171 +813,404 @@ export class Compiler extends Visitor {
         if (node.arguments_) this.visit(node.arguments_)
     }
 
-    private find_stack_position(label_node: InsnNode): number {
-        let current = label_node.next_node;
-        let count = 0;
-
-        while (current) {
-            if (current.instruction instanceof Instruction) {
-                count += current.instruction.pushes();
-                count -= current.instruction.pops();
-            }
-
-            current = current.next_node;
-        }
-
-        return count;
-    }
-
-    private measure_stack_change(cb: () => void): number {
-        let start_insn = this.iseq.insns.tail_node;
-
-        cb();
-
-        // start_insn may be null if we've started at the very beginning
-        // of the file
-        let current = start_insn || this.iseq.insns.head_node;
-        let total = 0;
-
-        while (current) {
-            if (current.instruction instanceof Instruction) {
-                total += current.instruction.pushes();
-                total -= current.instruction.pops();
-            }
-
-            if (current === this.iseq.insns.tail_node) {
-                break;
-            }
-
-            current = current.next_node;
-        }
-
-        return total;
-    }
-
     override visitMultiWriteNode(node: MultiWriteNode) {
-        const stack_positions: InsnNode[] = [];
+        const state = new MultiTargetState();
+        const writes = new InstructionList();
+        const cleanup = new InstructionList();
+        const ret = new InstructionList();
 
-        for (const left of node.lefts) {
-            if (left instanceof IndexTargetNode) {
-                const pos = new StackPosition();
-                const pos_node = this.iseq.push(pos) as InsnNode;
-                stack_positions.push(pos_node);
-                pos.delta = this.with_used<number>(true, () => {
-                    return this.measure_stack_change(() => this.visit(left))
-                });
-            }
+        state.position = this.used ? 1 : 0;
+        this.compile_multi_target_node(this.iseq, node, ret, writes, cleanup, state);
+
+        this.with_used(true, () => this.visit(node.value));
+        if (this.used) {
+            ret.dup();
         }
 
-        if (node.rest) {
-            const pos = new StackPosition();
-            const pos_node = this.iseq.push(pos) as InsnNode;
-            stack_positions.push(pos_node);
-            const rest = node.rest as SplatNode;
+        ret.push_list(writes);
 
-            if (rest.expression && rest.expression instanceof IndexTargetNode) {
-                pos.delta = this.with_used<number>(true, (): number => {
-                    return this.measure_stack_change(() => this.visit(rest.expression!))
-                });
-            }
+        if (this.used && state.stack_size >= 1) {
+            // Make sure the value on the right-hand side of the = operator is
+            // being returned before we pop the parent expressions.
+            ret.setn(state.stack_size);
         }
 
-        for (const right of node.rights) {
-            if (right instanceof IndexTargetNode) {
-                const pos = new StackPosition();
-                const pos_node = this.iseq.push(pos) as InsnNode;
-                stack_positions.push(pos_node);
-                pos.delta = this.with_used<number>(true, (): number => {
-                    return this.measure_stack_change(() => this.visit(right));
-                });
-            }
+        // Now, we need to go back and modify the topn instructions in order to
+        // ensure they can correctly retrieve the parent expressions.
+        this.multi_target_state_update(state);
+
+        ret.push_list(cleanup);
+
+        this.iseq.push_list(ret);
+    }
+
+    /**
+     * Compile a multi target or multi write node. It returns the number of values
+     * on the stack that correspond to the parent expressions of the various
+     * targets.
+     */
+    compile_multi_target_node(iseq: InstructionSequence, node: Node, parents: InstructionList, writes: InstructionList, cleanup: InstructionList, state: MultiTargetState) {
+        let lefts: Node[];
+        let rest: Node | null;
+        let rights: Node[];
+
+        if (node instanceof MultiTargetNode || node instanceof MultiWriteNode) {
+            lefts = node.lefts;
+            rest = node.rest;
+            rights = node.rights;
+        } else {
+            throw new Error(`Unsupported node ${node.constructor.name}`);
         }
 
-        // Visit all the value nodes. This is actually an ArrayNode that will result in
-        // a newarray instruction.
-        this.with_used(true, () => this.visit(node.value as ArrayNode));
+        const has_rest = rest != null && rest instanceof SplatNode && rest.expression != null;
+        const has_posts = rights.length > 0;
 
-        this.iseq.dup();
+        // The first instruction in the writes sequence is going to spread the
+        // top value of the stack onto the number of values that we're going to
+        // write.
+        writes.expandarray(lefts.length, (has_rest || has_posts) ? 1 : 0);
 
-        let flags = 0;
-        if (node.rest) flags |= ExpandArrayFlag.SPLAT_FLAG;
+        // We need to keep track of some additional state information as we're
+        // going through the targets because we will need to revisit them once
+        // we know how many values are being pushed onto the stack.
+        const target_state = new MultiTargetState();
+        if (state == null) state = target_state;
 
-        this.iseq.expandarray(node.lefts.length, flags);
+        const base_position = state.position;
+        const splat_position = (has_rest || has_posts) ? 1 : 0;
 
-        for (const left of node.lefts) {
-            if (left instanceof IndexTargetNode) {
-                const pos_node = stack_positions.shift()!
-                const pos = pos_node.instruction as unknown as StackPosition;
-                const stack_pos = this.find_stack_position(pos_node);
+        // Next, we'll iterate through all of the leading targets.
+        for (let index = 0; index < lefts.length; index ++) {
+            const target = lefts[index];
+            state.position = lefts.length - index + splat_position + base_position;
+            this.compile_target_node(iseq, target, parents, writes, cleanup, state);
+        }
 
-                for (let i = 0; i < pos.delta; i ++) {
-                    this.iseq.topn(stack_pos - 1);
-                }
+        // Next, we'll compile the rest target if there is one.
+        if (has_rest) {
+            const target = (rest as SplatNode).expression;
+            state.position = 1 + rights.length + base_position;
 
-                this.iseq.topn(2);
-                this.iseq.send(MethodCallData.create("[]=", 2), null);
-                this.iseq.pop();
-                this.iseq.pop();
+            if (has_posts) {
+                writes.expandarray(rights.length, 3);
+            }
+
+            this.compile_target_node(iseq, target, parents, writes, cleanup, state);
+        }
+
+        // Finally, we'll compile the trailing targets.
+        if (has_posts) {
+            if (!has_rest && rest != null) {
+                writes.expandarray(rights.length, 2);
+            }
+
+            for (let index = 0; index < rights.length; index ++) {
+                const target = rights[index];
+                state.position = rights.length - index + base_position;
+                this.compile_target_node(iseq, target, parents, writes, cleanup, state);
+            }
+        }
+    }
+
+    /**
+     * A target node represents an indirect write to a variable or a method call to
+     * a method ending in =. Compiling one of these nodes requires three sequences:
+     *
+     * * The first is to compile retrieving the parent expression if there is one.
+     *   This could be the object that owns a constant or the receiver of a method
+     *   call.
+     * * The second is to compile the writes to the targets. This could be writing
+     *   to variables, or it could be performing method calls.
+     * * The third is to compile any cleanup that needs to happen, i.e., popping the
+     *   appropriate number of values off the stack.
+     *
+     * When there is a parent expression and this target is part of a multi write, a
+     * topn instruction will be inserted into the write sequence. This is to move
+     * the parent expression to the top of the stack so that it can be used as the
+     * receiver of the method call or the owner of the constant. To facilitate this,
+     * we return a pointer to the topn instruction that was used to be later
+     * modified with the correct offset.
+     *
+     * These nodes can appear in a couple of places, but most commonly:
+     *
+     * * For loops - the index variable is a target node
+     * * Rescue clauses - the exception reference variable is a target node
+     * * Multi writes - the left hand side contains a list of target nodes
+     *
+     * For the comments with examples within this function, we'll use for loops as
+     * the containing node.
+     */
+    compile_target_node(iseq: InstructionSequence, node: Node | null, parents: InstructionList, writes: InstructionList, cleanup: InstructionList, state: MultiTargetState) {
+        if (node instanceof LocalVariableTargetNode) {
+            // Local variable targets have no parent expression, so they only need
+            // to compile the write.
+            //
+            //     for i in []; end
+            //
+            const lookup = this.iseq.local_table.find_or_throw(node.name, node.depth);
+            writes.setlocal(lookup.index, lookup.depth);
+        } else if (node instanceof ClassVariableTargetNode) {
+            // Class variable targets have no parent expression, so they only need
+            // to compile the write.
+            //
+            //     for @@i in []; end
+            //
+            writes.setclassvariable(node.name);
+        } else if (node instanceof ConstantTargetNode) {
+            // Constant targets have no parent expression, so they only need to
+            // compile the write.
+            //
+            //     for I in []; end
+            //
+            writes.putspecialobject(SpecialObjectType.CONST_BASE);
+            writes.setconstant(node.name);
+        } else if (node instanceof GlobalVariableTargetNode) {
+            // Global variable targets have no parent expression, so they only need
+            // to compile the write.
+            //
+            //     for $i in []; end
+            //
+            writes.setglobal(node.name);
+        } else if (node instanceof InstanceVariableTargetNode) {
+            // Instance variable targets have no parent expression, so they only
+            // need to compile the write.
+            //
+            //     for @i in []; end
+            //
+            writes.setinstancevariable(node.name);
+        } else if (node instanceof ConstantPathTargetNode) {
+            // Constant path targets have a parent expression that is the object
+            // that owns the constant. This needs to be compiled first into the
+            // parents sequence. If no parent is found, then it represents using the
+            // unary :: operator to indicate a top-level constant. In that case we
+            // need to push Object onto the stack.
+            //
+            //     for I::J in []; end
+            //
+
+            if (node.parent != null) {
+                const const_lookup = this.capture(() => {
+                    this.visit(node.parent!);
+                });
+
+                parents.push_list(const_lookup);
             } else {
-                this.visit(left);
-            }
-        }
-
-        if (node.rest) {
-            const rest = node.rest as SplatNode;
-
-            if (node.rights.length > 0) {
-                const flags = ExpandArrayFlag.SPLAT_FLAG | ExpandArrayFlag.POSTARG_FLAG;
-                this.iseq.expandarray(1, flags);
+                parents.putobject({ type: "RValue", value: ObjectClass });
             }
 
-            if (rest.expression instanceof IndexTargetNode) {
-                const pos_node = stack_positions.shift()!
-                const pos = pos_node.instruction as unknown as StackPosition;
-                const stack_pos = this.find_stack_position(pos_node);
-
-                for (let i = 0; i < pos.delta; i ++) {
-                    this.iseq.topn(stack_pos - 1);
-                }
-
-                this.iseq.topn(2);
-                this.iseq.send(MethodCallData.create("[]=", 2), null);
-                this.iseq.pop();
-                this.iseq.pop();
-            } else if (rest.expression) {
-                this.visit(rest.expression);
-            }
-        }
-
-        for (const right of node.rights) {
-            if (right instanceof IndexTargetNode) {
-                const pos_node = stack_positions.shift()!
-                const pos = pos_node.instruction as unknown as StackPosition;
-                const stack_pos = this.find_stack_position(pos_node);
-
-                for (let i = 0; i < pos.delta; i ++) {
-                    this.iseq.topn(stack_pos - 1);
-                }
-
-                this.iseq.topn(2);
-                this.iseq.send(MethodCallData.create("[]=", 2), null);
-                this.iseq.pop();
-                this.iseq.pop();
+            if (state === null) {
+                writes.swap();
             } else {
-                this.visit(right);
+                writes.topn(1);
+                this.multi_target_state_push(state, writes.tail_node as InsnNode<TopN>, 1);
             }
+
+            writes.setconstant(node.name!);
+
+            if (state !== null) {
+                cleanup.pop();
+            }
+        } else if (node instanceof CallTargetNode) {
+            // Call targets have a parent expression that is the receiver of the
+            // method being called. This needs to be compiled first into the parents
+            // sequence. These nodes cannot have arguments, so the method call is
+            // compiled with a single argument which represents the value being
+            // written.
+            //
+            //     for i.j in []; end
+            //
+            const receiver = this.capture(() => {
+                this.visit(node.receiver);
+            });
+
+            parents.push_list(receiver);
+
+            let safe_label: Label | null = null;
+
+            if (node.isSafeNavigation()) {
+                safe_label = new Label();
+                parents.dup();
+                parents.branchnil(safe_label);
+            }
+
+            if (state !== null) {
+                writes.topn(1);
+                this.multi_target_state_push(state, writes.tail_node as InsnNode<TopN>, 1);
+                writes.swap();
+            }
+
+            let flags = CallDataFlag.ARGS_SIMPLE;
+
+            if (node.isIgnoreVisibility()) {
+                flags |= CallDataFlag.FCALL;
+            }
+
+            writes.send(new MethodCallData(node.name, 1, flags, null), null);
+
+            if (safe_label !== null && state === null) {
+                writes.push(safe_label);
+            }
+
+            writes.pop();
+
+            if (safe_label !== null && state !== null) {
+                writes.push(safe_label);
+            }
+
+            if (state !== null) {
+                cleanup.pop();
+            }
+        } else if (node instanceof IndexTargetNode) {
+            // Index targets have a parent expression that is the receiver of the
+            // method being called and any additional arguments that are being
+            // passed along with the value being written. The receiver and arguments
+            // both need to be on the stack. Note that this is even more complicated
+            // by the fact that these nodes can hold a block using the unary &
+            // operator.
+            //
+            //     for i[:j] in []; end
+            //
+            const receiver = this.capture(() => {
+                this.visit(node.receiver);
+            });
+
+            parents.push_list(receiver);
+
+            const call_data = MethodCallData.create("[]");
+
+            if (node.arguments_) {
+                const args = this.capture(() => {
+                    this.populate_call_data_args(node.arguments_!, call_data);
+                });
+
+                parents.push_list(args);
+            }
+
+            if (state !== null) {
+                writes.topn(call_data.argc + 1);
+                this.multi_target_state_push(state, writes.tail_node as InsnNode<TopN>, call_data.argc + 1);
+
+                if (call_data.argc === 0) {
+                    writes.swap();
+                } else {
+                    for (let index = 0; index < call_data.argc; index ++) {
+                        writes.topn(call_data.argc + 1);
+                    }
+
+                    writes.topn(call_data.argc + 1);
+                }
+            }
+
+            // The argc that we're going to pass to the send instruction is the
+            // number of arguments + 1 for the value being written. If there's a
+            // splat, then we need to insert newarray and concatarray instructions
+            // after the arguments have been written.
+            let ci_argc = call_data.argc + 1;
+
+            if (call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
+                ci_argc --;
+                writes.newarray(1);
+                writes.concatarray();
+            }
+
+            writes.send(call_data, null);
+            writes.pop();
+
+            if (state !== null) {
+                if (call_data.argc !== 0) {
+                    writes.pop();
+                }
+
+                for (let index = 0; index < call_data.argc + 1; index ++) {
+                    cleanup.pop();
+                }
+            }
+        } else if (node instanceof MultiTargetNode) {
+            // Multi target nodes represent a set of writes to multiple variables.
+            // The parent expressions are the combined set of the parent expressions
+            // of its inner target nodes.
+            //
+            //     for i, j in []; end
+            //
+            let before_position: number = 0;
+
+            if (state !== null) {
+                before_position = state.position;
+                state.position --;
+            }
+
+            this.compile_multi_target_node(iseq, node, parents, writes, cleanup, state);
+            if (state !== null) state.position = before_position;
+        } else if (node instanceof SplatNode) {
+            // Splat nodes capture all values into an array. They can be used
+            // as targets in assignments or for loops.
+            //
+            //     for *x in []; end
+            //
+            if (node.expression !== null) {
+                this.compile_target_node(iseq, node.expression, parents, writes, cleanup, state);
+            }
+        } else {
+            throw new Error(`Unexpected node type: ${node ? node.constructor.name : "null"}`);
+        }
+    }
+
+    /**
+     * Push a new state node onto the multi target state.
+     */
+    multi_target_state_push(state: MultiTargetState, topn: InsnNode<TopN>, stack_size: number) {
+        const state_node = new MultiTargetStateNode();
+        state_node.topn = topn;
+        state_node.stack_index = state.stack_size + 1;
+        state_node.stack_size = stack_size;
+        state_node.position = state.position;
+        state_node.next = null;
+
+        if (state.head === null) {
+            state.head = state_node;
+            state.tail = state_node;
+        } else {
+            state.tail!.next = state_node;
+            state.tail = state_node;
         }
 
-        // wtf?
-        if (node.rights.length > 0) {
-            const count =
-                node.rights.length +
-                node.lefts.length +
-                (node.rest ? 1 : 0) +
-                (node.value as ArrayNode).elements?.length || 0;
+        state.stack_size += stack_size;
+    }
 
-            this.iseq.setn(count);
-            this.iseq.adjuststack(count);
+    /**
+     * Walk through a multi target state's linked list and update the topn
+     * instructions that were inserted into the write sequence to make sure they can
+     * correctly retrieve their parent expressions.
+     */
+    multi_target_state_update(state: MultiTargetState) {
+        // If nothing was ever pushed onto the stack, then we don't need to do any
+        // kind of updates.
+        if (state.stack_size == 0) return;
+
+        let current = state.head;
+
+        while (current != null) {
+            const offset = state.stack_size - current.stack_index + current.position;
+            current.topn!.instruction.index = offset;
+
+            // stack_size will be > 1 in the case that we compiled an index target
+            // and it had arguments. In this case, we use multiple topn instructions
+            // to grab up all of the arguments, so those offsets need to be updated
+            // as well.
+            if (current.stack_size > 1) {
+                let insn = current.topn!;
+
+                for (let index = 1; index < current.stack_size; index += 1) {
+                    insn = insn.next_node as InsnNode<TopN>;
+                    // RUBY_ASSERT(IS_INSN(element));
+
+                    // RUBY_ASSERT(insn->insn_id == BIN(topn));
+
+                    insn.instruction.index = offset;
+                }
+            }
+
+            current = current.next;
         }
     }
 
@@ -2221,7 +2474,7 @@ export class Compiler extends Visitor {
             for (const argument of node.arguments_.arguments_) {
                 if (argument instanceof SplatNode) {
                     flags = CallDataFlag.ARGS_SPLAT;
-                    break;
+                } else if (argument instanceof KeywordHashNode) {
                 }
             }
 
@@ -2697,11 +2950,15 @@ export class Compiler extends Visitor {
 
             if (val.parent == null) {
                 this.iseq.putobject({type: "RValue", value: ObjectClass});
+                this.iseq.defined(DefinedType.CONST_FROM, val.name, this.iseq.make_string("constant", Encoding.us_ascii, true));
             } else {
+                // 1. Check if the parent (DidYouMean) is defined
                 this.with_used(true, () => this.visit(val.parent!));
             }
+                this.iseq.defined(DefinedType.CONST_FROM, val.name, this.iseq.make_string("constant", Encoding.us_ascii, true));
 
             this.iseq.defined(DefinedType.CONST_FROM, val.name, this.iseq.make_string("constant", Encoding.us_ascii, true));
+                this.iseq.push(end_label);
         } else if (type === "ConstantReadNode") {
             this.iseq.putnil(); // defined instruction always pops one value
             this.iseq.defined(DefinedType.CONST, (value as ConstantReadNode).name, this.iseq.make_string("constant", Encoding.us_ascii, true));
@@ -2897,5 +3154,11 @@ export class Compiler extends Visitor {
 
     private get used(): boolean {
         return this.used_stack[this.used_stack.length - 1];
+    }
+
+    private capture(cb: () => void): InstructionList {
+        const dummy_iseq = new InstructionSequence(this.iseq.name, this.iseq.file, this.iseq.absolute_path, this.iseq.location, this.iseq.type, this.iseq.lexical_scope, this.iseq.parent_iseq, this.iseq.options);
+        this.with_child_iseq(dummy_iseq, cb);
+        return dummy_iseq;
     }
 }

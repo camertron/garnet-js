@@ -1,7 +1,8 @@
 import { CallData } from "./call_data";
-import { Class, ExecutionContext, RValue } from "./garnet";
+import { Class, RValue } from "./garnet";
 import Instruction, { ValueType } from "./instruction";
-import { CatchBreak, CatchNext, CatchRedo, CatchRescue, InstructionList, InstructionSequence, Label, StackPosition } from "./instruction_sequence";
+import { InsnNode, InstructionList, LineNumberNode } from "./instruction_list";
+import { CatchBreak, CatchNext, CatchRedo, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
 import { RubyString } from "./runtime/string";
 import { Symbol } from "./runtime/symbol";
 
@@ -146,47 +147,50 @@ export class Disassembler {
         const events: string[] = [];
         const lines: number[] = [];
 
-        insns.each((insn) => {
-            if (insn instanceof Label) {
-                // skip
-            } else if (typeof insn === 'number') {
-                lines.push(insn);
-            } else if (insn instanceof StackPosition) {
-                // what do we do here?
-            } else {
-                this.output += `${this.current_prefix}${insn.pos.toString().padStart(4, "0")} `;
+        insns.each((inode) => {
+            switch (inode.kind) {
+                case "lineno":
+                    const lineno = (inode as LineNumberNode).lineno;
+                    lines.push(lineno);
+                    break;
 
-                const disasm = insn.disasm(this);
-                this.output += disasm;
+                case "insn":
+                    const insn = (inode as InsnNode).instruction;
+                    this.output += `${this.current_prefix}${insn.pos.toString().padStart(4, "0")} `;
 
-                if (lines.length > 0) {
-                    if (disasm.length < 65) {
-                        this.output += " ".repeat(65 - disasm.length);
+                    const disasm = insn.disasm(this);
+                    this.output += disasm;
+
+                    if (lines.length > 0) {
+                        if (disasm.length < 65) {
+                            this.output += " ".repeat(65 - disasm.length);
+                        }
+                    } else if (events.length > 0) {
+                        if (disasm.length < 39) {
+                            this.output += " ".repeat(39 - disasm.length);
+                        }
                     }
-                } else if (events.length > 0) {
-                    if (disasm.length < 39) {
-                        this.output += " ".repeat(39 - disasm.length);
+
+                    if (lines.length > 0) {
+                        this.output += `(${lines[lines.length - 1].toString().padStart(4, " ")})`;
+                        lines.splice(0);
                     }
-                }
 
-                if (lines.length > 0) {
-                    this.output += `(${lines[lines.length - 1].toString().padStart(4, " ")})`;
-                    lines.splice(0);
-                }
+                    if (events.length > 0) {
+                        this.output += `[${events.join("")}]`;
+                        events.splice(0);
+                    }
 
-                if (events.length > 0) {
-                    this.output += `[${events.join("")}]`;
-                    events.splice(0);
-                }
+                    // A hook here to allow for custom formatting of instructions after
+                    // the main body has been processed.
+                    if (cb) {
+                        cb(insn, length);
+                    }
 
-                // A hook here to allow for custom formatting of instructions after
-                // the main body has been processed.
-                if (cb) {
-                    cb(insn, length);
-                }
+                    this.output += "\n";
+                    length += insn.length();
 
-                this.output += "\n";
-                length += insn.length();
+                    break;
             }
         });
     }
@@ -253,6 +257,6 @@ export class Disassembler {
             this.output += `${this.current_prefix}${locals.join("    ")}\n`;
         }
 
-        this.format_insns_bang(iseq.insns);
+        this.format_insns_bang(iseq);
     }
 }

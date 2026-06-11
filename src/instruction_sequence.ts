@@ -1,142 +1,16 @@
-import { BlockCallData, MethodCallData } from "./call_data";
-import AdjustStack from "./insns/adjuststack";
-import AnyToString from "./insns/any_to_string";
-import BranchIf from "./insns/branchif";
-import { BranchNil } from "./insns/branchnil";
-import BranchUnless from "./insns/branchunless";
-import ConcatStrings from "./insns/concat_strings";
 import DefineClass from "./insns/defineclass";
-import Defined, { DefinedType } from "./insns/defined";
 import DefineMethod from "./insns/definemethod";
 import DefineSMethod from "./insns/definesmethod";
-import Dup from "./insns/dup";
-import DupN from "./insns/dupn";
-import ExpandArray from "./insns/expandarray";
-import GetGlobal from "./insns/get_global";
-import GetConstant from "./insns/getconstant";
-import GetInstanceVariable from "./insns/getinstancevariable";
-import GetLocal from "./insns/getlocal";
-import GetLocalWC0 from "./insns/getlocal_wc_0";
-import GetLocalWC1 from "./insns/getlocal_wc_1";
-import GetSpecial, { GetSpecialType } from "./insns/getspecial";
-import Intern from "./insns/intern";
-import InvokeBlock from "./insns/invokeblock";
 import InvokeSuper from "./insns/invokesuper";
-import { Jump } from "./insns/jump";
-import Leave from "./insns/leave";
-import NewArray from "./insns/new_array";
-import NewHash from "./insns/newhash";
-import NewRange from "./insns/newrange";
-import ObjToString from "./insns/obj_to_string";
 import Once from "./insns/once";
-import Pop from "./insns/pop";
-import PutNil from "./insns/putnil";
-import PutObject from "./insns/putobject";
-import PutObjectInt2Fix0 from "./insns/putobject_int2fix_0";
-import PutObjectInt2Fix1 from "./insns/putobject_int2fix_1";
-import PutSelf from "./insns/putself";
-import PutSpecialObject, { SpecialObjectType } from "./insns/putspecialobject";
-import PutString from "./insns/putstring";
 import Send from "./insns/send";
-import SetGlobal from "./insns/set_global";
-import SetConstant from "./insns/setconstant";
-import SetInstanceVariable from "./insns/setinstancevariable";
-import SetLocal from "./insns/setlocal";
-import SetLocalWC0 from "./insns/setlocal_wc_0";
-import SetLocalWC1 from "./insns/setlocal_wc_1";
-import SetN from "./insns/setn";
-import Swap from "./insns/swap";
-import Throw from "./insns/throw";
-import TopN from "./insns/topn";
-import ToRegexp from "./insns/toregexp";
 import Instruction, { ValueType } from "./instruction";
 import { LocalTable, Lookup } from "./local_table";
 import { CompilerOptions } from "./compiler_options";
-import { Module, ObjectClass, RValue } from "./runtime";
-import { Object } from "./runtime/object";
-import { RubyString as RubyString } from "./runtime/string";
-import CheckKeyword from "./insns/checkkeyword";
-import CheckMatch from "./insns/checkmatch";
-import SetClassVariable from "./insns/setclassvariable";
-import GetClassVariable from "./insns/getclassvariable";
-import SplatArray from "./insns/splatarray";
-import GetBlockParamProxy from "./insns/getblockparamproxy";
-import ConcatArray from "./insns/concatarray";
-import { ParameterMetadata } from "./runtime/parameter-meta";
+import { RValue } from "./runtime";
 import { SourceLocation, LexicalScope } from "./compiler";
-import { ThrowType } from "./execution_context";
 import { Disassembler } from "./disassembler";
-import OptSendWithoutBlock from "./insns/opt_send_without_block";
-import OptPlus from "./insns/opt_plus";
-import OptMult from "./insns/opt_mult";
-
-export class Node {
-    public instruction: Instruction;
-    public next_node: Node | null;
-
-    constructor(instruction: Instruction, next_node: Node | null = null) {
-        this.instruction = instruction;
-        this.next_node = next_node;
-    }
-}
-
-export class StackPosition {
-    public delta: number;
-}
-
-// When the list of instructions is first being created, it's stored as a
-// linked list. This is to make it easier to perform peephole optimizations
-// and other transformations like instruction specialization.
-export class InstructionList {
-    public head_node: Node | null;
-    public tail_node: Node | null;
-
-    constructor() {
-        this.head_node = null;
-        this.tail_node = null;
-    }
-
-    each(cb: (instruction: Instruction) => void) {
-        this.each_node((node: Node) => {
-            cb(node.instruction);
-        });
-    }
-
-    each_node(cb: (node: Node) => void) {
-        let node = this.head_node;
-
-        while (node) {
-            cb(node);
-            node = node.next_node;
-        }
-    }
-
-    push(instruction: Instruction) {
-        let node = new Node(instruction)
-
-        if (this.head_node == null) {
-            this.head_node = node;
-            this.tail_node = node;
-        } else {
-            this.tail_node!.next_node = node
-            this.tail_node = node
-        }
-
-        return node;
-    }
-
-    to_array(): Instruction[] {
-        const result: Instruction[] = [];
-
-        this.each(instruction => {
-            if (!(instruction instanceof StackPosition)) {
-                result.push(instruction);
-            }
-        });
-
-        return result;
-    }
-}
+import { InsnNode, InstructionList, LabelNode } from "./instruction_list";
 
 // This represents the destination of instructions that jump. Initially it
 // does not track its position so that when we perform optimizations the
@@ -147,11 +21,6 @@ export class Label {
     // The slot position of this label in the containing sequence.
     // Only used in disasm output.
     public pos: number = -1;
-
-    // When we're serializing the instruction sequence, we need to be able to
-    // look up the label from the branch instructions and then access the
-    // subsequent node. So we'll store the reference here.
-    public node: Node;
 
     constructor(name: string | null = null) {
         this.name = name;
@@ -377,7 +246,7 @@ type ArgumentOptions = {
     repeated_params: number[] | null; // indices of repeated parameters (e.g., duplicate _ params)
 }
 
-export class InstructionSequence {
+export class InstructionSequence extends InstructionList {
     public name: string;
     public file: string;
     public absolute_path: string;
@@ -392,12 +261,13 @@ export class InstructionSequence {
     public catch_table: CatchTable;
     public local_table: LocalTable;
     public inline_storages: any;
-    public insns: InstructionList;
     public compiled_insns: (Instruction | number | string | Label)[];
     public storage_index: number;
     public stack: Stack;
 
     constructor(name: string, file: string, absolute_path: string, location: SourceLocation | null, type: string, lexical_scope: LexicalScope, parent_iseq: InstructionSequence | null = null, options: CompilerOptions) {
+        super();
+
         this.name = name;
         this.file = file;
         this.absolute_path = absolute_path;
@@ -424,7 +294,6 @@ export class InstructionSequence {
 
         this.local_table = new LocalTable();
         this.inline_storages = {};
-        this.insns = new InstructionList();
         this.storage_index = 0;
         this.stack = new Stack()
 
@@ -435,258 +304,14 @@ export class InstructionSequence {
         return new Label(id);
     }
 
-    putnil() {
-        this.push(new PutNil());
-    }
+    override push(value: Instruction | Label | number) {
+        const node = super.push(value as any);
 
-    putstring(str: string, encoding?: RValue, frozen?: boolean, forcedBinary?: boolean) {
-        this.push(new PutString(this.make_string(str, encoding, Boolean(frozen), Boolean(forcedBinary))));
-    }
-
-    // utility function
-    make_string(str: string, encoding?: RValue, frozen?: boolean, forcedBinary?: boolean): RValue {
-        // we have to look the constant up this way because the compiler does not
-        // support async visitor methods
-        const string_class = ObjectClass.get_data<Module>().constants["String"];
-        const rval = new RValue(string_class, str);
-        if (frozen) rval.freeze();
-        if (forcedBinary) RubyString.get_context(rval).forcedBinary = true;
-        if (encoding) RubyString.set_encoding(rval, encoding);
-        return rval;
-    }
-
-    leave() {
-        this.push(new Leave());
-    }
-
-    putself() {
-        this.push(new PutSelf());
-    }
-
-    putobject(object: ValueType) {
-        if (this.options.operands_unification) {
-            if (object.value === 0 && object.type === "Integer") {
-                this.push(new PutObjectInt2Fix0());
-            } else if (object.value === 1 && object.type === "Integer") {
-                this.push(new PutObjectInt2Fix1());
-            } else {
-                this.push(new PutObject(object));
-            }
-        } else {
-            this.push(new PutObject(object));
+        if (value instanceof Instruction) {
+            this.stack.change_by(-value.pops() + value.pushes());
         }
-    }
 
-    getlocal(index: number, depth: number) {
-        if (this.options.operands_unification) {
-            // Specialize the getlocal instruction based on the depth of the
-            // local variable. If it's 0 or 1, then there's a specialized
-            // instruction that will look at the current scope or the parent
-            // scope, respectively, and requires fewer operands.
-            switch (depth) {
-                case 0:
-                    this.push(new GetLocalWC0(index));
-                    break;
-
-                case 1:
-                    this.push(new GetLocalWC1(index));
-                    break;
-
-                default:
-                    this.push(new GetLocal(index, depth));
-            }
-        } else {
-            this.push(new GetLocal(index, depth));
-        }
-    }
-
-    setlocal(index: number, depth: number) {
-        if (this.options.operands_unification) {
-            // Specialize the setlocal instruction based on the depth of the
-            // local variable. If it's 0 or 1, then there's a specialized
-            // instruction that will write to the current scope or the parent
-            // scope, respectively, and requires fewer operands.
-            switch (depth) {
-                case 0:
-                    this.push(new SetLocalWC0(index));
-                    break;
-
-                case 1:
-                    this.push(new SetLocalWC1(index));
-                    break;
-
-                default:
-                    this.push(new SetLocal(index, depth));
-            }
-        } else {
-            this.push(new SetLocal(index, depth));
-        }
-    }
-
-    setinstancevariable(name: string) {
-        // @TODO figure out inline storage
-        this.push(new SetInstanceVariable(name));
-    }
-
-    getinstancevariable(name: string) {
-        // @TODO figure out inline storage
-        this.push(new GetInstanceVariable(name))
-    }
-
-    setclassvariable(name: string) {
-        this.push(new SetClassVariable(name));
-    }
-
-    getclassvariable(name: string) {
-        this.push(new GetClassVariable(name));
-    }
-
-    getspecial(type: GetSpecialType, number: number) {
-        this.push(new GetSpecial(type, number));
-    }
-
-    newarray(size: number) {
-        this.push(new NewArray(size));
-    }
-
-    expandarray(size: number, flags: number) {
-        this.push(new ExpandArray(size, flags));
-    }
-
-    branchnil(label: Label) {
-        this.push(new BranchNil(label));
-    }
-
-    branchif(label: Label) {
-        this.push(new BranchIf(label));
-    }
-
-    branchunless(label: Label) {
-        this.push(new BranchUnless(label));
-    }
-
-    checkkeyword(keyword_bits_index: number, keyword_index: number) {
-        this.push(new CheckKeyword(keyword_bits_index, keyword_index));
-    }
-
-    checkmatch(flag: number) {
-        this.push(new CheckMatch(flag));
-    }
-
-    dup() {
-        this.push(new Dup());
-    }
-
-    dupn(size: number) {
-        this.push(new DupN(size));
-    }
-
-    adjuststack(size: number) {
-        this.push(new AdjustStack(size));
-    }
-
-    pop() {
-        this.push(new Pop());
-    }
-
-    jump(label: Label) {
-        this.push(new Jump(label));
-    }
-
-    send(calldata: MethodCallData, block_iseq: InstructionSequence | null) {
-        this.push(new Send(calldata, block_iseq));
-    }
-
-    send_without_block(calldata: MethodCallData) {
-        this.push(new OptSendWithoutBlock(calldata));
-    }
-
-    opt_plus(calldata: MethodCallData) {
-        this.push(new OptPlus(calldata));
-    }
-
-    opt_mult(calldata: MethodCallData) {
-        this.push(new OptMult(calldata));
-    }
-
-    definemethod(name: string, method_iseq: InstructionSequence, parameters_meta: ParameterMetadata[], lexical_scope: LexicalScope) {
-        this.push(new DefineMethod(name, method_iseq, parameters_meta, lexical_scope));
-    }
-
-    definesmethod(name: string, method_iseq: InstructionSequence, parameters_meta: ParameterMetadata[], lexical_scope: LexicalScope) {
-        this.push(new DefineSMethod(name, method_iseq, parameters_meta, lexical_scope));
-    }
-
-    defineclass(name: string, iseq: InstructionSequence, flags: number) {
-        this.push(new DefineClass(name, iseq, flags));
-    }
-
-    getconstant(name: string) {
-        this.push(new GetConstant(name));
-    }
-
-    setconstant(name: string) {
-        this.push(new SetConstant(name));
-    }
-
-    getglobal(name: string) {
-        this.push(new GetGlobal(name));
-    }
-
-    setglobal(name: string) {
-        this.push(new SetGlobal(name));
-    }
-
-    defined(type: DefinedType, name: string, message: RValue) {
-        this.push(new Defined(type, name, message));
-    }
-
-    newhash(length: number) {
-        this.push(new NewHash(length));
-    }
-
-    newrange(exclude_end: boolean) {
-        this.push(new NewRange(exclude_end));
-    }
-
-    swap() {
-        this.push(new Swap());
-    }
-
-    topn(count: number) {
-        this.push(new TopN(count));
-    }
-
-    setn(count: number) {
-        this.push(new SetN(count));
-    }
-
-    invokeblock(calldata: BlockCallData) {
-        this.push(new InvokeBlock(calldata))
-    }
-
-    invokesuper(calldata: MethodCallData, block_iseq: InstructionSequence | null) {
-        this.push(new InvokeSuper(calldata, block_iseq));
-    }
-
-    throw(type: ThrowType) {
-        this.push(new Throw(type));
-    }
-
-    push(value: any): any {
-        const node = this.insns.push(value);
-
-        if (value.constructor == Array || value.constructor == Number || value.constructor == String) {
-          return value;
-        } else if (value instanceof Label) {
-          value.node = node;
-          return value;
-        } else if (value instanceof StackPosition) {
-            return node;
-        } else {
-          this.stack.change_by(-value.pops + value.pushes)
-          return value
-        }
+        return node;
     }
 
     local_variable(name: string, depth: number = 0): Lookup | null {
@@ -699,42 +324,6 @@ export class InstructionSequence {
         } else {
             return null;
         }
-    }
-
-    putspecialobject(type: SpecialObjectType) {
-        this.push(new PutSpecialObject(type));
-    }
-
-    objtostring(calldata: MethodCallData) {
-        this.push(new ObjToString(calldata));
-    }
-
-    anytostring() {
-        this.push(new AnyToString());
-    }
-
-    toregexp(flags: number, size: number) {
-        this.push(new ToRegexp(flags, size));
-    }
-
-    concatstrings(count: number) {
-        this.push(new ConcatStrings(count));
-    }
-
-    intern() {
-        this.push(new Intern());
-    }
-
-    splatarray(flag: boolean) {
-        this.push(new SplatArray(flag));
-    }
-
-    concatarray() {
-        this.push(new ConcatArray());
-    }
-
-    getblockparamproxy(index: number, depth: number) {
-        this.push(new GetBlockParamProxy(index, depth));
     }
 
     private child_iseq(name: string, coords: SourceLocation, type: string, lexical_scope: LexicalScope): InstructionSequence {
@@ -788,37 +377,45 @@ export class InstructionSequence {
         let length = 0;
         let label_counter = 0;
 
-        this.insns.each((insn) => {
-            if (insn instanceof Label) {
-                insn.patch(`label_${label_counter++}`, length);
-            } else if (typeof insn === 'number' || insn instanceof StackPosition) {
-                // skip
-            } else if (insn instanceof DefineClass) {
-                insn.iseq.compile();
-                insn.patch(length);
-                length += insn.length();
-            } else if (insn instanceof DefineMethod || insn instanceof DefineSMethod) {
-                insn.iseq.compile!();
-                insn.patch(length);
-                length += insn.length();
-            } else if (insn instanceof InvokeSuper || insn instanceof Send) {
-                if (insn.block_iseq) {
-                    insn.block_iseq.compile();
-                }
+        this.each((inode) => {
+            switch (inode.kind) {
+                case "label":
+                    const label = (inode as LabelNode).label;
+                    label.patch(`label_${label_counter++}`, length);
+                    break;
 
-                insn.patch(length);
-                length += insn.length();
-            } else if (insn instanceof Once) {
-                insn.iseq.compile();
-                insn.patch(length);
-                length += insn.length();
-            } else {
-                insn.patch(length);
-                length += insn.length();
+                case "insn":
+                    const insn: Instruction = (inode as InsnNode).instruction;
+
+                    if (insn instanceof DefineClass) {
+                        insn.iseq.compile();
+                        insn.patch(length);
+                        length += insn.length();
+                    } else if (insn instanceof DefineMethod || insn instanceof DefineSMethod) {
+                        insn.iseq.compile!();
+                        insn.patch(length);
+                        length += insn.length();
+                    } else if (insn instanceof InvokeSuper || insn instanceof Send) {
+                        if (insn.block_iseq) {
+                            insn.block_iseq.compile();
+                        }
+
+                        insn.patch(length);
+                        length += insn.length();
+                    } else if (insn instanceof Once) {
+                        insn.iseq.compile();
+                        insn.patch(length);
+                        length += insn.length();
+                    } else {
+                        insn.patch(length);
+                        length += insn.length();
+                    }
+
+                    break;
             }
         });
 
-        this.compiled_insns = this.insns.to_array();
+        this.compiled_insns = this.to_array();
     }
 
     disasm(): string {
