@@ -68,6 +68,21 @@ export const init = async () => {
         return await Object.send(ExecutionContext.current.globals["$stdout"], "puts", args);
     });
 
+    mod.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
+        const name = self.klass.get_data<Class>().full_name;
+        let parts = [`${name}:${Object.object_id_to_str(self.object_id)}`];
+
+        if (self.ivars) {
+            for (const ivar_name of self.ivars.keys()) {
+                const ivar = self.iv_get(ivar_name);
+                const inspect_str = (await Object.send(ivar, "inspect")).get_data<string>();
+                parts.push(`${ivar_name}=${inspect_str}`)
+            }
+        }
+
+        return RubyString.new(`#<${parts.join(" ")}>`)
+    });
+
     mod.define_native_method("require", async (_self: RValue, args: RValue[]): Promise<RValue> => {
         const path = args[0];
         await Runtime.assert_type(path, await RubyString.klass());
