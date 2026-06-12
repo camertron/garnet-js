@@ -120,34 +120,19 @@ import { Visitor } from "@ruby/prism/src/visitor";
 import { Lookup } from "./local_table";
 import { Module, ObjectClass, Qnil, Qtrue, RValue } from "./runtime";
 import { DefineClassFlags } from "./insns/defineclass";
-import PutSpecialObject, { SpecialObjectType } from "./insns/putspecialobject";
-import ExpandArray, { ExpandArrayFlag } from "./insns/expandarray";
 import { Regexp } from "./runtime/regexp";
 import { DefinedType } from "./insns/defined";
 import { GetSpecialType } from "./insns/getspecial";
 import { SyntaxError } from "./errors";
 import { ParameterMetadata, ParametersMetadataBuilder } from "./runtime/parameter-meta";
-import Instruction from "./instruction";
 import { Encoding } from "./runtime/encoding";
 import { ThrowType } from "./execution_context";
 import { CheckMatchType } from "./insns/checkmatch";
 import { MultiTargetState, MultiTargetStateNode } from "./insns/compiler/multi_targets";
-import Dup from "./insns/dup";
-import SetN from "./insns/setn";
 import TopN from "./insns/topn";
-import SetLocal from "./insns/setlocal";
-import SetClassVariable from "./insns/setclassvariable";
-import SetConstant from "./insns/setconstant";
-import SetGlobal from "./insns/set_global";
-import SetInstanceVariable from "./insns/setinstancevariable";
-import PutObject from "./insns/putobject";
-import Swap from "./insns/swap";
-import Pop from "./insns/pop";
-import { BranchNil } from "./insns/branchnil";
-import Send from "./insns/send";
-import NewArray from "./insns/new_array";
-import ConcatArray from "./insns/concatarray";
 import { InsnNode, InstructionList } from "./instruction_list";
+import { ExpandArrayFlag } from "./insns/expandarray";
+import { SpecialObjectType } from "./insns/putspecialobject";
 
 export type ParseLocal = {
     name: string
