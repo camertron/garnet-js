@@ -541,7 +541,7 @@ export class ExecutionContext {
 
         while (current) {
             if (frame_idx >= start) {
-                backtrace.push(`${current.iseq.file}:${current.line} in ${current.iseq.name}`);
+                backtrace.push(`${current.iseq.file}:${current.line}:in \`${current.iseq.name}'`);
             }
 
             current = current.parent;
@@ -569,6 +569,22 @@ export class ExecutionContext {
         }
 
         stdout.puts(`${backtrace[0]}: ${e.message} (${e.constructor.name})`);
+
+        for (let i = 1; i < backtrace.length; i ++) {
+            stdout.puts(`        ${backtrace[i]}`);
+        }
+    }
+
+    static print_ruby_error_backtrace(e: RubyError) {
+        const backtrace = e.backtrace;
+        const stdout = STDOUT.get_data<IO>();
+
+        if (!backtrace || backtrace.length === 0) {
+            stdout.puts(`${e.message} (${e.name})`);
+            return;
+        }
+
+        stdout.puts(`${backtrace[0]}: ${e.message} (${e.name})`);
 
         for (let i = 1; i < backtrace.length; i ++) {
             stdout.puts(`        ${backtrace[i]}`);

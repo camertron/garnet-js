@@ -1,4 +1,4 @@
-import { Qnil, RValue, Runtime, init as initRuntime } from "./runtime";
+import { RValue, Runtime, init as initRuntime } from "./runtime";
 import { ExecutionContext } from "./execution_context";
 import { vmfs } from "./vmfs";
 import { Compiler } from "./compiler";
@@ -89,7 +89,7 @@ export async function evaluate(code: string, path?: string, absolute_path?: stri
                 return await Integer.get(0);
             }
 
-            ExecutionContext.print_backtrace(e);
+            ExecutionContext.print_ruby_error_backtrace(e);
         } else if (e instanceof RValue) {
             // jesus christ improve this crap
             if (e.get_data<any>() instanceof RubyError) {
