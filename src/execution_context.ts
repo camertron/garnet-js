@@ -657,6 +657,18 @@ export class ExecutionContext {
 
     async run_top_frame(iseq: InstructionSequence, stack_index?: number): Promise<RValue> {
         const new_top_frame = new TopFrame(iseq, stack_index);
+
+        ObjectClass.get_data<Class>().constants["TOPLEVEL_BINDING"] = new RValue(
+            await Binding.klass(),
+            new Binding(
+                Main,
+                new_top_frame.nesting,
+                ExecutionContext.current.stack,
+                stack_index || 0,
+                null
+            )
+        );
+
         const result = await this.run_frame(new_top_frame, () => {
             // @TODO: only set items on this.top_locals if they have been defined
             // for (const local of new_top_frame.iseq.local_table.locals) {
