@@ -14,7 +14,12 @@ export const init = async () => {
             const message = self.get_data<IRubyError>().message;
 
             if (message instanceof RValue) {
-                return message;
+                if (message === Qnil) {
+                    const klass = (await self.get_data<IRubyError>().ruby_class()).get_data<Class>();
+                    return RubyString.new(klass.full_name);
+                } else {
+                    return message;
+                }
             } else {
                 return await RubyString.new(message);
             }
