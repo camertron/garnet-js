@@ -1,9 +1,10 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Qnil, Qtrue, RValue, Runtime } from "../runtime";
+import { Class, NilClass, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { Object } from "../runtime/object"
 import { RubyArray } from "../runtime/array";
 import { Disassembler } from "../disassembler";
+import { TypeError } from "../errors";
 
 export enum ExpandArrayFlag {
     SPLAT_FLAG = 0x01,
@@ -28,7 +29,17 @@ export default class ExpandArray extends Instruction {
             // dup
             object = await RubyArray.new([...object.get_data<RubyArray>().elements]);
         } else if ((await Object.send(object, "respond_to?", [await Runtime.intern("to_ary"), Qtrue])).is_truthy()) {
-            object = await Object.send(object, "to_ary");
+            const ary = await Object.send(object, "to_ary");
+
+            if (ary.klass == await RubyArray.klass()) {
+                object = ary;
+            } else if (ary.klass === NilClass) {
+                object = await RubyArray.new([object]);
+            } else {
+                const class_name = object.klass.get_data<Class>().name;
+                const ary_class_name = ary.klass.get_data<Class>().name;
+                throw new TypeError(`can't convert ${class_name} to Array (${class_name}#to_ary gives ${ary_class_name})`);
+            }
         } else {
             object = await RubyArray.new([object]);
         }
