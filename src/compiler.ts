@@ -473,6 +473,7 @@ export class Compiler extends Visitor {
         switch (node.block?.constructor.name) {
             case "BlockNode":
                 block_iseq = this.with_used(true, () => this.visitBlockNode(node.block as BlockNode));
+                call_data.flag |= CallDataFlag.BLOCKISEQ
                 break;
             case "BlockArgumentNode":
                 call_data.flag |= CallDataFlag.ARGS_BLOCKARG;
@@ -518,7 +519,7 @@ export class Compiler extends Visitor {
             call_data.flag |= CallDataFlag.VCALL;
         }
 
-        if (call_data.argc == 1 && !block_iseq) {
+        if (call_data.argc == 1 && !call_data.includes_block()) {
             switch (call_data.mid) {
                 case "+":
                     this.iseq.opt_plus(call_data);
@@ -529,7 +530,7 @@ export class Compiler extends Visitor {
                 default:
                     this.iseq.send_without_block(call_data);
             }
-        } else if (block_iseq) {
+        } else if (call_data.includes_block()) {
             this.iseq.send(call_data, block_iseq);
         } else {
             this.iseq.send_without_block(call_data);
