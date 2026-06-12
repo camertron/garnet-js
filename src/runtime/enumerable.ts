@@ -103,8 +103,6 @@ export const init = async () => {
             await Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, args: RValue[]): Promise<RValue> => {
                 const item = proc ? await proc.call(ExecutionContext.current, args) : args[0];
 
-                if (!item.is_truthy) debugger;
-
                 if (item.is_truthy()) {
                     found = true;
                     throw "any?";
