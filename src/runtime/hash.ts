@@ -11,6 +11,7 @@ import { RubyArray } from "../runtime/array";
 import { hash_string } from "../util/string_utils";
 import { BlockCallData, CallDataFlag, MethodCallData } from "../call_data";
 import { Kernel } from "./kernel";
+import { Args } from "./arg-scanner";
 
 export class Hash {
     static async new(default_value?: RValue, default_proc?: RValue): Promise<RValue> {
@@ -466,7 +467,7 @@ export const init = () => {
 
         klass.define_native_method("fetch", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             const hash = self.get_data<Hash>();
-            const key = args[0];
+            const [key, default_value] = await Args.scan("11", args);
 
             // check if the key exists in the hash (don't use default value)
             if (await hash.has(key)) {
@@ -475,8 +476,8 @@ export const init = () => {
 
             if (block) {
                 return await block.get_data<Proc>().call(ExecutionContext.current, [key]);
-            } else if (args.length > 1) {
-                return args[1];
+            } else if (default_value) {
+                return default_value;
             } else {
                 throw new KeyError(`key not found: ${(await Object.send(key, "inspect")).get_data<string>()}`);
             }
