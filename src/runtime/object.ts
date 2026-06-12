@@ -1,7 +1,7 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
 import { FrozenError } from "../errors";
 import { ExecutionContext } from "../execution_context";
-import { Callable, Class, KernelModule, ObjectClass, RValue, Runtime, Qtrue, Qfalse, Qnil, Module } from "../runtime";
+import { Callable, Class, KernelModule, ObjectClass, RValue, Runtime, Qtrue, Qfalse, Qnil, Module, Main } from "../runtime";
 import { Symbol } from "./symbol";
 import { RubyString } from "../runtime/string";
 import { Hash } from "./hash";
@@ -191,6 +191,10 @@ export const init = async () => {
         klass.include(KernelModule);
 
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
+            if (self === Main) {
+                return RubyString.new("main");
+            }
+
             const name = self.klass.get_data<Class>().full_name;
             let parts = [`${name}:${Object.object_id_to_str(self.object_id)}`];
 
