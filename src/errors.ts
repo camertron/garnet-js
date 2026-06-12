@@ -73,6 +73,47 @@ export const init = async () => {
         klass.define_native_method("backtrace_locations", (self: RValue): RValue => {
             return self.get_data<IRubyError>().backtrace_locations_rval;
         });
+
+        klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
+            const name = (await self.get_data<IRubyError>().ruby_class()).get_data<Class>().name;
+            const message = (await Object.send(self, "to_s")).get_data<string>();
+
+            if (message.length > 0) {
+                return RubyString.new(`#<${name}: ${message}>`);
+            } else {
+                const klass = (await self.get_data<IRubyError>().ruby_class()).get_data<Class>();
+                return RubyString.new(klass.name || klass.full_name);
+            }
+        });
+
+        klass.define_native_method("==", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const error = self.get_data<IRubyError>();
+            const [other_rval] = await Args.scan("1", args);
+
+            if (self.object_id == other_rval.object_id) {
+                return Qtrue;
+            }
+
+            if (self.klass !== other_rval.klass) {
+                return Qfalse;
+            }
+
+            const self_message = (await Object.send(self, "message"));
+            const other_message = (await Object.send(other_rval, "message"));
+
+            if (!(await Object.send(self_message, "==", [other_message])).is_truthy()) {
+                return Qfalse;
+            }
+
+            const self_backtrace = error.backtrace_rval;
+            const other_backtrace = await Object.send(other_rval, "backtrace");
+
+            if (!(await Object.send(self_backtrace, "==", [other_backtrace])).is_truthy()) {
+                return Qfalse;
+            }
+
+            return Qtrue;
+        });
     });
 
     const NoMemoryErrorClass = Runtime.define_class("NoMemoryError", ExceptionClass);
