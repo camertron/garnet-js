@@ -29,7 +29,7 @@
     "test": "node --experimental-vm-modules node_modules/.bin/jest --no-cache"
   },
   "devDependencies": {
-    "@camertron/garnet-js": "link:../../",
+    "@camertron/garnet-js": "file:../../",
     "@garnet-js/encoding-shift-jis": "./",
     "@rollup/plugin-node-resolve": "^14.0.1",
     "@rollup/plugin-typescript": "^8.5.0",
