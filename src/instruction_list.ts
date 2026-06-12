@@ -455,28 +455,20 @@ export class InstructionList {
     }
 
     push_list(list2: InstructionList) {
-        if (list2.head_node.next_node) {
-            // must not loop
-            if (list2.is_empty()) {
-                throw new Error("Expected list to not be empty");
-            }
-
-            this.tail_node.next_node = list2.head_node.next_node;
-            this.tail_node = list2.tail_node;
-        } else {
-            if (!list2.is_empty()) {
-                throw new Error("Expected list to be empty");
-            }
-        }
+        this.tail_node.next_node = list2.head_node;
+        this.tail_node = list2.tail_node;
     }
 
-    to_array(): Array<Instruction | number> {
-        const result: Array<Instruction | number> = [];
+    to_array(): Array<Instruction | Label | number> {
+        const result: Array<Instruction | Label | number> = [];
 
         this.each(node => {
             switch (node.kind) {
                 case "insn":
                     result.push((node as InsnNode).instruction);
+                    break;
+                case "label":
+                    result.push((node as LabelNode).label);
                     break;
                 case "lineno":
                     result.push((node as LineNumberNode).lineno);
