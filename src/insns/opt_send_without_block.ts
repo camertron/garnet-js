@@ -1,13 +1,12 @@
-import { MethodCallData, CallDataFlag } from "../call_data";
-import { extract_kwargs_from_forwarded_args } from "../util/kwargs_utils";
+import { MethodCallData } from "../call_data";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Object } from "../runtime/object"
-import { Hash } from "../runtime/hash";
 import { Disassembler } from "../disassembler";
+import Send from "./send";
 
 export default class OptSendWithoutBlock extends Instruction {
     public call_data: MethodCallData;
+    private _send: Send;
 
     constructor(call_data: MethodCallData) {
         super();
@@ -15,31 +14,27 @@ export default class OptSendWithoutBlock extends Instruction {
     }
 
     async call(context: ExecutionContext): Promise<ExecutionResult> {
-        const argc = this.call_data.argc + 1;
-        let [receiver, ...args] = context.popn(argc);
+        return this.send.call(context);
+    }
 
-        // Extract kwargs from the last positional arg if KW_SPLAT_FWD is set.
-        // This happens when arguments are forwarded with `...`.
-        let kwargs: Hash | undefined = undefined;
-        if (this.call_data.has_flag(CallDataFlag.KW_SPLAT_FWD)) {
-            [args, kwargs] = await extract_kwargs_from_forwarded_args(args);
+    get send(): Send {
+        if (!this._send) {
+            this._send = new Send(this.call_data, null);
         }
 
-        const result = await Object.send(receiver, this.call_data, args, kwargs);
-        context.push(result);
-        return null;
+        return this._send;
     }
 
     pops(): number {
-        return this.call_data.argc + 1;
+        return this.send.pops();
     }
 
     pushes(): number {
-        return 1;
+        return this.send.pushes();
     }
 
     length(): number {
-        return this.call_data.argc + 1;
+        return this.send.length();
     }
 
     disasm(fmt: Disassembler): string {
