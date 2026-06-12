@@ -1498,7 +1498,6 @@ export class Compiler extends Visitor {
         }
 
         if (node.block) {
-            this.iseq.argument_options.block_start = this.iseq.argument_size;
             this.with_used(true, () => this.visit(node.block!));
             this.iseq.argument_size ++;
         }
@@ -1511,9 +1510,9 @@ export class Compiler extends Visitor {
         }
     }
 
-    override visitForwardingParameterNode(node: ForwardingParameterNode): void {
+    override visitForwardingParameterNode(_node: ForwardingParameterNode): void {
         this.iseq.local_table.plain("*")
-        this.iseq.local_table.block("&")
+        const block_idx = this.iseq.local_table.block("&")
         this.iseq.local_table.plain("...")
 
         // forwarding all parameters implies forwarding kwargs and a block
@@ -1523,7 +1522,7 @@ export class Compiler extends Visitor {
         this.iseq.argument_options.keyword_rest_start = -1;
         this.iseq.argument_size ++;
 
-        this.iseq.argument_options.block_start = this.iseq.argument_size;
+        this.iseq.argument_options.block_start = block_idx;
         this.iseq.argument_size ++;
     }
 
@@ -1628,7 +1627,7 @@ export class Compiler extends Visitor {
     }
 
     override visitBlockParameterNode(node: BlockParameterNode) {
-        // no-op
+        this.iseq.argument_options.block_start = this.iseq.local_table.block(node.name || "&");
     }
 
     override visitBlockArgumentNode(node: BlockArgumentNode) {
