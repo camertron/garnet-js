@@ -89,6 +89,7 @@ import {
     OrNode,
     ParametersNode,
     ParenthesesNode,
+    PreExecutionNode,
     ProgramNode,
     RangeNode,
     RegularExpressionNode,
@@ -328,13 +329,14 @@ export class Compiler extends Visitor {
                 // We need to do some preprocessing here to grab up all of the BEGIN{}
                 // nodes. We could do this instead by manipulating our linked list of
                 // instructions, but it's easier to just do it here.
-                const preexes: any[] = [];
+                const preexes: PreExecutionNode[] = [];
                 let index = 0;
 
                 while (index < statements.length) {
                     const statement = statements[index];
-                    if (statement.constructor.name == "PreExecutionNode") {
-                        preexes.push(statements[index]);
+
+                    if (statement instanceof PreExecutionNode) {
+                        preexes.push(statement);
                         statements.splice(index, 1);
                     } else {
                         index ++;
@@ -360,6 +362,14 @@ export class Compiler extends Visitor {
         return top_iseq;
     }
 
+    override visitPreExecutionNode(node: PreExecutionNode): void {
+        if (node.statements) {
+            this.visit(node.statements);
+        } else {
+            if (this.used) this.iseq.putnil();
+        }
+    }
+
     override visitMissingNode(_node: MissingNode): void {
         // no-op: syntax errors are handled in the compile() method, so this is
         // only here just in case
@@ -367,6 +377,7 @@ export class Compiler extends Visitor {
 
     private split_rest_last<T>(elements: T[]): [T[], T] {
         const last = elements[elements.length - 1];
+
         if (elements.length <= 1) {
             return [[], last];
         } else {
