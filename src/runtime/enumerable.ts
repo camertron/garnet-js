@@ -8,6 +8,8 @@ import { ArgumentError, NameError, StopIteration } from "../errors";
 import { Enumerator, Lazy } from "./enumerator";
 import { Hash } from "./hash";
 import { schwartzian_quick_sort } from "../util/array_utils";
+import { Args } from "./arg-scanner";
+import { early_exit_handler, ExitEarlyFn } from "../util/early-exit";
 
 export class Enumerable {
     private static module_: RValue;
@@ -263,29 +265,21 @@ export const init = async () => {
         } else {
             // @TODO: return an Enumerator
             return Qnil;
-        }
+    }
     });
 
     mod.define_native_method("include?", async (self: RValue, args: RValue[]): Promise<RValue> => {
-        const object = args[0];
+        const [object] = await Args.scan("1", args);
 
-        try {
-            await Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, block_args: RValue[]): Promise<RValue> => {
+        return early_exit_handler(async (exit_early: ExitEarlyFn) => {
+            return Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, block_args: RValue[]): Promise<RValue> => {
                 if ((await Object.send(object, "==", [block_args[0]])).is_truthy()) {
-                    throw new BreakError(Qtrue);
+                    exit_early(Qtrue);
                 }
 
                 return Qnil;
             }));
-        } catch (e) {
-            if (e instanceof BreakError) {
-                return e.value;
-            }
-
-            throw e;
-        }
-
-        return Qfalse;
+        });
     });
 
     await mod.alias_method("member?", "include?");
