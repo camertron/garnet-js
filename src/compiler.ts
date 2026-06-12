@@ -74,6 +74,7 @@ import {
     LocalVariableTargetNode,
     LocalVariableWriteNode,
     Location,
+    MissingNode,
     ModuleNode,
     MultiTargetNode,
     MultiWriteNode,
@@ -253,7 +254,15 @@ export class Compiler extends Visitor {
         this.lexical_scope_stack = new LexicalScopeStack();
     }
 
-    static compile(source: string, require_path: string, absolute_path: string, ast: any, line_offset: number = 0, compiler_options?: CompilerOptions): InstructionSequence {
+    static compile(source: string, require_path: string, absolute_path: string, ast: ParseResult, line_offset: number = 0, compiler_options?: CompilerOptions): InstructionSequence {
+        if (ast.errors.length > 0) {
+            const first_syntax_error = ast.errors.find(err => err.level === "syntax");
+
+            if (first_syntax_error) {
+                throw new SyntaxError(first_syntax_error.message);
+            }
+        }
+
         const compiler = new Compiler(source, require_path, absolute_path, line_offset, compiler_options);
 
         return compiler.with_used<InstructionSequence>(true, () => {
@@ -364,6 +373,11 @@ export class Compiler extends Visitor {
 
         top_iseq.compile();
         return top_iseq;
+    }
+
+    override visitMissingNode(_node: MissingNode): void {
+        // no-op: syntax errors are handled in the compile() method, so this is
+        // only here just in case
     }
 
     private split_rest_last<T>(elements: T[]): [T[], T] {
