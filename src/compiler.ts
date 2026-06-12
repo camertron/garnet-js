@@ -3197,8 +3197,6 @@ export class Compiler extends Visitor {
     }
 
     private capture(cb: () => void): InstructionList {
-        const dummy_iseq = new InstructionSequence(this.iseq.name, this.iseq.file, this.iseq.absolute_path, this.iseq.location, this.iseq.type, this.iseq.lexical_scope, this.iseq.parent_iseq, this.iseq.options);
-        this.with_child_iseq(dummy_iseq, cb);
-        return dummy_iseq;
+        return this.iseq.capture(cb);
     }
 }

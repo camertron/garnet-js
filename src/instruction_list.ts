@@ -486,4 +486,26 @@ export class InstructionList {
 
         return result;
     }
+
+    capture(cb: () => void): InstructionList {
+        const old_head = this.head_node;
+        const old_tail = this.tail_node;
+
+        this.head_node = new AnchorNode()
+        this.tail_node = this.head_node;
+
+        try {
+            cb();
+
+            const result = new InstructionList();
+
+            result.head_node = this.head_node;
+            result.tail_node = this.tail_node;
+
+            return result;
+        } finally {
+            this.head_node = old_head;
+            this.tail_node = old_tail;
+        }
+    }
 }
