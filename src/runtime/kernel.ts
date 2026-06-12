@@ -479,44 +479,22 @@ export const init = async () => {
         throw new SystemExit(1, msg);
     });
 
-    mod.define_native_method("exec", async (self: RValue, args: RValue[]): Promise<RValue> => {
+    mod.define_native_method("exec", async (_self: RValue, args: RValue[]): Promise<RValue> => {
         if (!is_node) {
             throw new RuntimeError("Kernel#exec is only supported in nodejs");
         }
 
         const first_arg = args[0] || Qnil;
 
-        if (first_arg.klass === await RubyString.klass()) {
-            if (args[1]) {
-                if (args[1].klass === await RubyArray.klass()) {
-                    const elems = args[1].get_data<RubyArray>().elements;
-
-                    for (const elem of elems) {
-                        await Runtime.assert_type(elem, await RubyString.klass());
-                    }
-
-                    const elem_strings = elems.map((elem) => elem.get_data<string>());
-                    // kexec(first_arg.get_data<string>(), elem_strings);
-                    return Qnil;
-                } else {
-                    throw new NotImplementedError(`unexpected ${first_arg.get_data<Class>().name} passed as the first argument to Kernel#exec`);
-                }
-            } else {
-                // kexec(first_arg.get_data<string>());
-                return Qnil;
-            }
-        } else if (first_arg.klass === await Hash.klass()) {
+        if (first_arg.klass === await Hash.klass()) {
             throw new NotImplementedError("passing a hash as the first argument to Kernel#exec is not yet supported");
-        } else if (first_arg.klass === await RubyArray.klass()) {
-            const elems = args[0].get_data<RubyArray>().elements;
-
-            for (const elem of elems) {
-                await Runtime.assert_type(elem, await RubyString.klass());
-            }
-
-            const elem_strings = elems.map((elem) => elem.get_data<string>());
-            // kexec(elem_strings.join(" "));
-            return Qnil;
+        } else if (first_arg.klass === await RubyString.klass()) {
+            const [exe_path_rval, cmd_args_rvals] = await Args.scan("1*", args);
+            const exe_path = "exe/ruby"; // exe_path_rval.get_data<string>();
+            const cmd_args = cmd_args_rvals.map(arg => arg.get_data<string>());
+            console.log(`${exe_path} ${cmd_args.join(" ")}`);
+            const result = (child_process as typeof import("child_process")).spawnSync(exe_path, cmd_args, { stdio: "inherit" });
+            process.exit(result.status || 0);
         } else {
             throw new ArgumentError(`unexpected ${first_arg.klass.get_data<Class>().name} passed as the first argument to Kernel#exec`);
         }
