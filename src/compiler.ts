@@ -819,6 +819,7 @@ export class Compiler extends Visitor {
     }
 
     override visitIndexTargetNode(node: IndexTargetNode): void {
+        // do we need with_used(true) here?
         this.visit(node.receiver);
         if (node.arguments_) this.visit(node.arguments_)
     }
@@ -832,7 +833,12 @@ export class Compiler extends Visitor {
         state.position = this.used ? 1 : 0;
         this.compile_multi_target_node(this.iseq, node, ret, writes, cleanup, state);
 
-        this.with_used(true, () => this.visit(node.value));
+        const value_insns = this.with_used<InstructionList>(true, () => {
+            return this.capture(() => this.visit(node.value));
+        });
+
+        ret.push_list(value_insns);
+
         if (this.used) {
             ret.dup();
         }
@@ -999,8 +1005,10 @@ export class Compiler extends Visitor {
             //
 
             if (node.parent != null) {
-                const const_lookup = this.capture(() => {
-                    this.visit(node.parent!);
+                const const_lookup = this.with_used(true, () => {
+                    return this.capture(() => {
+                        this.visit(node.parent!);
+                    });
                 });
 
                 parents.push_list(const_lookup);
@@ -1029,8 +1037,10 @@ export class Compiler extends Visitor {
             //
             //     for i.j in []; end
             //
-            const receiver = this.capture(() => {
-                this.visit(node.receiver);
+            const receiver = this.with_used(true, () => {
+                return this.capture(() => {
+                    this.visit(node.receiver);
+                });
             });
 
             parents.push_list(receiver);
@@ -1080,8 +1090,10 @@ export class Compiler extends Visitor {
             //
             //     for i[:j] in []; end
             //
-            const receiver = this.capture(() => {
-                this.visit(node.receiver);
+            const receiver = this.with_used(true, () => {
+                return this.capture(() => {
+                    this.visit(node.receiver);
+                });
             });
 
             parents.push_list(receiver);
