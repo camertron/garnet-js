@@ -275,7 +275,7 @@ export class ArgumentError extends RubyError {
 
     constructor(message: string) {
         super(message);
-        this.name = "ArgumentErrorClass";
+        this.name = "ArgumentError";
     }
 
     async ruby_class(): Promise<RValue> {
