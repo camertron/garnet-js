@@ -1099,7 +1099,7 @@ export class Compiler extends Visitor {
 
             parents.push_list(receiver);
 
-            const call_data = MethodCallData.create("[]");
+            const call_data = MethodCallData.create(node.isAttributeWrite() ? "[]=" : "[]");
 
             if (node.arguments_) {
                 const args = this.capture(() => {
@@ -1136,7 +1136,10 @@ export class Compiler extends Visitor {
                 writes.concatarray();
             }
 
-            writes.send(call_data, null);
+            // use ci_argc for the method call
+            const write_call_data = MethodCallData.create("[]=", ci_argc, call_data.flag, call_data.kw_arg);
+
+            writes.send(write_call_data, null);
             writes.pop();
 
             if (state !== null) {
