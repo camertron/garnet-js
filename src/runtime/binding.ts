@@ -72,6 +72,11 @@ export const init = () => {
 
             return await RubyArray.new(local_names);
         });
+
+        klass.define_native_method("receiver", (self: RValue): RValue => {
+            const binding = self.get_data<Binding>();
+            return binding.receiver;
+        });
     });
 
     inited = true;
