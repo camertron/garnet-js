@@ -30,7 +30,7 @@ export const init = async () => {
             const proc = block!.get_data<Proc>();
             // nesting should include the class being evaluated
             const new_nesting = [...proc.binding.nesting, mod_rval];
-            const binding = proc.binding.with_self_and_nesting(mod_rval, new_nesting);
+            const binding = proc.binding.with_receiver_and_nesting(mod_rval, new_nesting);
             await proc.with_binding(binding).call(ExecutionContext.current, [mod_rval]);
         }
 
@@ -320,7 +320,7 @@ export const init = async () => {
             const proc = block!.get_data<Proc>();
             // nesting should include the class being evaluated
             const new_nesting = [...proc.binding.nesting, self];
-            const binding = proc.binding.with_self_and_nesting(self, new_nesting);
+            const binding = proc.binding.with_receiver_and_nesting(self, new_nesting);
             return await proc.with_binding(binding).call(ExecutionContext.current, [self]);
         } else {
             await Runtime.assert_type(args[0], await RubyString.klass());
@@ -386,7 +386,7 @@ export const init = async () => {
 
             try {
                 if (body instanceof Proc) {
-                    const binding = body.binding.with_self(mtd_self);
+                    const binding = body.binding.with_receiver(mtd_self);
                     return await body.with_binding(binding).call(ExecutionContext.current, mtd_args, mtd_kwargs, mtd_block, new_call_data, self.get_data<Module>());
                 } else {
                     return await body!.call(ExecutionContext.current, mtd_self, mtd_args, mtd_kwargs, mtd_block, new_call_data);
@@ -547,7 +547,7 @@ export const init = async () => {
         const proc = block!.get_data<Proc>();
         // nesting should include the class being evaluated
         const new_nesting = [...proc.binding.nesting, self];
-        const binding = proc.binding.with_self_and_nesting(self, new_nesting);
+        const binding = proc.binding.with_receiver_and_nesting(self, new_nesting);
         let block_call_data: BlockCallData | undefined = undefined;
 
         if (call_data) {

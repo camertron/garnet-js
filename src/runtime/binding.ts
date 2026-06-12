@@ -19,7 +19,7 @@ export class Binding {
         return this.klass_;
     }
 
-    public self: RValue;
+    public receiver: RValue;
     public nesting: RValue[];
     public stack: RValuePointer[];
     public parent_frame: Frame | null;
@@ -33,20 +33,20 @@ export class Binding {
         return new RValue(await Binding.klass(), binding);
     }
 
-    constructor(self: RValue, nesting: RValue[], stack: RValuePointer[], stack_index: number, parent_frame: Frame | null) {
-        this.self = self;
+    constructor(receiver: RValue, nesting: RValue[], stack: RValuePointer[], stack_index: number, parent_frame: Frame | null) {
+        this.receiver = receiver;
         this.nesting = nesting;
         this.stack = stack;
         this.parent_frame = parent_frame;
         this.stack_index = stack_index;
     }
 
-    with_self(new_self: RValue) {
-        return new Binding(new_self, this.nesting, this.stack, this.stack_index, this.parent_frame);
+    with_receiver(new_receiver: RValue) {
+        return new Binding(new_receiver, this.nesting, this.stack, this.stack_index, this.parent_frame);
     }
 
-    with_self_and_nesting(new_self: RValue, new_nesting: RValue[]) {
-        return new Binding(new_self, new_nesting, this.stack, this.stack_index, this.parent_frame);
+    with_receiver_and_nesting(new_receiver: RValue, new_nesting: RValue[]) {
+        return new Binding(new_receiver, new_nesting, this.stack, this.stack_index, this.parent_frame);
     }
 }
 

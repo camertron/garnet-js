@@ -55,7 +55,7 @@ export const init = async () => {
     // let kexec: (executable: string, args?: string[]) => never;
 
     if (is_node) {
-        // child_process = await import("child_process");
+        child_process = await import("child_process");
 
         // @ts-ignore
         // kexec = (await import("@gongt/kexec")).default;
@@ -153,10 +153,10 @@ export const init = async () => {
             // TODO: Implement eval with binding properly
             // For now, just run it as a class frame with the binding's self
             const binding = binding_rval.get_data<Binding>();
-            return await ec.run_class_frame(iseq, binding.self);
+            return await ec.run_class_frame(iseq, binding.receiver, binding.nesting);
         } else {
             // Run in the current context with the current self
-            return await ec.run_class_frame(iseq, self);
+            return await ec.run_class_frame(iseq, self, ExecutionContext.current.frame!.nesting);
         }
     });
 
@@ -958,7 +958,7 @@ export const init = async () => {
 
             try {
                 if (body instanceof Proc) {
-                    const binding = body.binding.with_self(mtd_self);
+                    const binding = body.binding.with_receiver(mtd_self);
 
                     return await body.with_binding(binding).call(
                         ExecutionContext.current, mtd_args, mtd_kwargs, mtd_block, new_call_data

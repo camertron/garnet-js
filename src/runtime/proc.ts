@@ -59,7 +59,7 @@ export class NativeProc extends Proc {
     }
 
     async call(_context: ExecutionContext, args: RValue[], kwargs?: Hash, block?: RValue, _call_data?: BlockCallData, _owner?: Module): Promise<RValue> {
-        return await this.callable(this.binding.self, args, kwargs, block);
+        return await this.callable(this.binding.receiver, args, kwargs, block);
     }
 
     with_binding(new_binding: Binding): NativeProc {

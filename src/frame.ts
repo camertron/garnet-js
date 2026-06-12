@@ -99,7 +99,7 @@ export class BlockFrame extends Frame implements IFrameWithOwner {
     public owner?: Module;
 
     constructor(call_data: BlockCallData, calling_convention: CallingConvention, iseq: InstructionSequence, binding: Binding, original_stack: RValuePointer[], args: RValue[], kwargs?: Hash, block?: RValue, owner?: Module) {
-        super(iseq, binding.parent_frame, binding.stack_index, binding.self, binding.nesting);
+        super(iseq, binding.parent_frame, binding.stack_index, binding.receiver, binding.nesting);
 
         this.call_data = call_data;
         this.calling_convention = calling_convention;

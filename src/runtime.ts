@@ -1368,7 +1368,7 @@ await (ClassClass.get_data<Class>()).tap(async (klass: Class) => {
             const proc = block!.get_data<Proc>();
             // nesting should include the class being evaluated
             const new_nesting = [...proc.binding.nesting, new_class_rval];
-            const binding = proc.binding.with_self_and_nesting(new_class_rval, new_nesting);
+            const binding = proc.binding.with_receiver_and_nesting(new_class_rval, new_nesting);
             // Call the inherited hook on the superclass before evaluating the block
             await Object.send(superclass, "inherited", [new_class_rval]);
             await proc.with_binding(binding).call(ExecutionContext.current, [new_class_rval]);
@@ -1434,7 +1434,7 @@ await (BasicObjectClass.get_data<Class>()).tap(async (klass: Class) => {
 
     klass.define_native_method("instance_exec", async (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
         const proc = block!.get_data<Proc>();
-        const binding = proc.binding.with_self(self);
+        const binding = proc.binding.with_receiver(self);
         let block_call_data: BlockCallData | undefined = undefined;
 
         if (call_data) {
@@ -1451,7 +1451,7 @@ await (BasicObjectClass.get_data<Class>()).tap(async (klass: Class) => {
             await Args.scan("0", args);
 
             const proc = block.get_data<Proc>();
-            const binding = proc.binding.with_self(self);
+            const binding = proc.binding.with_receiver(self);
             return await proc.with_binding(binding).call(ec, [self]);
         } else {
             // instance_eval(string, filename = nil, lineno = 1)
