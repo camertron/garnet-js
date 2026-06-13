@@ -1,7 +1,8 @@
-import { Class, Module, ObjectClass, Qnil, Qtrue, RValue, Runtime } from "./runtime";
+import { Class, Module, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "./runtime";
 import { Object } from "./runtime/object";
 import { RubyString } from "./runtime/string";
 import { RubyArray } from "./runtime/array";
+import { Args } from "./runtime/arg-scanner";
 
 export const init = async () => {
     const ExceptionClass = Runtime.define_class("Exception", ObjectClass, async (klass: Class) => {
@@ -143,6 +144,12 @@ export const init = async () => {
     const ArgumentErrorClass = Runtime.define_class("ArgumentError", StandardErrorClass);
     const IOError = Runtime.define_class("IOError", StandardErrorClass);
 
+    const UncaughtThrowErrorClass = Runtime.define_class("UncaughtThrowError", ArgumentErrorClass, (klass: Class) => {
+        klass.define_native_method("tag", (self: RValue): RValue => {
+            return self.get_data<UncaughtThrowError>().tag;
+        });
+    });
+
     const ScriptErrorClass = Runtime.define_class("ScriptError", ExceptionClass);
     const SyntaxErrorClass = Runtime.define_class("SyntaxError", ScriptErrorClass);
     const LoadErrorClass = Runtime.define_class("LoadError", ScriptErrorClass);
@@ -153,6 +160,7 @@ export const init = async () => {
     const ErrnoENOENTClass = await Runtime.define_class_under(ErrnoModule, "ENOENT", SystemCallErrorClass);
     const ErrnoENOTDIRClass = await Runtime.define_class_under(ErrnoModule, "ENOTDIR", SystemCallErrorClass);
     const ErrnoEINVALClass = await Runtime.define_class_under(ErrnoModule, "EINVAL", SystemCallErrorClass);
+    const ErrnoEACCESClass = await Runtime.define_class_under(ErrnoModule, "EACCES", SystemCallErrorClass);
 
     const SystemExitClass = Runtime.define_class("SystemExit", ExceptionClass, (klass: Class) => {
         klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
@@ -285,6 +293,22 @@ export class ArgumentError extends RubyError {
 
     async ruby_class(): Promise<RValue> {
         return Promise.resolve(ArgumentError.ruby_class ||= (await Object.find_constant("ArgumentError"))!);
+    }
+}
+
+export class UncaughtThrowError extends RubyError {
+    private static ruby_class: RValue | null;
+    public tag: RValue;
+
+    constructor(tag: RValue, message: string) {
+        super(message);
+
+        this.name = "UncaughtThrowError";
+        this.tag = tag;
+    }
+
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(UncaughtThrowError.ruby_class ||= (await Object.find_constant("UncaughtThrowError"))!);
     }
 }
 

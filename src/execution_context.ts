@@ -1,10 +1,10 @@
 import { BlockCallData, CallData, CallDataFlag, MethodCallData } from "./call_data";
-import { ArgumentError, LocalJumpError, NativeError, RubyError } from "./errors";
+import { ArgumentError, LocalJumpError, NativeError, RubyError, UncaughtThrowError } from "./errors";
 import { BlockFrame, ClassFrame, EnsureFrame, Frame, IFrameWithOwner, MethodFrame, RescueFrame, TopFrame } from "./frame";
 import Instruction from "./instruction";
 import { CatchBreak, CatchEnsure, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
 import { Local } from "./local_table";
-import { ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, Qtrue, Qfalse, Runtime, RValuePointer, Module, ObjectClass } from "./runtime";
+import { ModuleClass, Class, ClassClass, RValue, STDOUT, IO, Qnil, STDERR, Qtrue, Qfalse, Runtime, RValuePointer, Module, ObjectClass, Main } from "./runtime";
 import { Binding } from "./runtime/binding";
 import { Hash } from "./runtime/hash";
 import { Object } from "./runtime/object";
@@ -147,6 +147,9 @@ export class ExecutionContext {
     // The global VM lock
     public gvl: Mutex = new Mutex();
 
+    // Array of tags handled by the current set of potentially nested `catch` blocks.
+    public catch_tags: RValue[];
+
     private static next_id: number = 0;
     public id: number;
 
@@ -154,6 +157,7 @@ export class ExecutionContext {
         this.stack = [];
         this.top_locals = new Map();
         this.global_aliases = {};
+        this.catch_tags = [];
         this.id = ExecutionContext.next_id ++;
     }
 
@@ -361,10 +365,30 @@ export class ExecutionContext {
                             this.frame = previous || frame.parent;
                             throw error;
                         } else if (error instanceof ThrowError) {
-                            // Restore the frame before propagating.
-                            // Don't clean up the stack here - let with_stack handle it.
-                            this.frame = previous || frame.parent;
-                            throw error;
+                            let found_catch_tag = false;
+
+                            for (const tag of this.catch_tags) {
+                                if (tag.object_id === error.tag.object_id) {
+                                    found_catch_tag = true;
+                                    break;
+                                }
+                            }
+
+                            // Found a catch tag, so don't convert this error to an UncaughtThrowError;
+                            // let it propagate as a ThrowError to wherever should catch it.
+                            if (found_catch_tag) {
+                                // Restore the frame before propagating.
+                                // Don't clean up the stack here - let with_stack handle it.
+                                this.frame = previous || frame.parent;
+                                throw error;
+                            } else {
+                                // No tags matched, so raise an UncaughtThrowError and let rescue blocks
+                                // handle it like a normal Ruby exception
+                                const tag_str = await Object.send(error.tag, "inspect");
+                                const uncaught_throw = new UncaughtThrowError(error.tag, `uncaught throw ${tag_str.get_data<string>()}`);
+                                uncaught_throw.backtrace = this.create_backtrace();
+                                throw uncaught_throw;
+                            }
                         } else {
                             // I really need to clean up errors and error handling, what a mess
                             if (error instanceof RubyError || error instanceof RValue) {
