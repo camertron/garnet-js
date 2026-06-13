@@ -184,6 +184,10 @@ export const init = async () => {
             return self;
         });
 
+        klass.define_native_method("to_i", async (self: RValue): Promise<RValue> => {
+            return await Integer.get(Math.trunc(self.get_data<number>()));
+        });
+
         klass.define_native_method("to_s", async (self: RValue): Promise<RValue> => {
             const num = self.get_data<number>();
 
