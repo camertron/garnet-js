@@ -1,5 +1,5 @@
 import { is_node } from "../env";
-import { ArgumentError, IRubyError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, SystemExit, TypeError } from "../errors";
+import { ArgumentError, IRubyError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, StopIteration, SystemExit, TypeError } from "../errors";
 import { BreakError, CallingConvention, ExecutionContext, ReturnError, ThrowError } from "../execution_context";
 import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, Visibility, Callable, ObjectClass, InterpretedCallable, NativeCallable, STDERR, STDOUT, IO, NilClass } from "../runtime";
 import { vmfs } from "../vmfs";
@@ -756,6 +756,10 @@ export const init = async () => {
             } catch (e) {
                 if (e instanceof BreakError) {
                     return e.value;
+                }
+
+                if (e instanceof StopIteration) {
+                    return Qnil;
                 }
 
                 throw e;

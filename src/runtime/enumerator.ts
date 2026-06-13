@@ -1,15 +1,156 @@
 import { ArgumentError, NameError, NoMethodError, StopIteration } from "../errors";
 import { PauseError } from "../execution_context";
-import { BlockFrame, Frame } from "../frame";
+import { Frame } from "../frame";
 import { ExecutionContext } from "../garnet";
-import { Class, InterpretedCallable, NativeCallable, ObjectClass, Qnil, RValue, Runtime } from "../runtime";
-import { Binding } from "./binding";
+import { Class, InterpretedCallable, NativeCallable, ObjectClass, Qnil, RValue, Runtime, RValuePointer } from "../runtime";
+import { Args } from "./arg-scanner";
+import { RubyArray } from "./array";
 import { Enumerable } from "./enumerable";
 import { Hash } from "./hash";
 import { Object } from "./object";
 import { InterpretedProc, Proc } from "./proc";
 
 type NativeGeneratorType = AsyncGenerator<RValue, void, unknown>;
+
+const normalize_yield_args = async (args: RValue[]): Promise<RValue> => {
+    switch (args.length) {
+        case 0:
+            return Qnil;
+        case 1:
+            return args[0];
+        default:
+            return await RubyArray.new(args);
+    }
+};
+
+type YielderEvent = YielderYieldEvent | YielderTerminalEvent;
+
+type YielderYieldEvent = {
+    type: "yield";
+    value: RValue;
+    resume: (value: RValue) => void;
+};
+
+type YielderTerminalEvent = {
+    type: "return";
+    value: RValue;
+} | {
+    type: "error";
+    error: unknown;
+};
+
+class YielderController {
+    private ec: ExecutionContext;
+    private enumerator: ControllableEnumerator;
+    private caller_stack: RValuePointer[] | null = null;
+    private caller_frame: Frame | null = null;
+    private pending_event: YielderEvent | null = null;
+    private terminal_event: YielderTerminalEvent | null = null;
+    private waiting: ((event: YielderEvent) => void) | null = null;
+    private paused_event: YielderYieldEvent | null = null;
+
+    constructor(ec: ExecutionContext, enumerator: ControllableEnumerator) {
+        this.ec = ec;
+        this.enumerator = enumerator;
+    }
+
+    async next(): Promise<RValue> {
+        this.capture_caller();
+
+        await this.enumerator.start();
+
+        if (this.paused_event) {
+            const paused_event = this.paused_event;
+            this.paused_event = null;
+            paused_event.resume(Qnil);
+        }
+
+        const event = await this.receive();
+
+        switch (event.type) {
+            case "yield":
+                this.paused_event = event;
+                return event.value;
+            case "return":
+                throw new StopIteration("iteration reached an end");
+            case "error":
+                throw event.error;
+        }
+    }
+
+    yield(value: RValue): Promise<RValue> {
+        const suspended_stack = this.ec.stack;
+        const suspended_frame = this.ec.frame;
+
+        this.restore_caller();
+
+        return new Promise<RValue>((resolve) => {
+            this.deliver({
+                type: "yield",
+                value,
+                resume: (resume_value: RValue) => {
+                    this.ec.stack = suspended_stack;
+                    this.ec.frame = suspended_frame;
+                    resolve(resume_value);
+                }
+            });
+        });
+    }
+
+    return(value: RValue) {
+        this.restore_caller();
+        this.deliver({ type: "return", value });
+    }
+
+    error(error: unknown) {
+        this.restore_caller();
+        this.deliver({ type: "error", error });
+    }
+
+    private capture_caller() {
+        this.caller_stack = this.ec.stack.map(ptr => new RValuePointer(ptr.rval));
+        this.caller_frame = this.ec.frame;
+    }
+
+    private restore_caller() {
+        if (!this.caller_stack) {
+            throw new Error("Attempted to restore enumerator caller before capturing it");
+        }
+
+        this.ec.stack = this.caller_stack;
+        this.ec.frame = this.caller_frame;
+    }
+
+    private receive(): Promise<YielderEvent> {
+        if (this.pending_event) {
+            const event = this.pending_event;
+            this.pending_event = null;
+            return Promise.resolve(event);
+        }
+
+        if (this.terminal_event) {
+            return Promise.resolve(this.terminal_event);
+        }
+
+        return new Promise<YielderEvent>((resolve) => {
+            this.waiting = resolve;
+        });
+    }
+
+    private deliver(event: YielderEvent) {
+        if (event.type === "return" || event.type === "error") {
+            this.terminal_event = event;
+        }
+
+        if (this.waiting) {
+            const waiting = this.waiting;
+            this.waiting = null;
+            waiting(event);
+        } else {
+            this.pending_event = event;
+        }
+    }
+}
 
 export abstract class Enumerator {
     protected static klass_: RValue;
@@ -81,7 +222,7 @@ class MethodRefEnumerator extends Enumerator {
 
                 this.enumerator = enumerator.get_data<Enumerator>();
             } else if (method instanceof InterpretedCallable) {
-                this.enumerator = new InterpretedCallableEnumerator(ExecutionContext.current, this.receiver, method);
+                this.enumerator = new InterpretedCallableEnumerator(ExecutionContext.current, this.receiver, method, this.args, this.kwargs);
             }
         }
 
@@ -114,67 +255,57 @@ class NativeCallableEnumerator extends Enumerator {
     }
 }
 
-class InterpretedCallableEnumerator extends Enumerator {
+interface ControllableEnumerator {
+    start(): Promise<void>;  // should start producer only; must not await completion
+}
+
+class InterpretedCallableEnumerator extends Enumerator implements ControllableEnumerator {
     private ec: ExecutionContext;
     private receiver: RValue;
     private method: InterpretedCallable;
-    private current: RValue;
-    private frame: Frame | null;
-    private binding: Binding | null;
+    private args: RValue[];
+    private kwargs: Hash | undefined;
+    private controller: YielderController;
+    private running: Promise<void> | null;
 
-    constructor(ec: ExecutionContext, receiver: RValue, method: InterpretedCallable) {
+    constructor(ec: ExecutionContext, receiver: RValue, method: InterpretedCallable, args: RValue[] = [], kwargs?: Hash) {
         super();
 
         this.ec = ec;
         this.receiver = receiver;
         this.method = method;
-        this.current = Qnil;
-        this.frame = null;
-        this.binding = null;
+        this.args = args;
+        this.kwargs = kwargs;
+        this.controller = new YielderController(ec, this);
+        this.running = null;
     }
 
     async next(): Promise<RValue> {
-        try {
-            // If we have a reference to a frame, then that means the method yielded and was paused.
-            if (this.frame && this.binding) {
-                // Restore the stack to what it was when the frame was paused, then execute the
-                // frame. The block below should still be available at its position on the
-                // restored stack, meaning any additional yields will call the block.
-                await this.ec.with_stack(this.binding.stack, async (): Promise<RValue> => {
-                    return await this.ec.execute_frame(this.frame!, this.ec.frame);
-                });
-            } else {
-                // This block receives each yielded value. When the frame is resumed, this block
-                // is still available because locals are preserved via the binding.
-                await this.method.call(this.ec, this.receiver, [], undefined, await Proc.from_native_fn(this.ec, (_self: RValue, args: RValue[]): RValue => {
-                    this.current = args[0];
+        return this.controller.next();
+    }
 
-                    // Only create a binding the first time a value is yielded.
-                    if (!this.frame) {
-                        this.frame = this.ec.frame;
-                        this.binding = this.ec.get_binding();
-                    }
-
-                    // Instruct the execution context to effectively "pause" the current frame
-                    // by restoring the previous frame and continuing to execute it as if the
-                    // block returned.
-                    throw new PauseError(this.current);
-                }));
-            }
-        } catch (e) {
-            if (e instanceof PauseError) {
-                return e.value;
-            }
-
-            throw e;
+    async start() {
+        if (this.running) {
+            return;
         }
 
-        throw new StopIteration("iteration reached an end");
+        const block = await Proc.from_native_fn(this.ec, async (_self: RValue, args: RValue[]): Promise<RValue> => {
+            return await this.controller.yield(await normalize_yield_args(args));
+        });
+
+        this.running = this.method.call(this.ec, this.receiver, this.args, this.kwargs, block)
+            .then((value: RValue) => this.controller.return(value))
+            .catch((error: unknown) => this.controller.error(error));
     }
 }
 
 class Yielder {
     private static klass_: RValue;
+    private controller?: YielderController;
+
+    constructor(controller?: YielderController) {
+        this.controller = controller;
+    }
 
     static async klass(): Promise<RValue> {
         if (!this.klass_) {
@@ -190,69 +321,54 @@ class Yielder {
         return this.klass_;
     }
 
-    static async new(): Promise<RValue> {
-        return new RValue(await this.klass(), new Yielder());
+    static async new(controller?: YielderController): Promise<RValue> {
+        return new RValue(await this.klass(), new Yielder(controller));
     }
 
-    yield(value: RValue) {
+    async yield(args: RValue[]): Promise<RValue> {
+        const value = await normalize_yield_args(args);
+
+        if (this.controller) {
+            return await this.controller.yield(value);
+        }
+
         throw new PauseError(value);
     }
 }
 
-/* NOTE: enumerators do not work properly if Yielder#<< is called inside a native proc, eg:
- *
- * Enumerator.new do |yielder|
- *   loop do
- *     yielder << :foo
- *   end
- * end
- *
- * Supporting the ability to yield in the middle of arbitrary blocks works for interpreted
- * code but not native code because Garnet can control when native code executes. In this
- * example, Kernel#loop is a native method that is not capable of stopping and resuming as
- * enumerators are required to do. We could implement Kernel#loop in Ruby, but Yielder#<<
- * can be called from the body of _any_ block. Therefore, some work will have to be done to
- * support pausing native blocks - perhaps blocks could always be JavaScript generators?
- * I'm not sure how ergonomic that would be.
-*/
-class InterpretedProcEnumerator extends Enumerator {
+class InterpretedProcEnumerator extends Enumerator implements ControllableEnumerator {
     private ec: ExecutionContext;
     private proc: InterpretedProc;
-    private frame: BlockFrame;
     private yielder_: RValue;
+    private controller: YielderController;
+    private running: Promise<void> | null;
 
     constructor(ec: ExecutionContext, proc: InterpretedProc) {
         super();
 
         this.ec = ec;
         this.proc = proc;
+        this.controller = new YielderController(ec, this);
+        this.running = null;
     }
 
     async next(): Promise<RValue> {
-        try {
-            if (this.frame) {
-                await this.ec.with_stack(this.proc.binding.stack, async (): Promise<RValue> => {
-                    return await this.ec.execute_frame(this.frame!, this.ec.frame);
-                })
-            } else {
-                await this.proc.call(this.ec, [await this.yielder()], undefined, undefined, undefined, undefined, (frame: BlockFrame) => {
-                    this.frame = frame;
-                });
-            }
-        } catch (e) {
-            if (e instanceof PauseError) {
-                return e.value;
-            }
+        return this.controller.next();
+    }
 
-            throw e;
+    async start() {
+        if (this.running) {
+            return;
         }
 
-        throw new StopIteration("iteration reached an end");
+        this.running = this.proc.call(this.ec, [await this.yielder()])
+            .then((value: RValue) => this.controller.return(value))
+            .catch((error: unknown) => this.controller.error(error));
     }
 
     private async yielder(): Promise<RValue> {
         if (!this.yielder_) {
-            this.yielder_ = await Yielder.new();
+            this.yielder_ = await Yielder.new(this.controller);
         }
 
         return this.yielder_;
@@ -354,12 +470,20 @@ export const init = async () => {
     });
 
     await Runtime.define_class_under(await Enumerator.klass(), "Yielder", ObjectClass, async (klass: Class) => {
-        klass.define_native_method("yield", (self: RValue, args: RValue[]): RValue => {
-            self.get_data<Yielder>().yield(args[0]);
-            return Qnil;
+        klass.define_native_method("yield", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            return await self.get_data<Yielder>().yield(args);
         });
 
-        await klass.alias_method("<<", "yield");
+        klass.define_native_method("<<", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [value] = await Args.scan("1", args);
+            return await self.get_data<Yielder>().yield([value]);
+        });
+
+        klass.define_native_method("to_proc", async (self: RValue): Promise<RValue> => {
+            return await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, args: RValue[]): Promise<RValue> => {
+                return await self.get_data<Yielder>().yield(args);
+            });
+        });
     });
 
     inited = true;
