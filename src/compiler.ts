@@ -1726,8 +1726,8 @@ export class Compiler extends Visitor {
         this.iseq.branchunless(label)
         if (this.used) this.iseq.pop();
         this.with_used(true, () => this.visit(node.right));
-        this.iseq.push(label);
         if (!this.used) this.iseq.pop();
+        this.iseq.push(label);
     }
 
     override visitOrNode(node: OrNode) {
@@ -1738,8 +1738,8 @@ export class Compiler extends Visitor {
         this.iseq.branchif(label);
         if (this.used) this.iseq.pop();
         this.with_used(true, () => this.visit(node.right));
-        this.iseq.push(label);
         if (!this.used) this.iseq.pop();
+        this.iseq.push(label);
     }
 
     override visitClassNode(node: ClassNode) {
