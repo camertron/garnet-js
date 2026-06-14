@@ -22,6 +22,7 @@ import {
     CallTargetNode,
     CaseNode,
     ClassNode,
+    ClassVariableOperatorWriteNode,
     ClassVariableOrWriteNode,
     ClassVariableReadNode,
     ClassVariableTargetNode,
@@ -74,6 +75,7 @@ import {
     LocalVariableTargetNode,
     LocalVariableWriteNode,
     Location,
+    MatchWriteNode,
     MissingNode,
     ModuleNode,
     MultiTargetNode,
@@ -101,6 +103,7 @@ import {
     RetryNode,
     ReturnNode,
     SelfNode,
+    ShareableConstantNode,
     SingletonClassNode,
     SourceFileNode,
     SourceLineNode,
@@ -271,6 +274,12 @@ export class Compiler extends Visitor {
         super.visit(node);
     }
 
+    visit_all(nodes: Node[]) {
+        for (const node of nodes) {
+            this.visit(node);
+        }
+    }
+
     private emit_line_for(node: Node) {
         let line = this.location_to_source_location(node.location)?.start_line;
 
@@ -343,14 +352,14 @@ export class Compiler extends Visitor {
                     }
                 }
 
-                this.with_used(false, () => this.visitAll(preexes));
+                this.with_used(false, () => this.visit_all(preexes));
 
                 if (statements.length == 0) {
                     this.iseq.putnil();
                 } else {
                     const [first_statements, last_statement] = this.split_rest_last(statements)
 
-                    this.with_used(false, () => this.visitAll(first_statements));
+                    this.with_used(false, () => this.visit_all(first_statements));
                     this.with_used(true, () => this.visit(last_statement));
                 }
             }
@@ -391,13 +400,13 @@ export class Compiler extends Visitor {
     override visitStatementsNode(node: StatementsNode) {
         const [statements, last_statement] = this.split_rest_last(node.body as any[])
 
-        this.with_used(false, () => this.visitAll(statements));
+        this.with_used(false, () => this.visit_all(statements));
         this.visit(last_statement);
     }
 
     override visitArgumentsNode(node: ArgumentsNode) {
         if (node.arguments_) {
-            this.visitAll(node.arguments_)
+            this.visit_all(node.arguments_)
         }
     }
 
@@ -667,7 +676,7 @@ export class Compiler extends Visitor {
                         if (rest.expression instanceof LocalVariableTargetNode) {
                             if (multi_target.rights.length > 0) {
                                 const flags = ExpandArrayFlag.SPLAT_FLAG | ExpandArrayFlag.POSTARG_FLAG;
-                                this.iseq.expandarray(1, flags);
+                                this.iseq.expandarray(multi_target.rights.length, flags);
                             }
 
                             const local_lookup = this.iseq.local_table.find_or_throw(rest.expression.name, 0);
@@ -675,7 +684,7 @@ export class Compiler extends Visitor {
                         } else if (rest.expression instanceof RequiredParameterNode) {
                             if (multi_target.rights.length > 0) {
                                 const flags = ExpandArrayFlag.SPLAT_FLAG | ExpandArrayFlag.POSTARG_FLAG;
-                                this.iseq.expandarray(1, flags);
+                                this.iseq.expandarray(multi_target.rights.length, flags);
                             }
 
                             const local_lookup = this.iseq.local_table.find_or_throw(rest.expression.name, 0);
@@ -1241,7 +1250,7 @@ export class Compiler extends Visitor {
     }
 
     override visitArrayNode(node: ArrayNode) {
-        this.visitAll(node.elements);
+        this.visit_all(node.elements);
 
         if (this.used) {
             // don't wrap single-element arrays that only contain a splat node
@@ -1431,7 +1440,7 @@ export class Compiler extends Visitor {
         }
 
         this.iseq.argument_options.lead_num = node.requireds.length;
-        this.with_used(true, () => this.visitAll(node.optionals));
+        this.with_used(true, () => this.visit_all(node.optionals));
         this.iseq.argument_size += node.requireds.length + node.optionals.length;
 
         if (node.rest) {
@@ -1463,7 +1472,7 @@ export class Compiler extends Visitor {
             }
 
             this.iseq.argument_options.post_start = this.iseq.argument_size;
-            this.with_used(true, () => this.visitAll(node.posts));
+            this.with_used(true, () => this.visit_all(node.posts));
             this.iseq.argument_size += node.posts.length;
             this.iseq.argument_options.post_num = node.posts.length;
         }
@@ -1472,7 +1481,7 @@ export class Compiler extends Visitor {
             if (!(node.keywordRest instanceof NoKeywordsParameterNode) && node.keywords.length > 0) {
                 this.iseq.argument_options.keyword = [];
                 this.iseq.argument_options.keyword_bits_index = this.iseq.local_table.keyword_bits();
-                this.with_used(true, () => this.visitAll(node.keywords));
+                this.with_used(true, () => this.visit_all(node.keywords));
                 this.iseq.argument_size += this.iseq.argument_options.keyword.length;
             }
         }
@@ -1713,8 +1722,12 @@ export class Compiler extends Visitor {
     }
 
     override visitElseNode(node: ElseNode) {
-        if (node.statements) {
+        if (node.statements && node.statements.body.length > 0) {
             this.visit(node.statements);
+        } else {
+            if (this.used) {
+                this.iseq.putnil();
+            }
         }
     }
 
@@ -1871,6 +1884,14 @@ export class Compiler extends Visitor {
         this.iseq.pop();
     }
 
+    override visitClassVariableOperatorWriteNode(node: ClassVariableOperatorWriteNode) {
+        this.iseq.getclassvariable(node.name);
+        this.with_used(true, () => this.visit(node.value));
+        this.iseq.send_without_block(MethodCallData.create(node.binaryOperator, 1));
+        if (this.used) this.iseq.dup();
+        this.iseq.setclassvariable(node.name);
+    }
+
     override visitSymbolNode(node: SymbolNode) {
         if (this.used) {
             this.iseq.putobject({type: "Symbol", value: node.unescaped.value});
@@ -1940,7 +1961,7 @@ export class Compiler extends Visitor {
 
         if (node.statements) {
             const [first_statements, last_statement] = this.split_rest_last(node.statements.body);
-            this.with_used(true, () => this.visitAll(first_statements));
+            this.with_used(true, () => this.visit_all(first_statements));
             this.visit(last_statement);
 
             if (node.elseClause) {
@@ -2032,7 +2053,7 @@ export class Compiler extends Visitor {
             // rescue StandardError by default
             this.iseq.getlocal(0, 0);
             this.iseq.putnil(); // scope to look up constant
-            this.iseq.putobject({type: "TrueClass", value: Qtrue}); // allow nil scope
+            this.iseq.putobject({type: "TrueClass", value: true}); // allow nil scope
             this.iseq.getconstant("StandardError");
             this.iseq.send(MethodCallData.create("is_a?", 1), null);
             this.iseq.branchif(handled_label);
@@ -2104,7 +2125,7 @@ export class Compiler extends Visitor {
             // Rescue modifier always rescues StandardError by default (no explicit exception types)
             rescue_iseq.getlocal(0, 0);
             rescue_iseq.putnil(); // scope to look up constant
-            rescue_iseq.putobject({type: "TrueClass", value: Qtrue}); // allow nil scope
+            rescue_iseq.putobject({type: "TrueClass", value: true}); // allow nil scope
             rescue_iseq.getconstant("StandardError");
             rescue_iseq.send(MethodCallData.create("is_a?", 1), null);
             rescue_iseq.branchif(handled_label);
@@ -2156,7 +2177,7 @@ export class Compiler extends Visitor {
     }
 
     override visitInterpolatedStringNode(node: InterpolatedStringNode) {
-        for (const part of node.parts) {
+        for (let part of node.parts) {
             this.with_used(true, () => this.visit(part));
             this.iseq.dup();
             this.iseq.objtostring(MethodCallData.create("to_s", 0, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE));
@@ -2204,6 +2225,8 @@ export class Compiler extends Visitor {
     override visitEmbeddedStatementsNode(node: EmbeddedStatementsNode) {
         if (node.statements) {
             this.visit(node.statements);
+        } else {
+            this.iseq.putnil();
         }
     }
 
@@ -2323,7 +2346,9 @@ export class Compiler extends Visitor {
 
                     // stack before: [target]
                     // we need: [target, target, array] before checkmatch
-                    this.iseq.dup();
+                    if (node.predicate) {
+                        this.iseq.dup();
+                    }
 
                     if (condition.expression) {
                         this.with_used(true, () => this.visit(condition.expression!));
@@ -2331,13 +2356,20 @@ export class Compiler extends Visitor {
                     }
 
                     // stack: [target, target, array]
-                    this.iseq.checkmatch(CheckMatchType.TYPE_CASE | CheckMatchType.ARRAY_SPLAT);
+                    if (node.predicate) {
+                        this.iseq.checkmatch(CheckMatchType.TYPE_CASE | CheckMatchType.ARRAY_SPLAT);
+                    }
+
                     this.iseq.branchif(label);
                 } else {
                     // normal case, i.e. `when "foo"`
                     this.with_used(true, () => this.visit(condition));
-                    this.iseq.topn(1);
-                    this.iseq.send(MethodCallData.create("===", 1, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE), null);
+
+                    if (node.predicate) {
+                        this.iseq.topn(1);
+                        this.iseq.send(MethodCallData.create("===", 1, CallDataFlag.FCALL | CallDataFlag.ARGS_SIMPLE), null);
+                    }
+
                     this.iseq.branchif(label);
                 }
             });
@@ -2345,7 +2377,10 @@ export class Compiler extends Visitor {
             labels.push(label);
         });
 
-        this.iseq.pop();
+        // this pop discards the predicate, but only if it was visited
+        if (node.predicate) {
+            this.iseq.pop();
+        }
 
         if (node.elseClause) {
             this.visit(node.elseClause);
@@ -2359,7 +2394,10 @@ export class Compiler extends Visitor {
 
         (node.conditions as WhenNode[]).forEach((clause, index) => {
             this.iseq.push(labels[index]);
-            this.iseq.pop();
+
+            if (node.predicate) {
+                this.iseq.pop();
+            }
 
             if (clause.statements) {
                 this.visit(clause.statements);
@@ -2980,6 +3018,7 @@ export class Compiler extends Visitor {
             this.iseq.putself();
             this.iseq.defined(DefinedType.FUNC, node.name, this.iseq.make_string("method"));
         } else if (node instanceof ClassVariableReadNode) {
+            this.iseq.putnil(); // defined instruction always pops one value
             this.iseq.defined(DefinedType.CVAR, node.name, this.iseq.make_string("class variable"));
         } else if (node instanceof ConstantPathNode) {
             if (!node.name) {
@@ -3007,13 +3046,14 @@ export class Compiler extends Visitor {
             this.iseq.putself();
             this.iseq.defined(DefinedType.ZSUPER, "", this.iseq.make_string("super", Encoding.us_ascii, true));
         } else if (node instanceof GlobalVariableReadNode) {
+            this.iseq.putnil(); // defined instruction always pops one value
             this.iseq.defined(DefinedType.GVAR, node.name, this.iseq.make_string("global-variable", Encoding.us_ascii, true));
         } else if (node instanceof LocalVariableReadNode) {
             this.iseq.putobject({type: "RValue", value: this.iseq.make_string("local-variable", Encoding.us_ascii, true)});
         } else if (node instanceof LocalVariableWriteNode || node instanceof InstanceVariableWriteNode) {
             this.iseq.putobject({type: "RValue", value: this.iseq.make_string("assignment", Encoding.us_ascii, true)});
         } else if (node instanceof NilNode) {
-            this.iseq.putobject({type: "NilClass", value: Qnil});
+            this.iseq.putobject({type: "NilClass", value: null});
         } else if (node instanceof SelfNode) {
             this.iseq.putobject({type: "RValue", value: this.iseq.make_string("self", Encoding.us_ascii, true)});
         } else if (node instanceof TrueNode) {
@@ -3089,6 +3129,56 @@ export class Compiler extends Visitor {
         if (this.used) {
             this.iseq.getspecial(GetSpecialType.BACKREF, node.name.slice(1).charCodeAt(0) << 1 | 1);
         }
+    }
+
+    override visitMatchWriteNode(node: MatchWriteNode): void {
+        const unmatched_label = this.iseq.label();
+        const matched_label = this.iseq.label();
+
+        this.with_used(true, () => this.visit(node.call));
+        this.iseq.getglobal("$~");
+        this.iseq.dup();
+        this.iseq.branchunless(unmatched_label);
+
+        if (node.targets.length == 1) {
+            const local = node.targets[0] as LocalVariableTargetNode;
+            this.iseq.putobject({ type: "Symbol", value: local.name });
+            this.iseq.send_without_block(MethodCallData.create("[]", 1));
+            this.iseq.push(unmatched_label);
+            const lookup = this.iseq.local_table.find!(local.name, local.depth)!;
+            this.iseq.setlocal(lookup.index, lookup.depth)
+        } else {
+            for (let [index, local] of node.targets.entries()) {
+                local = local as LocalVariableTargetNode;
+
+                if (index != node.targets.length - 1) this.iseq.dup();
+
+                this.iseq.putobject({ type: "Symbol", value: local.name });
+                this.iseq.send_without_block(MethodCallData.create("[]", 1));
+
+                const lookup = this.iseq.local_table.find!(local.name, local.depth)!;
+                this.iseq.setlocal(lookup.index, lookup.depth);
+            }
+
+            this.iseq.jump(matched_label);
+
+            this.iseq.push(unmatched_label);
+            this.iseq.pop();
+
+            for (let local of node.targets) {
+                local = local as LocalVariableTargetNode;
+                this.iseq.putnil();
+                const lookup = this.iseq.local_table.find!(local.name, local.depth)!;
+                this.iseq.setlocal(lookup.index, lookup.depth);
+            }
+        }
+
+        this.iseq.push(matched_label);
+        if (!this.used) this.iseq.pop();
+    }
+
+    override visitShareableConstantNode(node: ShareableConstantNode): void {
+        this.visit(node.write);
     }
 
     private find_local_or_throw(name: string, depth: number): Lookup {
