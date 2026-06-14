@@ -103,6 +103,9 @@ export abstract class Encoding {
         let enc1 = await Encoding.extract(obj1);
         let enc2 = await Encoding.extract(obj2);
 
+        if (enc1 === Qnil) enc1 = undefined;
+        if (enc2 === Qnil) enc2 = undefined;
+
         if (enc1 == null || enc2 == null) return null;
         if (enc1 == enc2) return enc1;
 
@@ -713,15 +716,15 @@ export const init = async () => {
         // making new Encoding instances cannot be done from Ruby land
         klass.get_singleton_class().get_data<Class>().undef_method("new");
 
-        await Object.send(klass.get_singleton_class(), "attr_reader", [await Runtime.intern("default_external")]);
-        await Object.send(klass.get_singleton_class(), "attr_reader", [await Runtime.intern("default_internal")]);
+        klass.define_native_singleton_method("default_external", (_self: RValue): RValue => {
+            return Encoding.default_external;
+        });
 
         klass.define_native_singleton_method("default_external=", async (_self: RValue, args: RValue[]) => {
             const [enc_or_name] = await Args.scan("1", args);
 
             if (enc_or_name === Qnil) {
-                Encoding.default_external = Qnil;
-                return Qnil;
+                throw new ArgumentError("default external can not be nil");
             }
 
             await Runtime.assert_type(enc_or_name, await RubyString.klass(), await Encoding.klass());
@@ -730,6 +733,10 @@ export const init = async () => {
             Encoding.default_external = encoding;
 
             return enc_or_name;
+        });
+
+        klass.define_native_singleton_method("default_internal", (_self: RValue): RValue => {
+            return Encoding.default_internal;
         });
 
         klass.define_native_singleton_method("default_internal=", async (_self: RValue, args: RValue[]) => {
@@ -747,9 +754,6 @@ export const init = async () => {
 
             return enc_or_name;
         });
-
-        await Object.send(klass.rval, "default_internal=", [Qnil]);
-        await Object.send(klass.rval, "default_external=", [await Encoding.get("utf-8")!]);
 
         klass.define_native_singleton_method("find", async (_self: RValue, args: RValue[]): Promise<RValue> => {
             const [name_rval] = await Args.scan("1", args);
@@ -791,6 +795,9 @@ export const init = async () => {
     await register_encoding("utf-16le", [], new UTF16LEEncoding());
     await register_encoding("utf-16be", [], new UTF16BEEncoding());
     await register_encoding("utf-32", [], new UTF32Encoding());
+
+    Encoding.default_internal = Qnil;
+    Encoding.default_external = await Encoding.get("utf-8")!;
 
     await Runtime.define_class_under(EncodingClass, "CompatibilityError", (await Object.find_constant("EncodingError"))!);
     await Runtime.define_class_under(EncodingClass, "ConverterNotFoundError", (await Object.find_constant("EncodingError"))!);
