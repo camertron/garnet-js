@@ -35,6 +35,10 @@ export class Env {
     async delete(k: RValue): Promise<void> {
         await this.entries.delete(k);
     }
+
+    async to_hash(): Promise<RValue> {
+        return new RValue(await Hash.klass(), this.entries.dup());
+    }
 }
 
 export const init = () => {
@@ -90,6 +94,10 @@ export const init = () => {
         }
 
         return Qfalse;
+    });
+
+    env_rval.get_singleton_class().get_data<Class>().define_native_method("to_hash", async (_self: RValue): Promise<RValue> => {
+        return env.to_hash();
     });
 
     ObjectClass.get_data<Class>().constants["ENV"] = env_rval;

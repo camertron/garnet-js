@@ -144,6 +144,12 @@ export class Hash {
         this.values = new Map(other.values);
     }
 
+    dup() {
+        const copy = new Hash();
+        copy.replace(this);
+        return copy;
+    }
+
     async each(cb: (k: RValue, v: RValue) => Promise<void>) {
         for (const key of this.keys.keys()) {
             const k = this.keys.get(key)!;
@@ -441,9 +447,7 @@ export const init = () => {
         });
 
         klass.define_native_method("dup", async (self: RValue): Promise<RValue> => {
-            const copy = new Hash();
-            copy.replace(self.get_data<Hash>());
-            return new RValue(await Hash.klass(), copy);
+            return new RValue(await Hash.klass(), self.get_data<Hash>().dup());
         });
 
         klass.define_native_method("replace", async (self: RValue, args: RValue[]): Promise<RValue> => {
