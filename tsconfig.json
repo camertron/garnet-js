@@ -20,7 +20,8 @@
     },
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "src/**/*.mjs"
   ],
   "ts-node": {
     "esm": true
