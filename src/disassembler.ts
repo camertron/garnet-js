@@ -113,13 +113,15 @@ export class Disassembler {
 
     object(object: any) {
         if (object.type) {
+            object = object as ValueType;
+
             switch (object.type) {
                 case "String":
-                    return RubyString.inspect((object as ValueType).value);
+                    return RubyString.inspect(object.value);
                 case "Symbol":
-                    return Symbol.inspect((object as ValueType).value);
+                    return Symbol.inspect(object.value);
                 default:
-                    return (object as ValueType).value.toString();
+                    return object.value.toString();
             }
         } else if (object instanceof RValue) {
             if (object.klass.get_data<Class>().full_name === "String") {
