@@ -334,10 +334,10 @@ export const init = () => {
                         delete chunk_strs[chunk_strs.length - 1];
                     }
                 } else if (limit === -1) {
-                    // When limit is -1, trailing empty strings are kept. JavaScript's split already
-                    // handles this, so we only need to add last_chunk if there's a remainder that
-                    // wasn't captured. For limit === -1, we don't use a limit in split, so last_chunk
-                    // should always be empty and we don't need to add it.
+                    // JavaScript's split("") omits Ruby's trailing empty field.
+                    if (delim === "") {
+                        chunk_strs.push("");
+                    }
                 } else {
                     // limit > 1
                     if (last_chunk.length > 0 || (chunk_strs.length > 0 && chunk_strs[chunk_strs.length - 1] !== '')) {
