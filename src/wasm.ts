@@ -23,7 +23,7 @@ export class ModuleNotFound extends Error {
     }
 };
 
-const load_module_source = async (locator: string): Promise<Buffer> => {
+const load_module_source = async (locator: string): Promise<ArrayBuffer> => {
     if (is_node) {
         const fs = await import("fs");
         const path = await import("path");
@@ -54,7 +54,9 @@ const load_module_source = async (locator: string): Promise<Buffer> => {
                     reject(new ModuleNotFound(err.message, err));
                 }
 
-                resolve(data);
+                const buffer = new Uint8Array(data.byteLength);
+                buffer.set(data);
+                resolve(buffer.buffer);
             });
         });
     } else {
@@ -77,7 +79,7 @@ const load_module_source = async (locator: string): Promise<Buffer> => {
             }
 
             fetch_promise.then((value: Response) => {
-                resolve(value.arrayBuffer() as Promise<Buffer>);
+                resolve(value.arrayBuffer());
             }).catch((reason: any) => {
                 reject(reason);
             });
