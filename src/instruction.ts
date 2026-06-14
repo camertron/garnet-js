@@ -5,10 +5,13 @@ import { Float } from "./runtime/float";
 import { Integer } from "./runtime/integer";
 import { RubyString } from "./runtime/string";
 
-export type ValueType = {
-    value: any,
-    type: string
-}
+export type ValueType = (
+    { type: "String" | "Symbol", value: string } |
+    { type: "Integer" | "Float", value: number } |
+    { type: "TrueClass" | "FalseClass", value: boolean } |
+    { type: "NilClass", value: null | undefined } |
+    { type: "RValue", value: RValue }
+);
 
 // Abstract base instruction.
 export default abstract class Instruction {
@@ -19,22 +22,20 @@ export default abstract class Instruction {
     static async to_ruby(object: ValueType): Promise<RValue> {
         switch (object.type) {
             case "String":
-                return await RubyString.new(object.value as string);
+                return await RubyString.new(object.value);
             case "Symbol":
-                return await Runtime.intern(object.value as string);
+                return await Runtime.intern(object.value);
             case "Integer":
-                return await Integer.new(object.value as number);
+                return await Integer.new(object.value);
             case "Float":
-                return await Float.new(object.value as number);
+                return await Float.new(object.value);
             case "TrueClass":
             case "FalseClass":
-                return object.value as boolean ? Qtrue : Qfalse;
+                return object.value ? Qtrue : Qfalse;
             case "NilClass":
                 return Qnil;
             case "RValue":
-                return object.value as RValue;
-            default:
-                throw new TypeError(`no implicit conversion of ${object.type} into Ruby object`);
+                return object.value;
         }
     }
 
