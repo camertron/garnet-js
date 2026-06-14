@@ -302,9 +302,11 @@ class InterpretedCallableEnumerator extends Enumerator implements ControllableEn
 class Yielder {
     private static klass_: RValue;
     private controller?: YielderController;
+    private block?: RValue;
 
-    constructor(controller?: YielderController) {
+    constructor(controller?: YielderController, block?: RValue) {
         this.controller = controller;
+        this.block = block;
     }
 
     static async klass(): Promise<RValue> {
@@ -321,8 +323,12 @@ class Yielder {
         return this.klass_;
     }
 
-    static async new(controller?: YielderController): Promise<RValue> {
+    static async new_for_controller(controller: YielderController): Promise<RValue> {
         return new RValue(await this.klass(), new Yielder(controller));
+    }
+
+    static async new(block: RValue): Promise<RValue> {
+        return new RValue(await this.klass(), new Yielder(undefined, block));
     }
 
     async yield(args: RValue[]): Promise<RValue> {
@@ -332,7 +338,11 @@ class Yielder {
             return await this.controller.yield(value);
         }
 
-        throw new PauseError(value);
+        if (this.block) {
+            return await this.block.get_data<Proc>().call(ExecutionContext.current, args);
+        }
+
+        throw new TypeError("uninitialized yielder");
     }
 }
 
@@ -368,7 +378,7 @@ class InterpretedProcEnumerator extends Enumerator implements ControllableEnumer
 
     private async yielder(): Promise<RValue> {
         if (!this.yielder_) {
-            this.yielder_ = await Yielder.new(this.controller);
+            this.yielder_ = await Yielder.new_for_controller(this.controller);
         }
 
         return this.yielder_;
@@ -470,6 +480,15 @@ export const init = async () => {
     });
 
     await Runtime.define_class_under(await Enumerator.klass(), "Yielder", ObjectClass, async (klass: Class) => {
+        klass.define_native_method("initialize", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            if (!block) {
+                throw new ArgumentError("tried to create Enumerator::Yielder object without a block");
+            }
+
+            self.data = new Yielder(undefined, block);
+            return self;
+        });
+
         klass.define_native_method("yield", async (self: RValue, args: RValue[]): Promise<RValue> => {
             return await self.get_data<Yielder>().yield(args);
         });
