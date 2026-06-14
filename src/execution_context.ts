@@ -686,7 +686,8 @@ export class ExecutionContext {
     }
 
     async run_top_frame(iseq: InstructionSequence, stack_index?: number): Promise<RValue> {
-        const new_top_frame = new TopFrame(iseq, stack_index);
+        const effective_stack_index = stack_index ?? this.stack.length;
+        const new_top_frame = new TopFrame(iseq, effective_stack_index);
 
         ObjectClass.get_data<Class>().constants["TOPLEVEL_BINDING"] = new RValue(
             await Binding.klass(),
@@ -694,7 +695,7 @@ export class ExecutionContext {
                 Main,
                 new_top_frame.nesting,
                 ExecutionContext.current.stack,
-                stack_index || 0,
+                effective_stack_index,
                 null
             )
         );
@@ -897,13 +898,9 @@ export class ExecutionContext {
         let start_label: Label | null = null;
 
         if (call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
-            // arg splat and kwarg splat are always the last elements
-            let splat_index = call_data.argc - 1;
-
-            if (call_data.has_flag(CallDataFlag.KW_SPLAT)) {
-                splat_index = call_data.argc - 2;
-            }
-
+            // Send extracts keyword splats before passing args into frame setup,
+            // so the positional splat is always the last positional arg here.
+            const splat_index = call_data.argc - 1;
             const splat_arr = locals[splat_index];
 
             if (splat_arr && splat_arr.klass === await RubyArray.klass()) {
