@@ -101,8 +101,22 @@ export const init = () => {
                 init_arr = [];
             }
 
-            self.data = new RubyArray(init_arr);
+            // self.data will almost always be set because Array.allocate sets up storage
+            if (self.data) {
+                self.get_data<RubyArray>().elements = init_arr;
+            } else {
+                self.data = new RubyArray(init_arr);
+            }
+
             return Qnil;
+        });
+
+        klass.define_native_singleton_method("allocate", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            await Args.scan("0", args);
+
+            // arrays returned from Array.allocate must have storage, which makes allocate
+            // and initialize behave the same way
+            return await RubyArray.new();
         });
 
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
