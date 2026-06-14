@@ -242,6 +242,12 @@ export class ExecutionContext {
             locals[i] = new RValuePointer(Qnil);
         }
 
+        if (this.stack.length !== frame.stack_index) {
+            throw new Error(
+                `Frame stack mismatch before local allocation: stack length ${this.stack.length}, frame stack index ${frame.stack_index} (${this.describe_stack_frame(frame)})`
+            );
+        }
+
         this.stack.push(...locals);
 
         // Yield so that some frame-specific setup can be done.
@@ -260,12 +266,12 @@ export class ExecutionContext {
     }
 
     async execute_frame(frame: Frame, previous: Frame | null): Promise<RValue> {
-        this.frame = frame;
-
         // Finally we can execute the instructions one at a time. If they return
         // jump or leave we will handle those appropriately.
         while (true) {
             const insn = frame.iseq.compiled_insns[frame.pc];
+
+            // console.log(`${frame.iseq.absolute_path}:${frame.line}, ${frame.pc}`);
 
             switch (insn.constructor) {
                 case Number:
@@ -745,6 +751,7 @@ export class ExecutionContext {
         // invocations of the same block.
         //
         // @TODO: Maybe only copy the stack if the block has locals of its own?
+        // this.stack = stack.map(ptr => new RValuePointer(ptr.rval));
         this.stack = [...stack];
 
         try {
@@ -867,8 +874,14 @@ export class ExecutionContext {
     // Ugh whyyy is this necessary? Can't we just use the indices in the local table?
     // Probably. I'd say a refactor is in order.
     private inc_local_index(local_index: number, iseq: InstructionSequence): number {
+        // If we're already at or past the end of the local table, stay there
+        if (local_index >= iseq.local_table.locals.length) {
+            return local_index;
+        }
+
+        // If incrementing would go past the end, return the length (one past the last valid index)
         if (iseq.local_table.locals.length <= local_index + 1) {
-            return iseq.local_table.locals.length - 1;
+            return iseq.local_table.locals.length;
         }
 
         if (iseq.local_table.locals[local_index + 1].name === "keyword_bits") {
@@ -884,11 +897,17 @@ export class ExecutionContext {
         let start_label: Label | null = null;
 
         if (call_data.has_flag(CallDataFlag.ARGS_SPLAT)) {
-            // splatted array is always the last element
-            const splat_arr = locals[call_data.argc - 1];
+            // arg splat and kwarg splat are always the last elements
+            let splat_index = call_data.argc - 1;
+
+            if (call_data.has_flag(CallDataFlag.KW_SPLAT)) {
+                splat_index = call_data.argc - 2;
+            }
+
+            const splat_arr = locals[splat_index];
 
             if (splat_arr && splat_arr.klass === await RubyArray.klass()) {
-                locals.splice(call_data.argc - 1, 1, ...splat_arr.get_data<RubyArray>().elements);
+                locals.splice(splat_index, 1, ...splat_arr.get_data<RubyArray>().elements);
             }
         }
 
@@ -996,7 +1015,7 @@ export class ExecutionContext {
                 }
 
                 local_index = this.inc_local_index(local_index, iseq);
-            } else if (local_index >= 0) {
+            } else if (local_index >= 0 && local_index < iseq.local_table.size()) {
                 // named splat
                 if (iseq.argument_options.post_start != null) {
                     const length = locals.length - (iseq.argument_options.post_num || 0);
@@ -1148,8 +1167,59 @@ export class ExecutionContext {
         return start_label;
     }
 
+    private stack_boundary(): number {
+        return this.frame ? this.frame.stack_index + this.frame.iseq.local_table.size() : 0;
+    }
+
+    private describe_stack_frame(frame: Frame | null = this.frame): string {
+        if (!frame) {
+            return "no current frame";
+        }
+
+        return `${frame.iseq.name} at ${frame.iseq.absolute_path}:${frame.line}, pc=${frame.pc}, stack_index=${frame.stack_index}, locals=${frame.iseq.local_table.size()}`;
+    }
+
+    private assert_stack_can_read(index: number, operation: string): RValuePointer {
+        const boundary = this.stack_boundary();
+
+        if (index < boundary || index >= this.stack.length) {
+            throw new Error(
+                `${operation} stack access out of bounds: index ${index}, boundary ${boundary}, stack length ${this.stack.length} (${this.describe_stack_frame()})`
+            );
+        }
+
+        const pointer = this.stack[index];
+
+        if (!pointer) {
+            throw new Error(
+                `${operation} stack access found an empty slot: index ${index}, boundary ${boundary}, stack length ${this.stack.length} (${this.describe_stack_frame()})`
+            );
+        }
+
+        return pointer;
+    }
+
+    private assert_stack_can_remove(count: number, operation: string): void {
+        const boundary = this.stack_boundary();
+
+        if (count < 0) {
+            throw new Error(`${operation} cannot remove a negative number of stack entries: ${count}`);
+        }
+
+        if (this.stack.length - count < boundary) {
+            throw new Error(
+                `${operation} stack underflow: removing ${count} entries would cross boundary ${boundary} from stack length ${this.stack.length} (${this.describe_stack_frame()})`
+            );
+        }
+    }
+
     pop(): RValue | undefined {
-        return this.stack.pop()?.rval;
+        this.assert_stack_can_remove(1, "pop");
+        const pointer = this.assert_stack_can_read(this.stack.length - 1, "pop");
+
+        this.stack.pop();
+
+        return pointer.rval;
     }
 
     push(...values: RValue[]): void {
@@ -1157,7 +1227,7 @@ export class ExecutionContext {
     }
 
     peek(): RValue {
-        return this.stack[this.stack.length - 1].rval;
+        return this.assert_stack_can_read(this.stack.length - 1, "peek").rval;
     }
 
     get stack_len(): number {
@@ -1165,15 +1235,16 @@ export class ExecutionContext {
     }
 
     popn(n: number = 1): RValue[] {
+        this.assert_stack_can_remove(n, "popn");
         return this.stack.splice(this.stack.length - n, n).map(ptr => ptr.rval);
     }
 
     topn(n: number): RValue {
-        return this.stack[this.stack_len - n - 1].rval;
+        return this.assert_stack_can_read(this.stack_len - n - 1, "topn").rval;
     }
 
     setn(n: number, value: RValue): void {
-        this.stack[this.stack_len - (n + 1)].rval = value;
+        this.assert_stack_can_read(this.stack_len - (n + 1), "setn").rval = value;
     }
 
     jump(label: Label): JumpResult {
@@ -1181,7 +1252,12 @@ export class ExecutionContext {
     }
 
     leave() {
-        return new LeaveResult(this.stack.pop()!.rval);
+        this.assert_stack_can_remove(1, "leave");
+        const pointer = this.assert_stack_can_read(this.stack.length - 1, "leave");
+
+        this.stack.pop();
+
+        return new LeaveResult(pointer.rval);
     }
 
     get_binding(): Binding {
