@@ -1,14 +1,15 @@
 {
   "compilerOptions": {
-    "target": "es2020",
+    "target": "es2025",
     "module": "es2022",
-    "outDir": "build",
+    "rootDir": "src",
+    "outDir": "dist",
     "lib": [
-      "es2021",
+      "es2022",
       "dom"
     ],
     "sourceMap": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
     "declaration": true,
     "declarationDir": "dist",
