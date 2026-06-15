@@ -755,11 +755,13 @@ export const init = () => {
 
         klass.define_native_method("<<", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const [element_rval] = await Args.scan("1", args);
+            await Object.check_frozen(self);
             self.get_data<RubyArray>().elements.push(element_rval);
             return self;
         });
 
-        klass.define_native_method("push", (self: RValue, args: RValue[], _kwargs?: Hash, _block?: RValue, call_data?: MethodCallData): RValue => {
+        klass.define_native_method("push", async (self: RValue, args: RValue[], _kwargs?: Hash, _block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
+            await Object.check_frozen(self);
             const elements = self.get_data<RubyArray>().elements;
             elements.push(...args);
             return self;
