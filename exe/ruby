@@ -5,4 +5,4 @@ NODE_OPTIONS="--experimental-vm-modules $NODE_OPTIONS" \
   RUBY=exe/ruby \
   RUBY_EXE=exe/ruby \
   NODE_NO_WARNINGS=1 \
-  npx tsx exe/ruby-exe.ts "${@}"
+  npx tsx exe/ruby-exe.ts "$@"

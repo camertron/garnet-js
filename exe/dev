@@ -1,0 +1,33 @@
+#! /bin/bash
+
+function d-exec() {
+  docker run --rm -t -v $(pwd):/src garnet-dev:latest "$@"
+}
+
+function setup() {
+  docker build -t garnet-dev:latest .
+  d-exec "npm" "install"
+}
+
+function console() {
+  docker run --rm -it -v $(pwd):/src garnet-dev:latest /bin/bash
+}
+
+function mspec() {
+  d-exec "exe/mspec-run" "$@"
+}
+
+function ruby() {
+  d-exec "exe/ruby" "$@"
+}
+
+case "$1" in
+  "setup")
+    setup ;;
+  "console")
+    console ;;
+  "mspec")
+    mspec "${@:2}" ;;
+  "ruby")
+    ruby "${@:2}" ;;
+esac
