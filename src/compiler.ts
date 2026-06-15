@@ -2530,29 +2530,15 @@ export class Compiler extends Visitor {
     }
 
     override visitYieldNode(node: YieldNode) {
-        let argc = 0;
-        let flags = CallDataFlag.ARGS_SIMPLE;
+        const call_data = new BlockCallData(0, 0, null)
 
         if (node.arguments_) {
-            for (const argument of node.arguments_.arguments_) {
-                if (argument instanceof SplatNode) {
-                    flags = CallDataFlag.ARGS_SPLAT;
-                } else if (argument instanceof KeywordHashNode) {
-                    // Check if this is a keyword splat (**kwargs)
-                    for (const element of argument.elements) {
-                        if (element instanceof AssocSplatNode) {
-                            flags |= CallDataFlag.KW_SPLAT;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            this.with_used(true, () => this.visit(node.arguments_!));
-            argc = node.arguments_.arguments_.length;
+            this.with_used(true, () => {
+                this.populate_call_data_args(node.arguments_!, call_data);
+            });
         }
 
-        this.iseq.invokeblock(new BlockCallData(argc, flags, null));
+        this.iseq.invokeblock(call_data);
         if (!this.used) this.iseq.pop();
     }
 
