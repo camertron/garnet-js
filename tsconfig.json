@@ -17,8 +17,6 @@
     "strict": true,
     "types": ["node", "jest"],
     "esModuleInterop": true,
-    "paths": {
-    },
   },
   "include": [
     "src/**/*.ts",
