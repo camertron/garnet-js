@@ -1,6 +1,5 @@
 #! /bin/bash
 
-PATH=./exe:$PATH RUBY=exe/ruby RUBY_EXE=exe/ruby \
-  exe/ruby \
-    -I ./ruby/mspec/lib \
-    ./ruby/mspec/bin/mspec "${@}"
+exe/ruby \
+  -I ./ruby/mspec/lib \
+  ./ruby/mspec/bin/mspec "${@}"

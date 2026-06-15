@@ -16,9 +16,9 @@
 
             // "command": "exe/ruby -C ../../ioquatix/sus -I ../covered/lib bin/sus",
             // "command": "exe/ruby -r rubygems -C ../../phlex-ruby/phlex -I ../../phlex-ruby/phlex/lib -I ../../ioquatix/sus -I ../../ioquatix/sus/lib ../../ioquatix/sus/bin/sus"
-            // "command": "PATH=./bin:$PATH RUBY_EXE=exe/ruby exe/ruby -I /Users/camertron/workspace/test-unit/test-unit/lib -C /Users/camertron/workspace/test-unit/test-unit /Users/camertron/workspace/test-unit/test-unit/test/run.rb",
-            // "command": "PATH=./bin:$PATH RUBY_EXE=exe/ruby exe/ruby -I /Users/camertron/workspace/test-unit/test-unit/lib -C /Users/camertron/workspace/test-unit/test-unit /Users/camertron/workspace/test-unit/test-unit/test/run.rb -- test-assertions.rb -n test_assert_throw"
-            "command": "PATH=./bin:$PATH RUBY=exe/ruby RUBY_EXE=exe/ruby exe/ruby -I /Users/camertron/workspace/ruby/mspec/lib -C ruby/spec /Users/camertron/workspace/ruby/mspec/bin/mspec-run library/time/httpdate_spec.rb"
+            // "command": "exe/ruby -I /Users/camertron/workspace/test-unit/test-unit/lib -C /Users/camertron/workspace/test-unit/test-unit /Users/camertron/workspace/test-unit/test-unit/test/run.rb",
+            // "command": "exe/ruby -I /Users/camertron/workspace/test-unit/test-unit/lib -C /Users/camertron/workspace/test-unit/test-unit /Users/camertron/workspace/test-unit/test-unit/test/run.rb -- test-assertions.rb -n test_assert_throw"
+            "command": "exe/mspec-run ruby/spec/library/time/httpdate_spec.rb"
         }
     ]
 }

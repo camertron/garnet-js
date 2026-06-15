@@ -1,3 +1,8 @@
 #! /bin/sh
 
-NODE_OPTIONS="--experimental-vm-modules $NODE_OPTIONS" NODE_NO_WARNINGS=1 npx tsx exe/ruby-exe.ts "${@}"
+NODE_OPTIONS="--experimental-vm-modules $NODE_OPTIONS" \
+  PATH=./exe:$PATH \
+  RUBY=exe/ruby \
+  RUBY_EXE=exe/ruby \
+  NODE_NO_WARNINGS=1 \
+  npx tsx exe/ruby-exe.ts "${@}"
