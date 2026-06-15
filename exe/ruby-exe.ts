@@ -43,24 +43,28 @@ let argv_rval = Garnet.ObjectClass.get_data<Garnet.Class>().constants["ARGV"] = 
 
 // skip the first two elements (node and script path)
 for (let i = 2; i < argv.length; i ++) {
-    if (argv[i] == "-I") {
+    if (argv[i] === "-v" || argv[i] === "--version") {
+        const desc = await Garnet.find_constant("RUBY_DESCRIPTION");
+        console.log(desc?.get_data<string>());
+        process.exit(0);
+    } else if (argv[i] === "-I") {
         const p = path.resolve(argv[i + 1])
         await ExecutionContext.current.push_onto_load_path(p);
         i ++;
     } else if (argv[i].startsWith("-I")) {
         const p = path.resolve(argv[i].substring(2));
         await ExecutionContext.current.push_onto_load_path(p);
-    } else if (argv[i] == '-e') {
+    } else if (argv[i] === '-e') {
         code = argv[i + 1];
         i ++;
-    } else if (argv[i] == "-r") {
+    } else if (argv[i] === "-r") {
         await Runtime.require(argv[i + 1]);
         i ++;
-    } else if (argv[i] == "-m") {
+    } else if (argv[i] === "-m") {
         const module_name = argv[i + 1];
         await import(module_name);
         i ++;
-    } else if (argv[i] == "-C") {
+    } else if (argv[i] === "-C") {
         let dir = argv[i + 1];
 
         if (vmfs.is_relative(dir)) {
@@ -73,7 +77,7 @@ for (let i = 2; i < argv.length; i ++) {
         process.chdir(dir);
 
         i ++;
-    } else if (argv[i] == "--dump") {
+    } else if (argv[i] === "--dump") {
         dump_type = argv[i + 1];
         i ++;
     } else if (argv[i] === "--") {

@@ -1842,8 +1842,7 @@ export const init = async () => {
             if (arch === "x64") arch = "x86_64";
 
             const platform = process.platform;
-            // const release = (await import("os")).release().split(".")[0];
-            const release = "foo";
+            const release = (await import("os")).release().split(".")[0];
 
             return RubyString.new(`${arch}-${platform}${release}`);
         } else {
@@ -1882,7 +1881,7 @@ export const init = async () => {
     ObjectClass.get_data<Class>().constants["RUBY_ENGINE"] = await RubyString.new("Garnet.js");
 
     ObjectClass.get_data<Class>().constants["RUBY_DESCRIPTION"] = await RubyString.new(
-        `Garnet.js ${ObjectClass.get_data<Class>().constants["RUBY_VERSION"].get_data<string>()} [${ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"].get_data<string>()}]`
+        `Garnet.js ${ObjectClass.get_data<Class>().constants["RUBY_VERSION"].get_data<string>()} +PRISM [${ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"].get_data<string>()}]`
     );
 
     if (is_node) {
