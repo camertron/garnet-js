@@ -1,4 +1,4 @@
-import { CallDataFlag, MethodCallData } from "../call_data";
+import { MethodCallData } from "../call_data";
 import { BreakError, ExecutionContext } from "../execution_context";
 import { Class, Module, ObjectClass, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { hash_combine } from "../util/hash_utils";
@@ -821,7 +821,9 @@ export const init = () => {
             return self.get_data<RubyArray>().elements.length === 0 ? Qtrue : Qfalse;
         });
 
-        klass.define_native_method("clear", (self: RValue): RValue => {
+        klass.define_native_method("clear", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            await Object.check_frozen(self);
+            await Args.scan("0", args);
             const elements = self.get_data<RubyArray>().elements;
             elements.splice(0, elements.length);
             return self;
