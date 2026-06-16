@@ -14,6 +14,10 @@ function console() {
 }
 
 function mspec() {
+  d-exec "exe/mspec" "$@"
+}
+
+function mspec-run() {
   d-exec "exe/mspec-run" "$@"
 }
 
@@ -28,6 +32,10 @@ case "$1" in
     console ;;
   "mspec")
     mspec "${@:2}" ;;
+  "mspec-run")
+    mspec-run "${@:2}" ;;
   "ruby")
     ruby "${@:2}" ;;
+  *)
+    d-exec "${@}" ;;
 esac
