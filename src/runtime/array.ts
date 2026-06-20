@@ -516,7 +516,8 @@ export const init = () => {
                 }
             } else {
                 // floor here because you can pass a float to Array#[]
-                let index = Math.floor(arg1.get_data<number>());
+                let index = (await Runtime.coerce_to_int(arg1)).get_data<number>();
+                index = Math.floor(index);
 
                 if (arg2) {
                     await Runtime.assert_type(arg2, await Integer.klass());

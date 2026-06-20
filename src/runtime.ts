@@ -288,6 +288,29 @@ export class Runtime {
         }
     }
 
+    static async coerce_to_int(obj: RValue): Promise<RValue> {
+        switch (obj.klass) {
+            case await Integer.klass():
+                return obj;
+            default:
+                if (await Object.respond_to(obj, "to_int")) {
+                    const int = await Object.send(obj, "to_int");
+
+                    // make sure classes that inherit from String also work here
+                    if (await Kernel.is_a(int, await Integer.klass())) {
+                        return int;
+                    } else {
+                        const obj_class_name = obj.klass.get_data<Class>().full_name;
+                        const to_str_class_name = int.klass.get_data<Class>().full_name;
+                        throw new TypeError(`can't convert ${obj_class_name} to Integer (${obj_class_name}#to_int gives ${to_str_class_name})`);
+                    }
+                } else {
+                    const obj_class_name = obj.klass.get_data<Class>().full_name;
+                    throw new TypeError(`no implicit conversion of ${obj_class_name} into Integer`);
+                }
+        }
+    }
+
     static async coerce_all_to_string(objs: RValue[]): Promise<RValue[]> {
         const result = [];
 
