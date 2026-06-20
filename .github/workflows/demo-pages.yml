@@ -30,6 +30,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 25
+          cache-dependency-path: demo/
       - run: npm ci
       - name: Setup Pages
         uses: actions/configure-pages@v5

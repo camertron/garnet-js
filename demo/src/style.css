@@ -1,9 +1,9 @@
-@import "../node_modules/xterm/css/xterm";
-@import '../node_modules/@primer/css/dist/primer.css';
-@import '../node_modules/@primer/view-components/app/assets/styles/primer_view_components.css';
-@import '../node_modules/@primer/primitives/dist/css/primitives.css';
-@import '../node_modules/@primer/primitives/dist/css/functional/themes/light.css';
-@import '../node_modules/@primer/primitives/dist/css/functional/themes/dark.css';
+@import "xterm/css/xterm";
+@import '@primer/css/dist/primer.css';
+@import '@primer/view-components/app/assets/styles/primer_view_components.css';
+@import '@primer/primitives/dist/css/primitives.css';
+@import '@primer/primitives/dist/css/functional/themes/light.css';
+@import '@primer/primitives/dist/css/functional/themes/dark.css';
 
 @font-face {
   font-family: 'lequire-regular';
