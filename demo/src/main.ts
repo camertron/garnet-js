@@ -54,7 +54,7 @@ class IRBIO implements Garnet.IO {
 }
 
 const ec = Garnet.ExecutionContext.current;
-const terminal = new Terminal({cursorBlink: true, fontSize: 18, theme: {background: '#222222'}});
+const terminal = new Terminal({cursorBlink: true, fontSize: 18, theme: {background: '#222222', foreground: "#33ff33"}});
 terminal.open(document.querySelector(".Console")!);
 const local_echo = new LocalEchoAddon();
 terminal.loadAddon(local_echo);

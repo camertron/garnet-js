@@ -29,10 +29,6 @@ body {
     font-size: 25px;
 }
 
-.xterm-rows {
-    color: #33ff33 !important;
-}
-
 .Console {
     background-color: #222222;
     padding: 20px;
