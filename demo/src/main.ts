@@ -1,4 +1,8 @@
 import "./style.css";
+import "./assets/lequire-webfont.woff";
+import "./assets/lequire-webfont.woff2";
+import onigmo_url from "./assets/onigmo.wasm";
+import prism_url from "./assets/prism.wasm";
 
 import * as Garnet from "@camertron/garnet-js/src/garnet";
 import { Terminal } from "xterm";
@@ -10,8 +14,17 @@ declare global {
   }
 }
 
+const locator_map: {[key: string]: string} = {
+  onigmo: onigmo_url,
+  prism: prism_url,
+}
+
 Garnet.WASM.register_module_resolver((locator: string): string => {
-  return `${locator}.wasm`;
+  if (locator_map[locator]) {
+    return locator_map[locator]
+  } else {
+    throw new Error(`Could not resolve WASM module named ${locator}`);
+  }
 });
 
 await Garnet.init();

@@ -7,8 +7,8 @@
 
 @font-face {
   font-family: 'lequire-regular';
-  src: url('lequire-webfont.woff2') format('woff2'),
-        url('lequire-webfont.woff') format('woff');
+  src: url('assets/lequire-webfont.woff2') format('woff2'),
+        url('assets/lequire-webfont.woff') format('woff');
   font-weight: normal;
   font-style: normal;
 }
