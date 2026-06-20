@@ -1259,8 +1259,10 @@ export const VMCoreClass = Runtime.define_class("VMCore", ObjectClass, (klass: C
         throw new NotImplementedError("set_postexe is not implemented yet");
     });
 
-    klass.define_native_method("undef_method", (self: RValue, args: RValue[]): RValue => {
-        throw new NotImplementedError("undef_method is not implemented yet");
+    klass.define_native_method("core#undef_method", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+        const [cbase, name] = await Args.scan("2", args);
+        cbase.get_data<Class>().undef_method(name.get_data<string>());
+        return Qnil;
     });
 });
 

@@ -113,6 +113,7 @@ import {
     SuperNode,
     SymbolNode,
     TrueNode,
+    UndefNode,
     UnlessNode,
     UntilNode,
     WhenNode,
@@ -1338,13 +1339,13 @@ export class Compiler extends Visitor {
             }
 
             this.iseq.leave()
-        })
+        });
 
         const parameters_meta = this.get_parameters_meta(node.parameters);
 
         if (node.receiver) {
             this.with_used(true, () => this.visit(node.receiver!));
-            this.iseq.definesmethod(name, method_iseq, parameters_meta, lexical_scope)
+            this.iseq.definesmethod(name, method_iseq, parameters_meta, lexical_scope);
         } else {
             this.iseq.definemethod(name, method_iseq, parameters_meta, lexical_scope);
         }
@@ -3165,6 +3166,16 @@ export class Compiler extends Visitor {
 
     override visitShareableConstantNode(node: ShareableConstantNode): void {
         this.visit(node.write);
+    }
+
+    override visitUndefNode(node: UndefNode): void {
+        for (const name of node.names) {
+            this.iseq.putspecialobject(SpecialObjectType.VMCORE);
+            this.iseq.putspecialobject(SpecialObjectType.CBASE);
+            this.with_used(true, () => this.visit(name));
+            this.iseq.send_without_block(MethodCallData.create("core#undef_method", 2));
+            if (!this.used) this.iseq.pop();
+        }
     }
 
     private find_local_or_throw(name: string, depth: number): Lookup {
