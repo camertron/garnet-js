@@ -62,13 +62,42 @@ terminal.loadAddon(local_echo);
 ec.globals["$stdout"] = IRBIO.new(local_echo);
 ec.globals["$stderr"] = IRBIO.new(local_echo);
 
+// for remembering locals across top frame evals
+ec.globals["$__GARNET_DEMO_LOCALS"] = await Garnet.Hash.new();
+
 // Infinite loop of reading lines
 const prompt = "irb> ";
 const readLine = async () => {
-  const input = await local_echo.read(prompt);
+  let input = await local_echo.read(prompt);
 
   if (input.trim().length > 0) {
     try {
+      const toplevel_binding = Garnet.ObjectClass
+        .get_data<Garnet.Class>()
+        .constants["TOPLEVEL_BINDING"]
+        ?.get_data<Garnet.Binding>();
+
+      if (toplevel_binding) {
+        // "remember" locals
+        const local_names = toplevel_binding.local_variables();
+        const local_reads = [];
+
+        for (const [local_idx, local_name] of local_names.entries()) {
+          const stack_index = toplevel_binding.parent_frame!.stack_index + local_idx;
+
+          ec.globals["$__GARNET_DEMO_LOCALS"].get_data<Garnet.Hash>().set_by_symbol(
+            local_name,
+            ec.stack.at(stack_index)?.rval || Garnet.Qnil,
+          );
+
+          const local_name_sym = Garnet.Symbol.inspect(local_name);
+
+          local_reads.push(`${local_name} = $__GARNET_DEMO_LOCALS[${local_name_sym}]`);
+        }
+
+        input = `${local_reads.join(";")};${input}`;
+      }
+
       const result = await Garnet.evaluate(input);
       local_echo.println(`=> ${(await Garnet.Object.send(result, "inspect")).get_data<string>()}`)
     } catch (e) {

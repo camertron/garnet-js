@@ -696,7 +696,7 @@ export class ExecutionContext {
                 new_top_frame.nesting,
                 ExecutionContext.current.stack,
                 effective_stack_index,
-                null
+                new_top_frame
             )
         );
 
