@@ -4,7 +4,7 @@ import DefineSMethod from "./insns/definesmethod";
 import InvokeSuper from "./insns/invokesuper";
 import Once from "./insns/once";
 import Send from "./insns/send";
-import Instruction, { ValueType } from "./instruction";
+import Instruction from "./instruction";
 import { LocalTable, Lookup } from "./local_table";
 import { CompilerOptions } from "./compiler_options";
 import { RValue } from "./runtime";
@@ -33,29 +33,6 @@ export class Label {
 
     equals(other: Label) {
         return other instanceof Label && this.name == other.name;
-    }
-}
-
-// This object is used to track the size of the stack at any given time. It
-// is effectively a mini symbolic interpreter. It's necessary because when
-// instruction sequences get serialized they include a :stack_max field on
-// them. This field is used to determine how much stack space to allocate
-// for the instruction sequence.
-class Stack {
-    public current_size: number;
-    public maximum_size: number;
-
-    constructor() {
-        this.current_size = 0;
-        this.maximum_size = 0;
-    }
-
-    change_by(value: number) {
-        this.current_size += value;
-
-        if (this.current_size > this.maximum_size) {
-            this.maximum_size = this.current_size;
-        }
     }
 }
 
@@ -263,7 +240,6 @@ export class InstructionSequence extends InstructionList {
     public inline_storages: any;
     public compiled_insns: (Instruction | number | string | Label)[];
     public storage_index: number;
-    public stack: Stack;
 
     constructor(name: string, file: string, absolute_path: string, location: SourceLocation | null, type: string, lexical_scope: LexicalScope, parent_iseq: InstructionSequence | null = null, options: CompilerOptions) {
         super();
@@ -295,23 +271,12 @@ export class InstructionSequence extends InstructionList {
         this.local_table = new LocalTable();
         this.inline_storages = {};
         this.storage_index = 0;
-        this.stack = new Stack()
 
         this.options = options;
     }
 
     label(id?: string) {
         return new Label(id);
-    }
-
-    override push(value: Instruction | Label | number) {
-        const node = super.push(value as any);
-
-        if (value instanceof Instruction) {
-            this.stack.change_by(-value.pops() + value.pushes());
-        }
-
-        return node;
     }
 
     local_variable(name: string, depth: number = 0): Lookup | null {
