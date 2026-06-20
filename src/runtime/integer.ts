@@ -34,7 +34,15 @@ export class Integer {
     }
 
     static async new(value: number): Promise<RValue> {
-        if (isNaN(value)) {
+        let is_nan = false;
+
+        try {
+            // isNaN can throw when passed objects it doesn't recognize
+            is_nan = isNaN(value);
+        } catch {
+        }
+
+        if (is_nan) {
             throw new ArgumentError("value is NaN");
         }
 
