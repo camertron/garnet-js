@@ -318,9 +318,7 @@ export const init = async () => {
     mod.define_native_method("module_eval", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
         if (block) {
             const proc = block!.get_data<Proc>();
-            // nesting should include the class being evaluated
-            const new_nesting = [...proc.binding.nesting, self];
-            const binding = proc.binding.with_receiver_and_nesting(self, new_nesting);
+            const binding = proc.binding.with_receiver_nesting_and_method_definition_target(self, proc.binding.nesting, self);
             return await proc.with_binding(binding).call(ExecutionContext.current, [self]);
         } else {
             await Runtime.assert_type(args[0], await RubyString.klass());
@@ -342,7 +340,7 @@ export const init = async () => {
             }
 
             const iseq = Compiler.compile_string(code, path, path, line_offset);
-            return await ExecutionContext.current.run_class_frame(iseq, self);
+            return await ec.run_eval_frame(iseq, self, self, self, [self]);
         }
     });
 

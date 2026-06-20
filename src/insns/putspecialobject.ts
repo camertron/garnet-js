@@ -29,13 +29,13 @@ export default class PutSpecialObject extends Instruction {
                 // which is the last element in the nesting array.
                 // This is used for operations like alias that need to know
                 // which class/module they're being defined in.
-                context.push(context.const_base);
+                context.push(context.frame!.const_base);
                 break;
 
             case SpecialObjectType.CONST_BASE:
                 // CONST_BASE is the same as CBASE but may skip eval frames.
                 // For now, we treat them the same.
-                context.push(context.const_base);
+                context.push(context.frame!.const_base);
                 break;
         }
 

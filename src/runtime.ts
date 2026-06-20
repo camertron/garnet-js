@@ -1383,20 +1383,15 @@ await FalseClass.get_data<Class>().tap(async (klass: Class) => {
 
 await (ClassClass.get_data<Class>()).tap(async (klass: Class) => {
     // create a new instance of the Class class, i.e. create a new user-defined class
-    klass.define_native_singleton_method("new", async (self: RValue, args: RValue[], _kwargs?: RubyHash, block?: RValue): Promise<RValue> => {
+    klass.define_native_singleton_method("new", async (_self: RValue, args: RValue[], _kwargs?: RubyHash, block?: RValue): Promise<RValue> => {
         const superclass = args[0] || ObjectClass;
         const new_class = new Class(null, superclass);
         const new_class_rval = new RValue(ClassClass, new_class);
         new_class.rval = new_class_rval;
 
         if (block) {
-            const proc = block!.get_data<Proc>();
-            // nesting should include the class being evaluated
-            const new_nesting = [...proc.binding.nesting, new_class_rval];
-            const binding = proc.binding.with_receiver_and_nesting(new_class_rval, new_nesting);
-            // Call the inherited hook on the superclass before evaluating the block
             await Object.send(superclass, "inherited", [new_class_rval]);
-            await proc.with_binding(binding).call(ExecutionContext.current, [new_class_rval]);
+            await Object.send(new_class_rval, "class_eval", [], undefined, block);
         } else {
             // Call the inherited hook on the superclass
             await Object.send(superclass, "inherited", [new_class_rval]);
@@ -1476,7 +1471,7 @@ await (BasicObjectClass.get_data<Class>()).tap(async (klass: Class) => {
             await Args.scan("0", args);
 
             const proc = block.get_data<Proc>();
-            const binding = proc.binding.with_receiver(self);
+            const binding = proc.binding.with_receiver_and_method_definition_target(self, self.get_singleton_class());
             return await proc.with_binding(binding).call(ec, [self]);
         } else {
             // instance_eval(string, filename = nil, lineno = 1)
@@ -1500,7 +1495,15 @@ await (BasicObjectClass.get_data<Class>()).tap(async (klass: Class) => {
             }
 
             const iseq = Compiler.compile_string(code, filename, filename, lineno);
-            return await ec.run_class_frame(iseq, self);
+            let const_base;
+
+            if (self.has_singleton_class()) {
+                const_base = self.get_singleton_class();
+            } else {
+                const_base = self.klass;
+            }
+
+            return await ec.run_eval_frame(iseq, self, self.get_singleton_class(), const_base, null);
         }
     });
 

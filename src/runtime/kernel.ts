@@ -148,15 +148,12 @@ export const init = async () => {
 
         const iseq = Compiler.compile_string(code, path, path, line_offset);
 
-        // If a binding was provided, use it; otherwise use current context
         if (binding_rval) {
-            // TODO: Implement eval with binding properly
-            // For now, just run it as a class frame with the binding's self
             const binding = binding_rval.get_data<Binding>();
-            return await ec.run_class_frame(iseq, binding.receiver, binding.nesting);
+            return await ec.run_eval_frame(iseq, binding.receiver, binding.method_definition_target, binding.const_base, binding.nesting);
         } else {
             // Run in the current context with the current self
-            return await ec.run_class_frame(iseq, self, ExecutionContext.current.frame!.nesting);
+            return await ec.run_eval_frame(iseq, self, ec.frame!.method_definition_target, ec.frame!.const_base);
         }
     });
 

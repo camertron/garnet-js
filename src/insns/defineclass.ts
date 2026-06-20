@@ -1,8 +1,9 @@
 import { Disassembler } from "../disassembler";
+import { TypeError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
 import { InstructionSequence } from "../instruction_sequence";
-import { Class, Runtime } from "../runtime";
+import { ClassClass, Module, ModuleClass, Runtime } from "../runtime";
 
 export enum DefineClassFlags {
     TYPE_CLASS = 0,
@@ -32,8 +33,20 @@ export default class DefineClass extends Instruction {
         if (this.name == "singletonclass") {
             context.push(await context.run_class_frame(this.iseq, object.get_singleton_class()));
         } else {
-            // const constant = object.get_data<Class>().find_constant(this.name, false);
-            const constant = object.get_data<Class>().constants[this.name];
+            const constant = object.get_data<Module>().constants[this.name];
+
+            if (constant) {
+                // re-opening class or module
+                if (this.has_flag(DefineClassFlags.TYPE_CLASS)) {
+                    if (constant.klass !== ClassClass) {
+                        throw new TypeError(`${this.name} is not a class`);
+                    }
+                } else if (this.has_flag(DefineClassFlags.TYPE_MODULE)) {
+                    if (constant.klass !== ModuleClass) {
+                        throw new TypeError(`${this.name} is not a module`);
+                    }
+                }
+            }
 
             if (constant) {
                 context.push(await context.run_class_frame(this.iseq, constant));
@@ -59,6 +72,10 @@ export default class DefineClass extends Instruction {
 
     length(): number {
         return 4;
+    }
+
+    has_flag(flag: DefineClassFlags): boolean {
+        return (this.flags & flag) != 0;
     }
 
     disasm(fmt: Disassembler): string {

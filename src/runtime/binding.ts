@@ -21,32 +21,56 @@ export class Binding {
 
     public receiver: RValue;
     public nesting: RValue[];
+    public method_definition_target: RValue;
     public stack: RValuePointer[];
     public parent_frame: Frame | null;
     public stack_index: number;
 
-    static async new(self: RValue, nesting: RValue[], stack: RValuePointer[], stack_index: number = 0, parent_frame: Frame | null): Promise<RValue> {
-        return new RValue(await Binding.klass(), new Binding(self, nesting, stack, stack_index, parent_frame));
+    static async new(self: RValue, nesting: RValue[], stack: RValuePointer[], stack_index: number = 0, parent_frame: Frame | null, method_definition_target: RValue | null = null): Promise<RValue> {
+        return new RValue(await Binding.klass(), new Binding(self, nesting, stack, stack_index, parent_frame, method_definition_target));
     }
 
     static async from_binding(binding: Binding) {
         return new RValue(await Binding.klass(), binding);
     }
 
-    constructor(receiver: RValue, nesting: RValue[], stack: RValuePointer[], stack_index: number, parent_frame: Frame | null) {
+    constructor(receiver: RValue, nesting: RValue[], stack: RValuePointer[], stack_index: number, parent_frame: Frame | null, method_definition_target: RValue | null = null) {
+        if (parent_frame && !method_definition_target) {
+            method_definition_target = parent_frame.method_definition_target;
+        }
+
         this.receiver = receiver;
         this.nesting = nesting;
         this.stack = stack;
         this.parent_frame = parent_frame;
         this.stack_index = stack_index;
+        this.method_definition_target = method_definition_target || ObjectClass;
     }
 
-    with_receiver(new_receiver: RValue) {
-        return new Binding(new_receiver, this.nesting, this.stack, this.stack_index, this.parent_frame);
+    with_receiver(new_receiver: RValue): Binding {
+        return new Binding(new_receiver, this.nesting, this.stack, this.stack_index, this.parent_frame, this.method_definition_target);
     }
 
-    with_receiver_and_nesting(new_receiver: RValue, new_nesting: RValue[]) {
-        return new Binding(new_receiver, new_nesting, this.stack, this.stack_index, this.parent_frame);
+    with_receiver_and_nesting(new_receiver: RValue, new_nesting: RValue[]): Binding {
+        return new Binding(new_receiver, new_nesting, this.stack, this.stack_index, this.parent_frame, this.method_definition_target);
+    }
+
+    with_receiver_and_method_definition_target(new_receiver: RValue, method_definition_target: RValue): Binding {
+        return new Binding(new_receiver, this.nesting, this.stack, this.stack_index, this.parent_frame, method_definition_target);
+    }
+
+    with_receiver_nesting_and_method_definition_target(new_receiver: RValue, new_nesting: RValue[], method_definition_target: RValue): Binding {
+        return new Binding(new_receiver, new_nesting, this.stack, this.stack_index, this.parent_frame, method_definition_target);
+    }
+
+    get const_base(): RValue {
+        // if nesting is empty (e.g., in a top-level method), return ObjectClass
+        // since top-level methods are defined on Object
+        if (this.nesting.length === 0) {
+            return ObjectClass;
+        }
+
+        return this.nesting[this.nesting.length - 1];
     }
 }
 

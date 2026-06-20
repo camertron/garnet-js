@@ -1,6 +1,6 @@
 import { BlockCallData, CallData, CallDataFlag, MethodCallData } from "./call_data";
 import { ArgumentError, LocalJumpError, NativeError, RubyError, UncaughtThrowError } from "./errors";
-import { BlockFrame, ClassFrame, EnsureFrame, Frame, IFrameWithOwner, MethodFrame, RescueFrame, TopFrame } from "./frame";
+import { BlockFrame, ClassFrame, EnsureFrame, EvalFrame, Frame, IFrameWithOwner, MethodFrame, RescueFrame, TopFrame } from "./frame";
 import Instruction from "./instruction";
 import { CatchBreak, CatchEnsure, CatchEntry, CatchNext, CatchRescue, InstructionSequence, Label } from "./instruction_sequence";
 import { Local } from "./local_table";
@@ -766,6 +766,10 @@ export class ExecutionContext {
         return await this.run_frame(new ClassFrame(iseq, this.frame!, this.stack.length, klass, nesting));
     }
 
+    async run_eval_frame(iseq: InstructionSequence, self: RValue, method_definition_target: RValue, const_base: RValue, nesting: RValue[] | null = null): Promise<RValue> {
+        return await this.run_frame(new EvalFrame(iseq, this.frame!, this.stack.length, self, method_definition_target, const_base, nesting));
+    }
+
     async run_method_frame(call_data: MethodCallData, nesting: RValue[], iseq: InstructionSequence, self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, owner?: Module): Promise<RValue> {
         const method_frame = new MethodFrame(
             iseq,
@@ -858,18 +862,6 @@ export class ExecutionContext {
 
     local_set(index: number, depth: number, value: RValue) {
         this.frame!.local_set(this, index, depth, value);
-    }
-
-    get const_base() {
-        const nesting = this.frame!.nesting!;
-
-        // if nesting is empty (e.g., in a top-level method), return ObjectClass
-        // since top-level methods are defined on Object
-        if (nesting.length === 0) {
-            return ObjectClass;
-        }
-
-        return nesting[nesting.length - 1];
     }
 
     // Ugh whyyy is this necessary? Can't we just use the indices in the local table?

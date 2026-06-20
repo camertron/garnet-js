@@ -23,7 +23,7 @@ export default class DefineMethod extends Instruction {
     }
 
     async call(context: ExecutionContext): Promise<ExecutionResult> {
-        const target = context.frame!.self;
+        const target = context.frame!.method_definition_target;
 
         context.define_method(
             target,

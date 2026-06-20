@@ -29,16 +29,18 @@ export class Frame implements IFrame {
     public stack_index: number;
     public self: RValue;
     public nesting: RValue[];
+    public method_definition_target: RValue;
     public svars: { [key: string]: RValue };
     public line: number;
     public pc: number;
 
-    constructor(iseq: InstructionSequence, parent: Frame | null, stack_index: number, self: RValue, nesting: RValue[]) {
+    constructor(iseq: InstructionSequence, parent: Frame | null, stack_index: number, self: RValue, nesting: RValue[], method_definition_target: RValue) {
         this.iseq = iseq;
         this.parent = parent;
         this.stack_index = stack_index;
         this.self = self;
         this.nesting = nesting;
+        this.method_definition_target = method_definition_target;
 
         this.svars = {};
         this.line = iseq.location?.start_line ?? 1;
@@ -81,11 +83,21 @@ export class Frame implements IFrame {
 
         return current;
     }
+
+    get const_base() {
+        // if nesting is empty (e.g., in a top-level method), return ObjectClass
+        // since top-level methods are defined on Object
+        if (this.nesting.length === 0) {
+            return ObjectClass;
+        }
+
+        return this.nesting[this.nesting.length - 1];
+    }
 }
 
 export class TopFrame extends Frame {
     constructor(iseq: InstructionSequence, stack_index: number = 0) {
-        super(iseq, null, stack_index, Main, [ObjectClass]);
+        super(iseq, null, stack_index, Main, [ObjectClass], ObjectClass);
     }
 }
 
@@ -99,7 +111,7 @@ export class BlockFrame extends Frame implements IFrameWithOwner {
     public owner?: Module;
 
     constructor(call_data: BlockCallData, calling_convention: CallingConvention, iseq: InstructionSequence, binding: Binding, original_stack: RValuePointer[], args: RValue[], kwargs?: Hash, block?: RValue, owner?: Module) {
-        super(iseq, binding.parent_frame, binding.stack_index, binding.receiver, binding.nesting);
+        super(iseq, binding.parent_frame, binding.stack_index, binding.receiver, binding.nesting, binding.method_definition_target);
 
         this.call_data = call_data;
         this.calling_convention = calling_convention;
@@ -160,7 +172,7 @@ export class MethodFrame extends Frame implements IFrameWithOwner {
     public owner?: Module;
 
     constructor(iseq: InstructionSequence, nesting: RValue[], parent: Frame, stack_index: number, self: RValue, call_data: MethodCallData, args: RValue[], kwargs?: Hash, block?: RValue, owner?: Module) {
-        super(iseq, parent, stack_index, self, nesting);
+        super(iseq, parent, stack_index, self, nesting, owner?.rval || ObjectClass);
         this.call_data = call_data;
         this.args = args;
         this.kwargs = kwargs;
@@ -173,7 +185,7 @@ export class ClassFrame extends Frame implements IFrameWithOwner {
     public owner?: Module;
 
     constructor(iseq: InstructionSequence, parent: Frame, stack_index: number, self: RValue, nesting?: RValue[]) {
-        super(iseq, parent, stack_index, self, nesting || parent.nesting.concat([self]));
+        super(iseq, parent, stack_index, self, nesting || parent.nesting.concat([self]), self.get_data<Module>().rval);
         // In a class/module body, the owner is the class/module being defined
         this.owner = self.get_data<Module>();
     }
@@ -181,12 +193,25 @@ export class ClassFrame extends Frame implements IFrameWithOwner {
 
 export class RescueFrame extends Frame {
     constructor(iseq: InstructionSequence, parent: Frame, stack_index: number) {
-        super(iseq, parent, stack_index, parent.self, parent.nesting);
+        super(iseq, parent, stack_index, parent.self, parent.nesting, parent.method_definition_target);
     }
 }
 
 export class EnsureFrame extends Frame {
     constructor(iseq: InstructionSequence, parent: Frame, stack_index: number) {
-        super(iseq, parent, stack_index, parent.self, parent.nesting);
+        super(iseq, parent, stack_index, parent.self, parent.nesting, parent.method_definition_target);
+    }
+}
+
+export class EvalFrame extends Frame {
+    private _const_base: RValue;
+
+    constructor(iseq: InstructionSequence, parent: Frame, stack_index: number, self: RValue, method_definition_target: RValue, const_base: RValue, nesting: RValue[] | null = null) {
+        super(iseq, parent, stack_index, self, nesting ?? [...parent!.nesting, const_base], method_definition_target);
+        this._const_base = const_base;
+    }
+
+    override get const_base(): RValue {
+        return this._const_base;
     }
 }
