@@ -182,12 +182,14 @@ export { CallDataFlag, CallData, MethodCallData, BlockCallData, } from "./call_d
 
 export type { IO } from "./runtime";
 export { RubyString as String } from "./runtime/string";
+export { Symbol } from "./runtime/symbol";
 export { RubyArray } from "./runtime/array";
 export { Hash } from "./runtime/hash"
 export { Integer } from "./runtime/integer";
 export { Float } from "./runtime/float";
 export { Proc } from "./runtime/proc";
 export { Argf } from "./runtime/argf";
+export { Binding } from "./runtime/binding";
 
 export { Object } from "./runtime/object";
 export { RubyError, LoadError, SystemExit } from "./errors";
