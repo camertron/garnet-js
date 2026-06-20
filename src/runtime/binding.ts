@@ -72,6 +72,22 @@ export class Binding {
 
         return this.nesting[this.nesting.length - 1];
     }
+
+    local_variables(): string[] {
+        let current_frame: Frame | null = this.parent_frame;
+        const local_names = [];
+
+        while (current_frame) {
+            for (const local of current_frame.iseq.local_table.locals) {
+                if (local.name === "keyword_bits") continue;  // special local for kwargs
+                local_names.push(local.name);
+            }
+
+            current_frame = current_frame.parent;
+        }
+
+        return local_names;
+    }
 }
 
 let inited = false;
@@ -82,16 +98,10 @@ export const init = () => {
     Runtime.define_class("Binding", ObjectClass, (klass: Class) => {
         klass.define_native_method("local_variables", async (self: RValue): Promise<RValue> => {
             const binding = self.get_data<Binding>();
-            let current_frame: Frame | null = binding.parent_frame;
             const local_names = [];
 
-            while (current_frame) {
-                for (const local of current_frame.iseq.local_table.locals) {
-                    if (local.name === "keyword_bits") continue;  // special local for kwargs
-                    local_names.push(await Runtime.intern(local.name));
-                }
-
-                current_frame = current_frame.parent;
+            for (const local_name of binding.local_variables()) {
+                local_names.push(await Runtime.intern(local_name));
             }
 
             return await RubyArray.new(local_names);
