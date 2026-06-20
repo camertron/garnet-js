@@ -75,6 +75,10 @@ export const init = () => {
                     await Runtime.assert_type(args[0], await Integer.klass());
                     const size = args[0].get_data<number>();
 
+                    if (size < 0) {
+                        throw new ArgumentError("negative array size");
+                    }
+
                     // block supercedes default value
                     if (block) {
                         const proc = block.get_data<Proc>();
