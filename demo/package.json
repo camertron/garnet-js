@@ -12,7 +12,8 @@
     "@gytx/xterm-local-echo": "^0.1.8",
     "xterm": "^5.3.0",
     "@primer/css": "^21.1.1",
-    "@primer/view-components": "^0.52.2"
+    "@primer/view-components": "^0.52.2",
+    "@camertron/garnet-js": "file:../"
   },
   "devDependencies": {
     "typescript": "~6.0.2",
