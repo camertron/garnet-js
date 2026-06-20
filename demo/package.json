@@ -1,20 +1,21 @@
 {
   "name": "app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
   "dependencies": {
-    "@camertron/garnet-js": "link:../",
     "@gytx/xterm-local-echo": "^0.1.8",
-    "@hotwired/stimulus": "^3.2.2",
-    "@hotwired/turbo-rails": "^8.0.0-beta.2",
+    "xterm": "^5.3.0",
     "@primer/css": "^21.1.1",
-    "@ruby/prism": "*",
-    "rollup": "^4.9.5",
-    "xterm": "^5.3.0"
+    "@primer/view-components": "^0.52.2"
   },
   "devDependencies": {
-    "vite": "^5.0.0",
-    "vite-plugin-full-reload": "^1.1.0",
-    "vite-plugin-rails": "^0.5.0",
-    "vite-plugin-stimulus-hmr": "^3.0.0"
-  },
-  "packageManager": "yarn@4.0.2"
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12"
+  }
 }

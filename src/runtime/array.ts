@@ -15,7 +15,6 @@ import { spaceship_compare } from "./comparable";
 import { Numeric } from "./numeric";
 import { Args } from "./arg-scanner";
 import { Kernel } from "./kernel";
-import { warn } from "console";
 
 export class RubyArray {
     private static klass_: RValue;
@@ -1156,7 +1155,7 @@ export const init = () => {
             }
 
             if (target_arg && block) {
-                warn("warning: given block not used");
+                console.warn("warning: given block not used");
             }
 
             let count = 0;
