@@ -1506,7 +1506,8 @@ await (BasicObjectClass.get_data<Class>()).tap(async (klass: Class) => {
     });
 
     klass.define_native_method("__send__", async (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
-        const method_name = (await Runtime.coerce_to_string(args[0])).get_data<string>();
+        const [method_name_rval] = await Args.scan("1", args);
+        const method_name = (await Runtime.coerce_to_string(method_name_rval)).get_data<string>();
         let send_call_data;
 
         if (call_data) {
