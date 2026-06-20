@@ -8,12 +8,5 @@ export default defineConfig({
         keepNames: true,
       },
     },
-    lib: {
-      entry: resolve(import.meta.dirname, 'src/garnet.ts'),
-      name: 'GarnetJs',
-      // the proper extensions will be added
-      fileName: 'garnet',
-      formats: ['es'],
-    },
   },
 });
