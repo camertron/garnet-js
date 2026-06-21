@@ -1,3 +1,5 @@
+![The Garnet.js logo](/garnet-logotype.svg)
+
 ## Garnet.js
 
 Garnet is an implementation of the YARV (Yet Another Ruby VM) virtual machine and Ruby standard library written in TypeScript.
