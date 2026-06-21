@@ -2,9 +2,9 @@
 <!-- Created with Inkscape (http://www.inkscape.org/) -->
 
 <svg
-   width="479.10699mm"
+   width="126.107mm"
    height="122.107mm"
-   viewBox="0 0 479.10699 122.107"
+   viewBox="0 0 126.107 122.107"
    version="1.1"
    id="svg1"
    xml:space="preserve"
@@ -78,14 +78,4 @@
        xml:space="preserve"
        transform="matrix(0.26458333,0,0,0.26458333,85.873024,114.794)"
        id="text1"
-       style="font-size:37.3333px;font-family:Impact;-inkscape-font-specification:'Impact, Normal';white-space:pre;shape-inside:url(#rect2);display:inline;fill:#ffffff;stroke-width:0" /><text
-       xml:space="preserve"
-       style="font-size:61.8559px;font-family:Impact;-inkscape-font-specification:'Impact, Normal';fill:#007acd;fill-opacity:1;stroke-width:0"
-       x="217.69476"
-       y="198.00255"
-       id="text3"><tspan
-         sodipodi:role="line"
-         id="tspan3"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:61.8559px;font-family:'Lequire DEMO';-inkscape-font-specification:'Lequire DEMO';fill:#007acd;fill-opacity:1;stroke-width:0"
-         x="217.69476"
-         y="198.00255">Garnet.js</tspan></text></g></svg>
+       style="font-size:37.3333px;font-family:Impact;-inkscape-font-specification:'Impact, Normal';white-space:pre;shape-inside:url(#rect2);display:inline;fill:#ffffff;stroke-width:0" /></g></svg>
