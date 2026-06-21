@@ -19,7 +19,7 @@ Aside from the project's educational objectives, it's different from Opal and ot
 
 ## Getting Started
 
-Right now, Garnet isn't available on npm or published anywhere. It's only runnable with nodejs directly inside this repository. The project should be able to run in the browser as well, but I haven't actually tested browser compatibility in a very long time.
+Right now, Garnet isn't available on npm or published anywhere. It's only runnable with nodejs directly inside this repository. The project can also run in the browser. Take a look at the demo at [https://garnet-js.dev](https://garnet-js.dev)
 
 ### Clone the repository
 
