@@ -13,7 +13,8 @@
     "xterm": "^4.13.0",
     "@primer/css": "^21.1.1",
     "@primer/view-components": "^0.52.2",
-    "@camertron/garnet-js": "file:../"
+    "@camertron/garnet-js": "file:../",
+    "gsap": "^3.15.0"
   },
   "devDependencies": {
     "typescript": "~6.0.2",

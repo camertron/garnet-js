@@ -7,49 +7,107 @@
   </head>
 
   <body>
-    <div class="Header">
-      <span class="mt-1 ml-2">Garnet-JS Demo</span>
+    <div class="Hyperspace">
+      <div class="Hyperspace-banner">
+        <div class="Header">
+          <img src="src/assets/garnet-logotype.svg" />
+          <a href="https://github.com/camertron/garnet-js">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40">
+              <path d="M10.226 17.284c-2.965-.36-5.054-2.493-5.054-5.256 0-1.123.404-2.336 1.078-3.144-.292-.741-.247-2.314.09-2.965.898-.112 2.111.36 2.83 1.01.853-.269 1.752-.404 2.853-.404 1.1 0 1.999.135 2.807.382.696-.629 1.932-1.1 2.83-.988.315.606.36 2.179.067 2.942.72.854 1.101 2 1.101 3.167 0 2.763-2.089 4.852-5.098 5.234.763.494 1.28 1.572 1.28 2.807v2.336c0 .674.561 1.056 1.235.786 4.066-1.55 7.255-5.615 7.255-10.646C23.5 6.188 18.334 1 11.978 1 5.62 1 .5 6.188.5 12.545c0 4.986 3.167 9.12 7.435 10.669.606.225 1.19-.18 1.19-.786V20.63a2.9 2.9 0 0 1-1.078.224c-1.483 0-2.359-.808-2.987-2.313-.247-.607-.517-.966-1.034-1.033-.27-.023-.359-.135-.359-.27 0-.27.45-.471.898-.471.652 0 1.213.404 1.797 1.235.45.651.921.943 1.483.943.561 0 .92-.202 1.437-.719.382-.381.674-.718.944-.943"></path>
+            </svg>
+          </a>
+        </div>
+        <div class="Hyperspace-hero">
+          <div>
+            <div class="Hyperspace-banner-subtitle">
+              No transpilation. Just Ruby.
+            </div>
+            <div class="Hyperspace-banner-title">
+              In the browser.
+            </div>
+          </div>
+        </div>
+      </div>
+      <canvas class="Hyperspace-canvas"></canvas>
     </div>
-    <div class="container-lg mt-6 Console">
-      <div class="Console-header">
-        <div class="Console-header-btn">
-          <svg
-            viewBox="0 0 10 10"
-            xmlns="http://www.w3.org/2000/svg"
-            xmlns:xlink="http://www.w3.org/1999/xlink">
-            <defs>
-              <radialGradient id="fill-close">
-                <stop offset="10%" stop-color="rgb(229,103,92)" />
-                <stop offset="95%" stop-color="rgb(238,105,94)" />
-              </radialGradient>
-            </defs>
-            <circle cx="5" cy="5" r="4" fill="url('#fill-close')" />
-          </svg>
+    <div class="Console">
+      <div class="container-lg Console-body">
+        <div class="Console-body-header">Give it a try</div>
+        <div class="Console-input">
         </div>
-        <div class="Console-header-btn">
-          <svg
-            viewBox="0 0 10 10"
-            xmlns="http://www.w3.org/2000/svg"
-            xmlns:xlink="http://www.w3.org/1999/xlink">
-            <defs>
-              <radialGradient id="fill-min">
-                <stop offset="10%" stop-color="rgb(236,182,77)" />
-                <stop offset="95%" stop-color="rgb(245,189,79)" />
-              </radialGradient>
-            </defs>
-            <circle cx="5" cy="5" r="4" fill="url('#fill-min')" />
-          </svg>
-        </div>
-        <div class="Console-header-btn">
-          <svg
-            viewBox="0 0 10 10"
-            xmlns="http://www.w3.org/2000/svg"
-            xmlns:xlink="http://www.w3.org/1999/xlink">
-            <circle cx="5" cy="5" r="4" fill="rgb(97,195,84)" />
-          </svg>
+      </div>
+    </div>
+    <div class="Footer">
+      <div class="container-lg">
+        <div class="Footer-body">
+          <div class="Footer-body-left">
+            <img src="src/assets/garnet-logotype.svg" width="200" />
+            <span>&nbsp;&copy; 2026 Cameron C. Dutro</span>
+          </div>
+          <div class="Footer-body-right">
+            <a href="https://twitter.com/camertron" target="_blank">
+              <svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" viewBox="0 0 248 204" width="32px" data-view-component="true">
+                <defs>
+                  <style>
+                    .lc-twitter-logo {
+                      fill: #FFF;
+                    }
+                  </style>
+                </defs>
+                <path class="lc-twitter-logo" d="M221.95 51.29c.15 2.17.15 4.34.15 6.53 0 66.73-50.8 143.69-143.69 143.69v-.04c-27.44.04-54.31-7.82-77.41-22.64 3.99.48 8 .72 12.02.73 22.74.02 44.83-7.61 62.72-21.66-21.61-.41-40.56-14.5-47.18-35.07 7.57 1.46 15.37 1.16 22.8-.87-23.56-4.76-40.51-25.46-40.51-49.5v-.64c7.02 3.91 14.88 6.08 22.92 6.32C11.58 63.31 4.74 33.79 18.14 10.71c25.64 31.55 63.47 50.73 104.08 52.76-4.07-17.54 1.49-35.92 14.61-48.25 20.34-19.12 52.33-18.14 71.45 2.19 11.31-2.23 22.15-6.38 32.07-12.26-3.77 11.69-11.66 21.62-22.2 27.93 10.01-1.18 19.79-3.86 29-7.95-6.78 10.16-15.32 19.01-25.2 26.16z"></path>
+              </svg>
+            </a>
+            <a href="https://ruby.social/@camertron" target="_blank">
+              <svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" viewBox="0 0 216.4144 232.00976" width="30px" data-view-component="true">
+                <defs>
+                  <style>
+                    .lc-mastodon-logo {
+                      fill: #FFF;
+                    }
+
+                    .lc-mastodon-m {
+                      fill: #000;
+                    }
+                  </style>
+                </defs>
+                <path class="lc-mastodon-logo" d="M211.80734 139.0875c-3.18125 16.36625-28.4925 34.2775-57.5625 37.74875-15.15875 1.80875-30.08375 3.47125-45.99875 2.74125-26.0275-1.1925-46.565-6.2125-46.565-6.2125 0 2.53375.15625 4.94625.46875 7.2025 3.38375 25.68625 25.47 27.225 46.39125 27.9425 21.11625.7225 39.91875-5.20625 39.91875-5.20625l.8675 19.09s-14.77 7.93125-41.08125 9.39c-14.50875.7975-32.52375-.365-53.50625-5.91875C9.23234 213.82 1.40609 165.31125.20859 116.09125c-.365-14.61375-.14-28.39375-.14-39.91875 0-50.33 32.97625-65.0825 32.97625-65.0825C49.67234 3.45375 78.20359.2425 107.86484 0h.72875c29.66125.2425 58.21125 3.45375 74.8375 11.09 0 0 32.975 14.7525 32.975 65.0825 0 0 .41375 37.13375-4.59875 62.915"></path>
+                <path class="lc-mastodon-m" d="M177.50984 80.077v60.94125h-24.14375v-59.15c0-12.46875-5.24625-18.7975-15.74-18.7975-11.6025 0-17.4175 7.5075-17.4175 22.3525v32.37625H96.20734V85.42325c0-14.845-5.81625-22.3525-17.41875-22.3525-10.49375 0-15.74 6.32875-15.74 18.7975v59.15H38.90484V80.077c0-12.455 3.17125-22.3525 9.54125-29.675 6.56875-7.3225 15.17125-11.07625 25.85-11.07625 12.355 0 21.71125 4.74875 27.8975 14.2475l6.01375 10.08125 6.015-10.08125c6.185-9.49875 15.54125-14.2475 27.8975-14.2475 10.6775 0 19.28 3.75375 25.85 11.07625 6.36875 7.3225 9.54 17.22 9.54 29.675"></path>
+              </svg>
+            </a>
+            <a href="https://bsky.app/profile/camertron.bsky.social" target="_blank">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 530" width="32px" data-view-component="true">
+                <defs>
+                  <style>
+                    .lc-bluesky-logo {
+                      fill: #FFF;
+                    }
+                  </style>
+                </defs>
+                <path class="lc-bluesky-logo" d="m135.72 44.03c66.496 49.921 138.02 151.14 164.28 205.46 26.262-54.316 97.782-155.54 164.28-205.46 47.98-36.021 125.72-63.892 125.72 24.795 0 17.712-10.155 148.79-16.111 170.07-20.703 73.984-96.144 92.854-163.25 81.433 117.3 19.964 147.14 86.092 82.697 152.22-122.39 125.59-175.91-31.511-189.63-71.766-2.514-7.3797-3.6904-10.832-3.7077-7.8964-0.0174-2.9357-1.1937 0.51669-3.7077 7.8964-13.714 40.255-67.233 197.36-189.63 71.766-64.444-66.128-34.605-132.26 82.697-152.22-67.108 11.421-142.55-7.4491-163.25-81.433-5.9562-21.282-16.111-152.36-16.111-170.07 0-88.687 77.742-60.816 125.72-24.795z"></path>
+              </svg>
+            </a>
+            <a href="https://www.linkedin.com/in/camerondutro/" target="_blank">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="32px" data-view-component="true">
+                <defs>
+                  <style>
+                    .lc-linkedin-logo {
+                      fill: #FFF;
+                    }
+
+                    .lc-linkedin-fill {
+                      fill: #000;
+                    }
+                  </style>
+                </defs>
+                <g fill="none" fill-rule="evenodd">
+                  <path class="lc-linkedin-logo" d="M8,72 L64,72 C68.418278,72 72,68.418278 72,64 L72,8 C72,3.581722 68.418278,-8.11624501e-16 64,0 L8,0 C3.581722,8.11624501e-16 -5.41083001e-16,3.581722 0,8 L0,64 C5.41083001e-16,68.418278 3.581722,72 8,72 Z"></path>
+                  <path class="lc-linkedin-fill" d="M62,62 L51.315625,62 L51.315625,43.8021149 C51.315625,38.8127542 49.4197917,36.0245323 45.4707031,36.0245323 C41.1746094,36.0245323 38.9300781,38.9261103 38.9300781,43.8021149 L38.9300781,62 L28.6333333,62 L28.6333333,27.3333333 L38.9300781,27.3333333 L38.9300781,32.0029283 C38.9300781,32.0029283 42.0260417,26.2742151 49.3825521,26.2742151 C56.7356771,26.2742151 62,30.7644705 62,40.051212 L62,62 Z M16.349349,22.7940133 C12.8420573,22.7940133 10,19.9296567 10,16.3970067 C10,12.8643566 12.8420573,10 16.349349,10 C19.8566406,10 22.6970052,12.8643566 22.6970052,16.3970067 C22.6970052,19.9296567 19.8566406,22.7940133 16.349349,22.7940133 Z M11.0325521,62 L21.769401,62 L21.769401,27.3333333 L11.0325521,27.3333333 L11.0325521,62 Z"></path>
+                </g>
+              </svg>
+            </a>
+          </div>
         </div>
       </div>
     </div>
   </body>
 </html>
-
