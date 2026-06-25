@@ -37,6 +37,14 @@ export const init = async () => {
         return mod_rval;
     });
 
+    mod.define_native_singleton_method("allocate", (): RValue => {
+        const mod = new Module(null);
+        const mod_rval = new RValue(ModuleClass, mod);
+        mod.rval = mod_rval;
+
+        return mod_rval;
+    });
+
     mod.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
         return await RubyString.new(self.get_data<Module>().full_name);
     });
