@@ -1400,6 +1400,14 @@ await (ClassClass.get_data<Class>()).tap(async (klass: Class) => {
         return new_class_rval;
     });
 
+    klass.define_native_singleton_method("allocate", (self: RValue): RValue => {
+        const new_class = new Class(null, null);
+        const new_class_rval = new RValue(ClassClass, new_class);
+        new_class.rval = new_class_rval;
+
+        return new RValue(self, new_class);
+    });
+
     klass.define_native_method("superclass", (self: RValue): RValue => {
         return self.get_data<Class>().superclass || Qnil;
     });
