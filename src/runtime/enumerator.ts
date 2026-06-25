@@ -415,14 +415,16 @@ export const init = async () => {
     Runtime.define_class("Enumerator", ObjectClass, async (klass: Class) => {
         klass.include(await Enumerable.module());
 
-        klass.define_native_singleton_method("new", async (self: RValue, _args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
+        klass.define_native_method("initialize", async (self: RValue, _args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
             if (!block) {
                 throw new ArgumentError("tried to create Proc object without a block");
             }
 
             // We're making an assumption here that we've received an InterpretedProc. It's hopefully
             // exceptionally rare that a native block would be passed to Enumerator.new.
-            return await Enumerator.for_proc(block.get_data<InterpretedProc>());
+            self.data = (await Enumerator.for_proc(block.get_data<InterpretedProc>())).get_data<Enumerator>();
+
+            return Qnil;
         });
 
         klass.define_native_method("next", async (self: RValue): Promise<RValue> => {
