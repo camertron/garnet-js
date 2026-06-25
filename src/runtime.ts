@@ -1,6 +1,6 @@
 import { InstructionSequence } from "./instruction_sequence";
 import { Compiler, LexicalScope } from "./compiler";
-import { LoadError, TypeError, NoMethodError, NotImplementedError, NameError } from "./errors";
+import { LoadError, TypeError, NoMethodError, NotImplementedError, NameError, LocalJumpError } from "./errors";
 import { ExecutionContext } from "./execution_context";
 import { init as array_init } from "./runtime/array";
 import { Integer, init as integer_init } from "./runtime/integer";
@@ -865,6 +865,10 @@ export class Module {
     }
 
     get full_name(): string {
+        if (!this.name) {
+            return this.anonymous_name_str;
+        }
+
         if (!this.full_name_) {
             let cur_parent_rval: RValue | undefined = this.rval;
             const parts = [];
@@ -893,7 +897,7 @@ export class Module {
         }
 
         if (!this.anonymous_name_str_) {
-            const type_str = (this instanceof Module) ? "Module" : "Class";
+            const type_str = (this instanceof Class) ? "Class" : "Module";
             this.anonymous_name_str_ = `#<${type_str}:${Object.object_id_to_str(this.rval.object_id)}>`
         }
 
