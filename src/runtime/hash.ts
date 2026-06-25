@@ -455,8 +455,9 @@ export const init = () => {
         });
 
         klass.define_native_method("replace", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            await Runtime.assert_type(args[0], await Hash.klass());
-            const other = args[0].get_data<Hash>();
+            const [other_rval] = await Args.scan("1", args);
+            await Runtime.assert_type(other_rval, await Hash.klass());
+            const other = other_rval.get_data<Hash>();
             self.get_data<Hash>().replace(other);
             return self;
         });
