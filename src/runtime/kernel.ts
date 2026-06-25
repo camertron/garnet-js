@@ -558,19 +558,17 @@ export const init = async () => {
     });
 
     mod.define_native_method("tap", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
-        if (block) {
-            try {
-                await block.get_data<Proc>().call(ExecutionContext.current, [self]);
-                return self;
-            } catch (e) {
-                if (e instanceof BreakError) {
-                    return e.value;
-                }
+        Args.check_block(block, { yielding: true });
 
-                throw e;
+        try {
+            await block!.get_data<Proc>().call(ExecutionContext.current, [self]);
+            return self;
+        } catch (e) {
+            if (e instanceof BreakError) {
+                return e.value;
             }
-        } else {
-            throw new LocalJumpError("no block given (yield)");
+
+            throw e;
         }
     });
 
