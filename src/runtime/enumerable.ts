@@ -321,7 +321,7 @@ export const init = async () => {
         if (args.length > 0) {
             return RubyArray.new(found);
         } else {
-            return found[0];
+            return found[0] ?? Qnil;
         }
     });
 
