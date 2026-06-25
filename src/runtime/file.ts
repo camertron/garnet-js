@@ -448,8 +448,9 @@ export const init = async () => {
 
         /* Return true if the named file exists. */
         klass.define_native_singleton_method("exist?", async (_self: RValue, args: RValue[]): Promise<RValue> => {
-            await Runtime.assert_type(args[0], await RubyString.klass());
-            const path = args[0].get_data<string>();
+            const [path_rval] = await Args.scan("1", args);
+            await Runtime.assert_type(path_rval, await RubyString.klass());
+            const path = path_rval.get_data<string>();
             return vmfs.path_exists(path) ? Qtrue : Qfalse;
         });
 
@@ -465,8 +466,9 @@ export const init = async () => {
         });
 
         klass.define_native_singleton_method("extname", async (_self: RValue, args: RValue[]): Promise<RValue> => {
-            await Runtime.assert_type(args[0], await RubyString.klass());
-            const path_str = args[0].get_data<string>();
+            const [path_rval] = await Args.scan("1", args);
+            await Runtime.assert_type(path_rval, await RubyString.klass());
+            const path_str = path_rval.get_data<string>();
 
             return RubyString.new(vmfs.extname(path_str));
         });
