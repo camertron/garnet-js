@@ -313,10 +313,6 @@ export class ExecutionContext {
                                 throw error;
                             }
 
-                            if (frame.iseq.type != "block") {
-                                throw new Error(`Expected frame type to be 'block', was '${frame.iseq.type}' instead`);
-                            }
-
                             const catch_entry = this.find_catch_entry(frame, CatchBreak);
 
                             if (!catch_entry) {
