@@ -188,6 +188,10 @@ export const init = () => {
             return await Hash.subclass_new(self, args[0], block);
         });
 
+        klass.define_native_singleton_method("allocate", (self: RValue): RValue => {
+            return Hash.subclass_new(self);
+        });
+
         klass.define_native_method("default", (self: RValue): RValue => {
             return self.get_data<Hash>().default_value || Qnil;
         });
