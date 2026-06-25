@@ -1,4 +1,4 @@
-import { ArgumentError } from "../errors";
+import { ArgumentError, LocalJumpError } from "../errors";
 import { Qnil, RValue } from "../runtime";
 import { Hash } from "./hash";
 
@@ -175,5 +175,15 @@ export const Args = {
         }
     },
 
-    get_kwarg: get_kwarg_impl
+    get_kwarg: get_kwarg_impl,
+
+    check_block: (block?: RValue, options: { yielding: boolean } = { yielding: false }) => {
+        if (!block) {
+            if (options.yielding) {
+                throw new LocalJumpError("no block given (yield)");
+            } else {
+                throw new LocalJumpError("no block given");
+            }
+        }
+    }
 }
