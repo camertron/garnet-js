@@ -1453,6 +1453,8 @@ await (BasicObjectClass.get_data<Class>()).tap(async (klass: Class) => {
     });
 
     klass.define_native_method("instance_exec", async (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
+        Args.check_block(block);
+
         const proc = block!.get_data<Proc>();
         const binding = proc.binding.with_receiver(self);
         let block_call_data: BlockCallData | undefined = undefined;
