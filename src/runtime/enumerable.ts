@@ -361,8 +361,10 @@ export const init = async () => {
 
             try {
                 await Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, each_args: RValue[]): Promise<RValue> => {
-                    if ((await Object.send(each_args[0], "==", [target])).is_truthy()) {
-                        throw new BreakError(await Integer.get(index));
+                    if (each_args.length > 0) {
+                        if ((await Object.send(each_args[0], "==", [target])).is_truthy()) {
+                            throw new BreakError(await Integer.get(index));
+                        }
                     }
 
                     index++;
