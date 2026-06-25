@@ -736,8 +736,9 @@ export const init = async () => {
     });
 
     mod.define_native_method("to_enum", async (self: RValue, args: RValue[], kwargs?: Hash): Promise<RValue> => {
-        const method_name = args[0].get_data<string>();
-        return await Enumerator.for_method(self, method_name, args.slice(1), kwargs);
+        const [method_name_rval, rest_args] = await Args.scan("01*", args);
+        const method_name = method_name_rval ? method_name_rval.get_data<string>() : "each";
+        return await Enumerator.for_method(self, method_name, rest_args, kwargs);
     });
 
     mod.define_native_method("loop", async (_self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
