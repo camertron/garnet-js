@@ -1,7 +1,7 @@
 import { is_node } from "../env";
-import { ArgumentError, IRubyError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, StopIteration, SystemExit, TypeError } from "../errors";
+import { ArgumentError, ErrnoENOENT, IRubyError, LocalJumpError, NameError, NoMethodError, NotImplementedError, RuntimeError, StopIteration, SystemExit, TypeError } from "../errors";
 import { BreakError, CallingConvention, ExecutionContext, ReturnError, ThrowError } from "../execution_context";
-import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, Visibility, Callable, ObjectClass, InterpretedCallable, NativeCallable, STDERR, STDOUT, IO, NilClass } from "../runtime";
+import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime, ClassClass, ModuleClass, Class, KernelModule, Visibility, NativeCallable, STDERR, IO, NilClass } from "../runtime";
 import { vmfs } from "../vmfs";
 import { Integer } from "./integer";
 import { Object } from "./object";
@@ -282,8 +282,23 @@ export const init = async () => {
             throw new RuntimeError("backticks are only supported in nodejs");
         }
 
-        const result = (child_process as typeof import("child_process")).spawnSync(args[0].get_data<string>());
-        return await RubyString.new(result.stdout.toString('utf-8')); // hopefully utf-8 is ok
+        const [cmd_rval] = await Args.scan("1", args);
+        const cmd = (await Runtime.coerce_to_string(cmd_rval)).get_data<string>();
+        const result = (child_process as typeof import("child_process")).spawnSync(cmd);
+
+        if (result.error) {
+            if ("code" in result.error) {
+                switch (result.error.code) {
+                    case "ENOENT":
+                        const msg = `No such file or directory - ${cmd.split(" ")[0]}`
+                        throw new ErrnoENOENT(msg);
+                }
+            }
+
+            throw new RuntimeError(result.error.message);
+        } else {
+            return await RubyString.new(result.stdout.toString('utf-8')); // hopefully utf-8 is ok
+        }
     });
 
     mod.define_native_method("class", (self: RValue): RValue => {
