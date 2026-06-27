@@ -145,7 +145,7 @@ export const init = async () => {
     if (inited) return;
 
     // Jesus I hope I don't have to implement this whole thing any time soon 😱
-    const ThreadClass = Runtime.define_class("Thread", ObjectClass, (klass: Class) => {
+    const ThreadClass = await Runtime.define_class("Thread", ObjectClass, async (klass: Class) => {
         klass.define_native_singleton_method("current", async (_self: RValue): Promise<RValue> => {
             return await Thread.current();
         });
@@ -165,7 +165,7 @@ export const init = async () => {
         });
     });
 
-    const MutexClass = await Runtime.define_class_under(ThreadClass, "Mutex", ObjectClass, (klass: Class) => {
+    const MutexClass = await Runtime.define_class_under(ThreadClass, "Mutex", ObjectClass, async (klass: Class) => {
         klass.define_native_singleton_method("new", async (self: RValue): Promise<RValue> => {
             return await Mutex.new();
         });
@@ -231,7 +231,7 @@ export const init = async () => {
     // alias
     ObjectClass.get_data<Class>().constants["Mutex"] = MutexClass;
 
-    const BacktraceClass = await Runtime.define_class_under(ThreadClass, "Backtrace", ObjectClass, (klass: Class) => {
+    const BacktraceClass = await Runtime.define_class_under(ThreadClass, "Backtrace", ObjectClass, async (klass: Class) => {
         // klass.define_native_method("to_s", (self: RValue): RValue => {
         //     return Qnil;
         // });
@@ -241,7 +241,7 @@ export const init = async () => {
         // });
     });
 
-    await Runtime.define_class_under(BacktraceClass, "Location", ObjectClass, (klass: Class) => {
+    await Runtime.define_class_under(BacktraceClass, "Location", ObjectClass, async (klass: Class) => {
         klass.define_native_method("path", async (self: RValue): Promise<RValue> => {
             return await self.get_data<BacktraceLocation>().path_rval();
         });

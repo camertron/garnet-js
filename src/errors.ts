@@ -5,7 +5,7 @@ import { RubyArray } from "./runtime/array";
 import { Args } from "./runtime/arg-scanner";
 
 export const init = async () => {
-    const ExceptionClass = Runtime.define_class("Exception", ObjectClass, async (klass: Class) => {
+    const ExceptionClass = await Runtime.define_class("Exception", ObjectClass, async (klass: Class) => {
         klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
             self.data = new UserDefinedException(self.klass, args[0] || Qnil);
             return Qnil;
@@ -122,47 +122,48 @@ export const init = async () => {
         });
     });
 
-    const NoMemoryErrorClass = Runtime.define_class("NoMemoryError", ExceptionClass);
+    const NoMemoryErrorClass = await Runtime.define_class("NoMemoryError", ExceptionClass);
 
-    const SignalExceptionClass = Runtime.define_class("SignalException", ExceptionClass);
-    const InterruptClass = Runtime.define_class("Interrupt", SignalExceptionClass);
+    const SignalExceptionClass = await Runtime.define_class("SignalException", ExceptionClass);
+    const InterruptClass = await Runtime.define_class("Interrupt", SignalExceptionClass);
 
-    const StandardErrorClass = Runtime.define_class("StandardError", ExceptionClass);
-    const TypeErrorClass = Runtime.define_class("TypeError", StandardErrorClass);
-    const NameErrorClass = Runtime.define_class("NameError", StandardErrorClass);
-    const LocalJumpErrorClass = Runtime.define_class("LocalJumpError", StandardErrorClass);
-    const RuntimeErrorClass = Runtime.define_class("RuntimeError", StandardErrorClass);
-    const IndexErrorClass = Runtime.define_class("IndexError", StandardErrorClass);
-    const StopIterationClass = Runtime.define_class("StopIteration", IndexErrorClass);
-    const RangeErrorClass = Runtime.define_class("RangeError", StandardErrorClass);
-    const EncodingErrorClass = Runtime.define_class("EncodingError", StandardErrorClass);
-    const ThreadErrorClass = Runtime.define_class("ThreadError", StandardErrorClass);
-    const ZeroDivisionError = Runtime.define_class("ZeroDivisionError", StandardErrorClass);
-    const KeyErrorClass = Runtime.define_class("KeyError", IndexErrorClass);
-    const FrozenErrorClass = Runtime.define_class("FrozenError", RuntimeErrorClass);
-    const NoMethodErrorClass = Runtime.define_class("NoMethodError", NameErrorClass);
-    const ArgumentErrorClass = Runtime.define_class("ArgumentError", StandardErrorClass);
-    const IOError = Runtime.define_class("IOError", StandardErrorClass);
+    const StandardErrorClass = await Runtime.define_class("StandardError", ExceptionClass);
+    const TypeErrorClass = await Runtime.define_class("TypeError", StandardErrorClass);
+    const NameErrorClass = await Runtime.define_class("NameError", StandardErrorClass);
+    const LocalJumpErrorClass = await Runtime.define_class("LocalJumpError", StandardErrorClass);
+    const RuntimeErrorClass = await Runtime.define_class("RuntimeError", StandardErrorClass);
+    const IndexErrorClass = await Runtime.define_class("IndexError", StandardErrorClass);
+    const StopIterationClass = await Runtime.define_class("StopIteration", IndexErrorClass);
+    const RangeErrorClass = await Runtime.define_class("RangeError", StandardErrorClass);
+    const FloatDomainError = await Runtime.define_class("FloatDomainError", RangeErrorClass);
+    const EncodingErrorClass = await Runtime.define_class("EncodingError", StandardErrorClass);
+    const ThreadErrorClass = await Runtime.define_class("ThreadError", StandardErrorClass);
+    const ZeroDivisionError = await Runtime.define_class("ZeroDivisionError", StandardErrorClass);
+    const KeyErrorClass = await Runtime.define_class("KeyError", IndexErrorClass);
+    const FrozenErrorClass = await Runtime.define_class("FrozenError", RuntimeErrorClass);
+    const NoMethodErrorClass = await Runtime.define_class("NoMethodError", NameErrorClass);
+    const ArgumentErrorClass = await Runtime.define_class("ArgumentError", StandardErrorClass);
+    const IOError = await Runtime.define_class("IOError", StandardErrorClass);
 
-    const UncaughtThrowErrorClass = Runtime.define_class("UncaughtThrowError", ArgumentErrorClass, (klass: Class) => {
+    const UncaughtThrowErrorClass = await Runtime.define_class("UncaughtThrowError", ArgumentErrorClass, async (klass: Class) => {
         klass.define_native_method("tag", (self: RValue): RValue => {
             return self.get_data<UncaughtThrowError>().tag;
         });
     });
 
-    const ScriptErrorClass = Runtime.define_class("ScriptError", ExceptionClass);
-    const SyntaxErrorClass = Runtime.define_class("SyntaxError", ScriptErrorClass);
-    const LoadErrorClass = Runtime.define_class("LoadError", ScriptErrorClass);
-    const NotImplementedErrorClass = Runtime.define_class("NoMethodError", ScriptErrorClass);
+    const ScriptErrorClass = await Runtime.define_class("ScriptError", ExceptionClass);
+    const SyntaxErrorClass = await Runtime.define_class("SyntaxError", ScriptErrorClass);
+    const LoadErrorClass = await Runtime.define_class("LoadError", ScriptErrorClass);
+    const NotImplementedErrorClass = await Runtime.define_class("NoMethodError", ScriptErrorClass);
 
-    const SystemCallErrorClass = Runtime.define_class("SystemCallError", StandardErrorClass);
-    const ErrnoModule = Runtime.define_module("Errno");
+    const SystemCallErrorClass = await Runtime.define_class("SystemCallError", StandardErrorClass);
+    const ErrnoModule = await Runtime.define_module("Errno");
     const ErrnoENOENTClass = await Runtime.define_class_under(ErrnoModule, "ENOENT", SystemCallErrorClass);
     const ErrnoENOTDIRClass = await Runtime.define_class_under(ErrnoModule, "ENOTDIR", SystemCallErrorClass);
     const ErrnoEINVALClass = await Runtime.define_class_under(ErrnoModule, "EINVAL", SystemCallErrorClass);
     const ErrnoEACCESClass = await Runtime.define_class_under(ErrnoModule, "EACCES", SystemCallErrorClass);
 
-    const SystemExitClass = Runtime.define_class("SystemExit", ExceptionClass, (klass: Class) => {
+    const SystemExitClass = await Runtime.define_class("SystemExit", ExceptionClass, async (klass: Class) => {
         klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
             self.iv_set("@status", args[0] || Qtrue);
             self.iv_set("@message", args[0] || Qnil);

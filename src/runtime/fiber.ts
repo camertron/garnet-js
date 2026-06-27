@@ -38,7 +38,7 @@ export class Fiber {
 export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("Fiber", ObjectClass, (klass: Class) => {
+    await Runtime.define_class("Fiber", ObjectClass, async (klass: Class) => {
         klass.define_native_singleton_method("current", (): RValue => {
             return root_fiber_rval;
         });

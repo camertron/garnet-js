@@ -6,11 +6,11 @@ import { URI } from "../uri";
 export const init = async () => {
     const DEFAULT_PORT: number = 80;
 
-    const net_module = Runtime.define_module("Net");
+    const net_module = await Runtime.define_module("Net");
     const protocol_class = await Runtime.define_class_under(net_module, "Protocol", ObjectClass);
     const response_class = await Runtime.define_class_under(net_module, "HTTPResponse", ObjectClass);
 
-    await Runtime.define_class_under(net_module, "HTTP", protocol_class, (klass: Class) => {
+    await Runtime.define_class_under(net_module, "HTTP", protocol_class, async (klass: Class) => {
         klass.define_native_singleton_method("get", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const hostname = await Runtime.coerce_to_string(args[0]);
             const path = await Runtime.coerce_to_string(args[1]);

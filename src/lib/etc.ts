@@ -7,14 +7,14 @@ let inited = false;
 export const init = async () => {
     if (inited) return;
 
-    Runtime.define_module("Etc", (mod: Module) => {
+    await Runtime.define_module("Etc", async (mod: Module) => {
         mod.define_native_singleton_method("nprocessors", async (): Promise<RValue> => {
-          if (is_node) {
-            const os = await import("os");
-            return await Integer.get(os.availableParallelism());
-          } else {
-            return await Integer.get(1);
-          }
+            if (is_node) {
+                const os = await import("os");
+                return await Integer.get(os.availableParallelism());
+            } else {
+                return await Integer.get(1);
+            }
         });
     });
 

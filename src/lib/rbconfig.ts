@@ -28,7 +28,7 @@ export const init = async () => {
         );
     }
 
-    Runtime.define_module("RbConfig", (mod: Module): void => {
+    await Runtime.define_module("RbConfig", async (mod: Module) => {
         mod.constants["CONFIG"] = config_rvalue;
     });
 

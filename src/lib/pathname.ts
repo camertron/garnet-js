@@ -52,7 +52,7 @@ let inited = false;
 export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("Pathname", ObjectClass, async (klass: Class): Promise<void> => {
+    await Runtime.define_class("Pathname", ObjectClass, async (klass: Class): Promise<void> => {
         klass.define_native_singleton_method("new", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const [path_arg] = await Args.scan("1", args);
             let path_str: string;

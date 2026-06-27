@@ -64,8 +64,8 @@ import { Hash } from "node:crypto";
 import { Mutex } from "./util/mutex";
 import { Args } from "./runtime/arg-scanner";
 
-type ModuleDefinitionCallback = (module: Module) => void;
-type ClassDefinitionCallback = (klass: Class) => void;
+type ModuleDefinitionCallback = (module: Module) => Promise<void>;
+type ClassDefinitionCallback = (klass: Class) => Promise<void>;
 
 export type NativeMethod = (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData) => RValue | Promise<RValue>;
 
@@ -81,7 +81,7 @@ export class Runtime {
     static require_mutex: Mutex = new Mutex();
     static load_mutex: Mutex = new Mutex();
 
-    static define_module(name: string, cb?: ModuleDefinitionCallback): RValue {
+    static async define_module(name: string, cb?: ModuleDefinitionCallback): Promise<RValue> {
         const obj = ObjectClass.get_data<Class>();
 
         if (!obj.constants[name]) {
@@ -92,13 +92,13 @@ export class Runtime {
         }
 
         if (cb) {
-            cb(obj.constants[name].get_data<Module>());
+            await cb(obj.constants[name].get_data<Module>());
         }
 
         return obj.constants[name];
     }
 
-    static define_module_under(parent: RValue, name: string, cb?: ModuleDefinitionCallback): RValue {
+    static async define_module_under(parent: RValue, name: string, cb?: ModuleDefinitionCallback): Promise<RValue> {
         const parent_mod = parent.get_data<Module>();
 
         if (!parent_mod.constants[name]) {
@@ -109,13 +109,13 @@ export class Runtime {
         }
 
         if (cb) {
-            cb(parent_mod.constants[name].get_data<Module>());
+            await cb(parent_mod.constants[name].get_data<Module>());
         }
 
         return parent_mod.constants[name];
     }
 
-    static define_class(name: string, superclass: RValue, cb?: ClassDefinitionCallback): RValue {
+    static async define_class(name: string, superclass: RValue, cb?: ClassDefinitionCallback): Promise<RValue> {
         const obj = ObjectClass.get_data<Class>();
 
         if (!obj.constants[name]) {
@@ -130,7 +130,7 @@ export class Runtime {
         }
 
         if (cb) {
-            cb(obj.constants[name].get_data<Class>());
+            await cb(obj.constants[name].get_data<Class>());
         }
 
         return obj.constants[name];
@@ -154,7 +154,7 @@ export class Runtime {
         }
 
         if (cb) {
-            cb(parent_mod.constants[name].get_data<Class>());
+            await cb(parent_mod.constants[name].get_data<Class>());
         }
 
         return parent_mod.constants[name];
@@ -1221,7 +1221,7 @@ export const Qnil = new RValue(NilClass, null);
 export const Qtrue = new RValue(TrueClass, true);
 export const Qfalse = new RValue(FalseClass, false);
 
-export const VMCoreClass = Runtime.define_class("VMCore", ObjectClass, (klass: Class) => {
+export const VMCoreClass = await Runtime.define_class("VMCore", ObjectClass, async (klass: Class) => {
     klass.define_native_method("hash_merge_kwd", async (self: RValue, args: RValue[]): Promise<RValue> => {
         // @TODO: can we do this without creating a new hash?
         const new_hash = new RubyHash();
@@ -1546,7 +1546,7 @@ await (BasicObjectClass.get_data<Class>()).tap(async (klass: Class) => {
     });
 
     klass.define_native_method("__send__", async (self: RValue, args: RValue[], kwargs?: RubyHash, block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
-        const [method_name_rval] = await Args.scan("1", args);
+        const [method_name_rval, rest_args] = await Args.scan("10*", args);
         const method_name = (await Runtime.coerce_to_string(method_name_rval)).get_data<string>();
         let send_call_data;
 
@@ -1559,11 +1559,11 @@ await (BasicObjectClass.get_data<Class>()).tap(async (klass: Class) => {
             if (block) flags |= CallDataFlag.ARGS_BLOCKARG;
 
             send_call_data = MethodCallData.create(
-                method_name, args.length - 1, flags
+                method_name, rest_args.length, flags
             );
         }
 
-        return Object.send(self, send_call_data, args.slice(1), kwargs, block);
+        return Object.send(self, send_call_data, rest_args, kwargs, block);
     });
 
     klass.define_native_method("__id__", async (self: RValue): Promise<RValue> => {
@@ -1650,7 +1650,7 @@ export class NodeIO implements IO {
     }
 }
 
-export const IOClass = Runtime.define_class("IO", ObjectClass, async (klass: Class) => {
+export const IOClass = await Runtime.define_class("IO", ObjectClass, async (klass: Class) => {
     klass.define_native_method("puts", async (self: RValue, args: RValue[], _kwargs?: RubyHash, _block?: RValue, _call_data?: MethodCallData): Promise<RValue> => {
         const io = self.get_data<IO>();
 
@@ -1842,42 +1842,42 @@ export const STDERR = ObjectClass.get_data<Class>().constants["STDERR"] = is_nod
 
 export const init = async () => {
     await module_init();
-    string_init();
-    comparable_init();
-    numeric_init();
+    await comparable_init();
+    await string_init();
+    await numeric_init();
     await rational_init();
     await integer_init();
     await float_init();
-    symbol_init();
+    await symbol_init();
     await enumerable_init();
     await enumerator_init();
-    hash_init();
-    array_init();
-    proc_init();
+    await hash_init();
+    await array_init();
+    await proc_init();
     await error_init();
-    process_init();
+    await process_init();
     env_init();
     await file_init();
-    dir_init();
+    await dir_init();
     await kernel_init();
     await object_init();
-    range_init();
-    binding_init();
+    await range_init();
+    await binding_init();
     await signal_init();
-    time_init();
+    await time_init();
     await thread_init();
     await regexp_init();
     await encoding_init();
-    struct_init();
+    await struct_init();
     await method_init();
     await fiber_init();
     await pathname_init();
-    ruby_vm_init();
+    await ruby_vm_init();
     await objectspace_init();
-    warning_init();
-    argf_init();
+    await warning_init();
+    await argf_init();
     await gc_init();
-    math_init();
+    await math_init();
 
     ObjectClass.get_data<Class>().constants["RUBY_PLATFORM"] = await (async () => {
         if (is_node) {

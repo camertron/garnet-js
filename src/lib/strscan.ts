@@ -88,10 +88,10 @@ export class StringScanner {
     }
 }
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("StringScanner", ObjectClass, async (klass: Class) => {
+    await Runtime.define_class("StringScanner", ObjectClass, async (klass: Class) => {
         klass.define_native_method("initialize", async (self: RValue, args: RValue[], kwargs?: Hash): Promise<RValue> => {
             const [str_rval] = await Args.scan("1", args);
             const str = await Runtime.coerce_to_string(str_rval);

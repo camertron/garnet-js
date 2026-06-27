@@ -36,10 +36,10 @@ export class Range {
 
 let inited = false;
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("Range", ObjectClass, async (klass: Class) => {
+    await Runtime.define_class("Range", ObjectClass, async (klass: Class) => {
         klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
             self.data = new Range(args[0], args[1], (args[3] || Qfalse).is_truthy());
             return Qnil;

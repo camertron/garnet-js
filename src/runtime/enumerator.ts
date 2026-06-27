@@ -412,7 +412,7 @@ let inited = false;
 export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("Enumerator", ObjectClass, async (klass: Class) => {
+    await Runtime.define_class("Enumerator", ObjectClass, async (klass: Class) => {
         klass.include(await Enumerable.module());
 
         klass.define_native_method("initialize", async (self: RValue, _args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
@@ -461,7 +461,7 @@ export const init = async () => {
         }
     }
 
-    await Runtime.define_class_under(await Enumerator.klass(), "Lazy", await Enumerator.klass(), (klass: Class) => {
+    await Runtime.define_class_under(await Enumerator.klass(), "Lazy", await Enumerator.klass(), async (klass: Class) => {
         klass.define_native_method("select", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             check_block_given(block, "select");
             const proc = block!.get_data<Proc>();

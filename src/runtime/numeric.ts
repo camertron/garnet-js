@@ -20,8 +20,8 @@ export class Numeric {
     }
 }
 
-export const init = () => {
-    Runtime.define_class("Numeric", ObjectClass, async (klass: Class) => {
+export const init = async () => {
+    await Runtime.define_class("Numeric", ObjectClass, async (klass: Class) => {
         klass.include((await Object.find_constant("Comparable"))!);
 
         // This is just the base implementation of Numeric#<=>. Integer, Float, etc

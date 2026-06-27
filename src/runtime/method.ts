@@ -85,7 +85,7 @@ let inited = false;
 export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("Method", ObjectClass, async (klass: Class) => {
+    await Runtime.define_class("Method", ObjectClass, async (klass: Class) => {
         klass.define_native_method("call", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
             const mtd = self.get_data<Method>();
             let mtd_call_data;
@@ -257,7 +257,7 @@ export const init = async () => {
         });
     });
 
-    Runtime.define_class("UnboundMethod", ObjectClass, async (klass: Class) => {
+    await Runtime.define_class("UnboundMethod", ObjectClass, async (klass: Class) => {
         klass.define_native_method("owner", (self: RValue): RValue => {
             return self.get_data<UnboundMethod>().callable.owner?.rval || Qnil;
         });

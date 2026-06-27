@@ -125,7 +125,7 @@ const parse_pattern = (pattern: string) => {
 }
 
 export const init = async () => {
-    Runtime.define_class("Date", ObjectClass, (klass: Class) => {
+    await Runtime.define_class("Date", ObjectClass, async (klass: Class) => {
         klass.define_native_singleton_method("today", async (self: RValue): Promise<RValue> => {
             return await RubyDate.new(new Date());
         });

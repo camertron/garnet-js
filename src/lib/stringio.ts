@@ -140,10 +140,10 @@ export class StringIO implements IO {
     }
 }
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("StringIO", IOClass, async (klass: Class) => {
+    await Runtime.define_class("StringIO", IOClass, async (klass: Class) => {
         // @TODO: also include IO::generic_readable and IO::generic_writable
         klass.include(await Enumerable.module());
 

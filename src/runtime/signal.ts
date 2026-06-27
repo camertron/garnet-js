@@ -61,7 +61,7 @@ export const init = async () => {
     // Ignore ts errors here because Signal inherits from nothing, which define_class doesn't support and which
     // would force us to add a bunch of null checks everywhere. Maybe a little messy, but it gets the job done.
     /* @ts-ignore */
-    Runtime.define_class("Signal", null, (klass: Class) => {
+    await Runtime.define_class("Signal", null, (klass: Class) => {
         klass.define_native_singleton_method("trap", async (_self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             if (!block) {
                 throw new ArgumentError("tried to create Proc object without a block");

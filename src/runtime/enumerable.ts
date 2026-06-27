@@ -34,7 +34,7 @@ let inited = false;
 export const init = async () => {
     if (inited) return;
 
-    const mod_rval = Runtime.define_module("Enumerable");
+    const mod_rval = await Runtime.define_module("Enumerable");
     const mod = mod_rval.get_data<Module>();
 
     mod.define_native_method("map", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {

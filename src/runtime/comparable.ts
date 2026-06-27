@@ -31,10 +31,10 @@ async function compare(x: RValue, y: RValue, raise: boolean, callback: ((result:
 
 let inited = false;
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
-    Runtime.define_module("Comparable", (mod: Module) => {
+    await Runtime.define_module("Comparable", async (mod: Module) => {
         mod.define_native_method("<", async (self: RValue, args: RValue[]): Promise<RValue> => {
             return await compare(self, args[0], true, result => result < 0);
         });

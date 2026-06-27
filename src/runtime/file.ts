@@ -286,7 +286,7 @@ export const FNM_DOTMATCH = 4;
 export const FNM_EXTGLOB = 16;
 
 export const init = async () => {
-    Runtime.define_class("File", IOClass, async (klass: Class): Promise<void> => {
+    await Runtime.define_class("File", IOClass, async (klass: Class): Promise<void> => {
         klass.constants["SEPARATOR"] = await RubyString.new("/");
         klass.constants["Separator"] = await RubyString.new("/");
 

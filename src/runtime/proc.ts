@@ -127,10 +127,10 @@ export class InterpretedProc extends Proc {
 
 let inited = false;
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("Proc", ObjectClass, async (klass: Class) => {
+    await Runtime.define_class("Proc", ObjectClass, async (klass: Class) => {
         klass.define_native_singleton_method("new", (_self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
             if (!block) {
                 throw new ArgumentError("tried to create Proc object without a block");

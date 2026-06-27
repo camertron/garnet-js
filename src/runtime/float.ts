@@ -13,6 +13,7 @@ export class Float {
     private static klass_: RValue;
     private static POSITIVE_INFINITY: RValue;
     private static NEGATIVE_INFINITY: RValue;
+    private static NAN: RValue;
 
     static async new(value: number): Promise<RValue> {
         if (value === Number.POSITIVE_INFINITY) {
@@ -58,7 +59,7 @@ let inited = false;
 export const init = async () => {
     if (inited) return;
 
-    const float_klass = Runtime.define_class("Float", await Numeric.klass(), (klass: Class) => {
+    const float_klass = await Runtime.define_class("Float", await Numeric.klass(), async (klass: Class) => {
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             let str = self.get_data<number>().toString();
 

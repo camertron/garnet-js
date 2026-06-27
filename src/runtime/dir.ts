@@ -32,10 +32,10 @@ export class Dir {
 
 let inited = false;
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("Dir", ObjectClass, async (klass: Class) => {
+    await Runtime.define_class("Dir", ObjectClass, async (klass: Class) => {
         klass.define_native_singleton_method("getwd", (_self: RValue): RValue => {
             return Dir.getwd_val();
         });

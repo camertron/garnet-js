@@ -178,10 +178,10 @@ export class Hash {
 
 let inited = false;
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("Hash", ObjectClass, async (klass: Class) => {
+    await Runtime.define_class("Hash", ObjectClass, async (klass: Class) => {
         klass.include((await Object.find_constant("Enumerable"))!);
 
         klass.define_native_singleton_method("new", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {

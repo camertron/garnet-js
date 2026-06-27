@@ -712,7 +712,7 @@ let inited = false;
 export const init = async () => {
     if (inited) return false;
 
-    const EncodingClass = Runtime.define_class("Encoding", ObjectClass, async (klass: Class) => {
+    const EncodingClass = await Runtime.define_class("Encoding", ObjectClass, async (klass: Class) => {
         // making new Encoding instances cannot be done from Ruby land
         klass.get_singleton_class().get_data<Class>().undef_method("new");
 

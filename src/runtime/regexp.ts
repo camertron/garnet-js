@@ -111,7 +111,7 @@ export const init = async () => {
     const onigmo_instance = await WASM.load_module("onigmo");
     onigmo = { exports: new OnigmoExportsWrapper(onigmo_instance.exports as unknown as OnigmoExports) };
 
-    Runtime.define_class("Regexp", ObjectClass, async (klass: Class) => {
+    await Runtime.define_class("Regexp", ObjectClass, async (klass: Class) => {
         klass.define_native_singleton_method("compile", async (_self: RValue, args: RValue[]): Promise<RValue> => {
             // @TODO: handle flags/options
             const pattern = await Runtime.coerce_to_string(args[0]);
@@ -243,7 +243,7 @@ export const init = async () => {
         await singleton_class.alias_method("quote", "escape");
     });
 
-    Runtime.define_class("MatchData", ObjectClass, (klass: Class) => {
+    await Runtime.define_class("MatchData", ObjectClass, async (klass: Class) => {
         klass.define_native_method("captures", async (self: RValue): Promise<RValue> => {
             const match_data = self.get_data<MatchData>();
             const captures = [];

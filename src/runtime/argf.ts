@@ -22,10 +22,10 @@ export class Argf {
 
 let inited = false;
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("ARGF.class", ObjectClass, (klass: Class) => {
+    await Runtime.define_class("ARGF.class", ObjectClass, async (klass: Class) => {
     });
 
     inited = true;

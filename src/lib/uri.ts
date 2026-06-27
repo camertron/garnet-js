@@ -41,7 +41,7 @@ export class URI {
 export const init = async () => {
     if (inited) return;
 
-    const uri_module = Runtime.define_module("URI", async (mod: Module) => {
+    const uri_module = await Runtime.define_module("URI", async (mod: Module) => {
         mod.define_native_singleton_method("parse", (self: RValue, args: RValue[]): RValue => {
             const url = new URL(args[0].get_data<string>());
             const uri = new URI(url);
@@ -57,7 +57,7 @@ export const init = async () => {
         });
     });
 
-    const generic_class = await Runtime.define_class_under(uri_module, "Generic", ObjectClass, (klass: Class) => {
+    const generic_class = await Runtime.define_class_under(uri_module, "Generic", ObjectClass, async (klass: Class) => {
         klass.define_native_method("scheme", async (self: RValue): Promise<RValue> => {
             return await self.get_data<URI>().scheme();
         })

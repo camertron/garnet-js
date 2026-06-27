@@ -10,10 +10,10 @@ type StructContext = {
     fields?: Map<string, RValue>
 }
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("Struct", ObjectClass, (struct_class: Class) => {
+    await Runtime.define_class("Struct", ObjectClass, async (struct_class: Class) => {
         struct_class.define_native_singleton_method("new", async (self: RValue, args: RValue[]): Promise<RValue> => {
             let new_class;
             const field_names: string[] = [];

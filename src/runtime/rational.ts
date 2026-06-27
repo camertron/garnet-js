@@ -208,7 +208,7 @@ export class Rational {
 export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("Rational", await Numeric.klass(), (klass: Class) => {
+    await Runtime.define_class("Rational", await Numeric.klass(), async (klass: Class) => {
         klass.define_native_singleton_method("new", async (self: RValue, args: RValue[]): Promise<RValue> => {
             let rational;
 

@@ -9,7 +9,7 @@ let inited = false;
 export const init = async () => {
     if (inited) return;
 
-    Runtime.define_module("ObjectSpace", (mod: Module) => {
+    await Runtime.define_module("ObjectSpace", async (mod: Module) => {
         // Since we currently don't track all created objects, this method only searches for
         // Classes and Modules. That's fine for now since we don't need anything more, but
         // eventually it'll need to work the way CRuby does.

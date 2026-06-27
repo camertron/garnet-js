@@ -92,10 +92,10 @@ export class Binding {
 
 let inited = false;
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("Binding", ObjectClass, (klass: Class) => {
+    await Runtime.define_class("Binding", ObjectClass, async (klass: Class) => {
         klass.define_native_method("local_variables", async (self: RValue): Promise<RValue> => {
             const binding = self.get_data<Binding>();
             const local_names = [];

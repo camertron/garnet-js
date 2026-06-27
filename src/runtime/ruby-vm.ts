@@ -2,10 +2,10 @@ import { ObjectClass, Runtime } from "../runtime"
 
 let inited = false;
 
-export const init = () => {
+export const init = async () => {
   if (inited) return;
 
-    Runtime.define_class("RubyVM", ObjectClass);
+  await Runtime.define_class("RubyVM", ObjectClass);
 
-    inited = true;
+  inited = true;
 }

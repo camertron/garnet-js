@@ -6,12 +6,12 @@ import { Integer } from "./integer";
 
 let inited = false;
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
     const browserPid = Integer.new(2);
 
-    Runtime.define_module("Process", async (mod: Module): Promise<void> => {
+    await Runtime.define_module("Process", async (mod: Module): Promise<void> => {
         // really just an arbitrary value, 6 is what MRI returned on my system
         mod.constants["CLOCK_MONOTONIC"] = await Integer.get(6);
 

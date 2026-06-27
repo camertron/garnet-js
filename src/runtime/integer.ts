@@ -67,7 +67,7 @@ let inited = false;
 export const init = async () => {
     if (inited) return
 
-    Runtime.define_class("Integer", await Numeric.klass(), (klass: Class) => {
+    await Runtime.define_class("Integer", await Numeric.klass(), async (klass: Class) => {
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             return await RubyString.new(self.get_data<number>().toString());
         });

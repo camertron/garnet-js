@@ -37,10 +37,10 @@ export class MathDomainError extends RubyError {
     }
 }
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
-    Runtime.define_module("Math", async (mod: Module) => {
+    await Runtime.define_module("Math", async (mod: Module) => {
         mod.define_native_singleton_method("log10", async (_self: RValue, args: RValue[]): Promise<RValue> => {
             const [value_rval] = await Args.scan("1", args);
             await Runtime.assert_type(value_rval, await Integer.klass(), await Float.klass());

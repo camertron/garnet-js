@@ -48,10 +48,10 @@ export class Symbol {
 
 let inited = false;
 
-export const init = () => {
+export const init = async () => {
     if (inited) return;
 
-    Runtime.define_class("Symbol", ObjectClass, async (klass: Class) => {
+    await Runtime.define_class("Symbol", ObjectClass, async (klass: Class) => {
         klass.include((await Object.find_constant("Comparable"))!);
         await mix_shared_string_methods_into(klass);
 
