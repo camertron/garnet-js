@@ -231,7 +231,7 @@ abstract class BigInfinity implements Big.Big {
         return BigPositiveInfinity.instance();
     }
 
-    add(n: Big.BigSource): Big.Big {
+    add(_n: Big.BigSource): Big.Big {
         return this;
     }
 
@@ -503,6 +503,14 @@ export const init = async () => {
     }
 
     await Runtime.define_class("BigDecimal", ObjectClass, async (klass: Class): Promise<void> => {
+        const sign_nan = klass.constants["SIGN_NaN"] = await Integer.get(0);
+        const sign_positive_zero = klass.constants["SIGN_POSITIVE_ZERO"] = await Integer.get(1);
+        const sign_negative_zero = klass.constants["SIGN_NEGATIVE_ZERO"] = await Integer.get(-1);
+        const sign_positive_finite = klass.constants["SIGN_POSITIVE_FINITE"] = await Integer.get(2);
+        const sign_negative_finite = klass.constants["SIGN_NEGATIVE_FINITE"] = await Integer.get(-2);
+        const sign_positive_infinite = klass.constants["SIGN_POSITIVE_INFINITE"] = await Integer.get(3);
+        const sign_negative_infinite = klass.constants["SIGN_NEGATIVE_INFINITE"] = await Integer.get(-3);
+
         klass.define_native_method("to_f", (self: RValue): Promise<RValue> => {
             return Float.new(self.get_data<BigDecimal>().to_f());
         });
@@ -592,8 +600,43 @@ export const init = async () => {
             return self.get_data<BigDecimal>().value.gte(other) ? Qtrue : Qfalse;
         });
 
+        klass.define_native_method("==", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [term] = await Args.scan("1", args);
+            await Runtime.assert_type(term, await Numeric.klass(), await BigDecimal.klass());
+            const other = await coerce_to_big_source(term);
+            return self.get_data<BigDecimal>().value.eq(other) ? Qtrue : Qfalse;
+        });
+
+        klass.define_native_method("nan?", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            return self.get_data<BigDecimal>().value === BigNaN.instance() ? Qtrue : Qfalse;
+        });
+
+        klass.define_native_method("sign", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const big = self.get_data<BigDecimal>().value;
+
+            if (big === BigPositiveInfinity.instance()) {
+                return sign_positive_infinite;
+            } else if (big === BigNegativeInfinity.instance()) {
+                return sign_negative_infinite;
+            } else if (big === BigNaN.instance()) {
+                return sign_nan;
+            } else if (big.eq(0)) {
+                return sign_positive_zero;
+            } else {
+                return big.lt(0) ? sign_negative_finite : sign_positive_finite;
+            }
+        });
+
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const big = self.get_data<BigDecimal>();
+
+            if (big.value === BigPositiveInfinity.instance()) {
+                return RubyString.new("Infinity");
+            } else if (big.value === BigNegativeInfinity.instance()) {
+                return RubyString.new("-Infinity");
+            } else if (big.value === BigNaN.instance()) {
+                return RubyString.new("NaN");
+            }
 
             if (big.value.eq(0)) {
                 if (big.value.s === 1) {
@@ -601,14 +644,6 @@ export const init = async () => {
                 } else {
                     return RubyString.new("-0.0");
                 }
-            }
-
-            if (big.value.eq(BigPositiveInfinity.instance())) {
-                return RubyString.new("Infinity");
-            } else if (big.value.eq(BigNegativeInfinity.instance())) {
-                return RubyString.new("-Infinity");
-            } else if (big.value.eq(BigNaN.instance())) {
-                return RubyString.new("NaN");
             }
 
             const digits = [...big.value.c];
