@@ -38,14 +38,18 @@ export class BigDecimal {
     public digits: number | undefined;
 
     constructor(value: Big.BigSource, digits?: number) {
-        try {
-            this.value = new Big(value);
-        } catch (e) {
-            if (e instanceof Error && e.message === "[big.js] Invalid number") {
-                throw new ArgumentError(`invalid value for BigDecimal(): "${value}"`);
-            }
+        if (typeof value === "object") {
+            this.value = value as Big.Big;
+        } else {
+            try {
+                this.value = new Big(value);
+            } catch (e) {
+                if (e instanceof Error && e.message === "[big.js] Invalid number") {
+                    throw new ArgumentError(`invalid value for BigDecimal(): "${value}"`);
+                }
 
-            throw e;
+                throw e;
+            }
         }
 
         this.digits = digits;
@@ -90,9 +94,11 @@ const big_source_to_big = (src: Big.BigSource): Big.Big => {
         } else if (src === "NaN") {
             return BigNaN.instance();
         }
+    } else if (typeof src !== "number") {
+        return src;
     }
 
-    return Big.Big(src);
+    return new Big(src);
 }
 
 class BigNaN implements Big.Big {
@@ -454,7 +460,7 @@ class BigDecimalNegativeInfinity extends BigDecimal {
     static instance(): BigDecimalNegativeInfinity {
         if (!BigDecimalNegativeInfinity._instance) {
             BigDecimalNegativeInfinity._instance = new BigDecimalNegativeInfinity(
-                BigPositiveInfinity.instance()
+                BigNegativeInfinity.instance()
             );
         }
 
@@ -595,6 +601,14 @@ export const init = async () => {
                 } else {
                     return RubyString.new("-0.0");
                 }
+            }
+
+            if (big.value.eq(BigPositiveInfinity.instance())) {
+                return RubyString.new("Infinity");
+            } else if (big.value.eq(BigNegativeInfinity.instance())) {
+                return RubyString.new("-Infinity");
+            } else if (big.value.eq(BigNaN.instance())) {
+                return RubyString.new("NaN");
             }
 
             const digits = [...big.value.c];

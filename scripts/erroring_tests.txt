@@ -155,7 +155,6 @@ ruby/spec/language/while_spec.rb
 ruby/spec/language/yield_spec.rb
 ruby/spec/library/bigdecimal/BigDecimal_spec.rb
 ruby/spec/library/bigdecimal/abs_spec.rb
-ruby/spec/library/bigdecimal/case_compare_spec.rb
 ruby/spec/library/bigdecimal/add_spec.rb
 ruby/spec/library/bigdecimal/ceil_spec.rb
 ruby/spec/library/bigdecimal/comparison_spec.rb
