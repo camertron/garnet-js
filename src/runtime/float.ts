@@ -52,6 +52,14 @@ export class Float {
 
         return Float.NEGATIVE_INFINITY;
     }
+
+    static async nan(): Promise<RValue> {
+        if (!Float.NAN) {
+            Float.NAN = new RValue(await this.klass(), NaN);
+        }
+
+        return Float.NAN;
+    }
 }
 
 let inited = false;

@@ -391,6 +391,19 @@ export class RangeError extends RubyError {
     }
 }
 
+export class FloatDomainError extends RubyError {
+    private static ruby_class: RValue | null;
+
+    constructor(message: string) {
+        super(message);
+        this.name = "FloatDomainError";
+    }
+
+    async ruby_class(): Promise<RValue> {
+        return Promise.resolve(FloatDomainError.ruby_class ||= (await Object.find_constant("FloatDomainError"))!);
+    }
+}
+
 export class KeyError extends RubyError {
     private static ruby_class: RValue | null;
 
