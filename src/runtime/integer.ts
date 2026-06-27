@@ -1,4 +1,4 @@
-import { ArgumentError, NameError, RangeError } from "../errors";
+import { ArgumentError, NameError, RangeError, TypeError } from "../errors";
 import { Class, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime";
 import { obj_id_hash } from "../util/object_id";
 import { Encoding } from "./encoding";

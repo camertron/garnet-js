@@ -1,5 +1,5 @@
 import { CallDataFlag, MethodCallData } from "../call_data";
-import { FrozenError } from "../errors";
+import { FrozenError, TypeError } from "../errors";
 import { ExecutionContext } from "../execution_context";
 import { Callable, Class, KernelModule, ObjectClass, RValue, Runtime, Qtrue, Qfalse, Qnil, Module, Main } from "../runtime";
 import { Symbol } from "./symbol";

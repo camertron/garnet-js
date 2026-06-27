@@ -1,9 +1,9 @@
-import { Class, RValue, Runtime, Qnil, ObjectClass, Qtrue, Qfalse } from "../runtime";
+import { Class, RValue, Runtime, Qnil, Qtrue, Qfalse } from "../runtime";
 import { RubyString } from "../runtime/string";
 import { Object } from "../runtime/object";
 import { Integer } from "./integer";
 import { Numeric } from "./numeric";
-import { NameError } from "../errors";
+import { NameError, TypeError } from "../errors";
 import { Args } from "./arg-scanner";
 import { Kernel } from "./kernel";
 import { RubyArray } from "./array";

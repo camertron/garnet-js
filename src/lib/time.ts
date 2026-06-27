@@ -1,4 +1,4 @@
-import { NameError, NotImplementedError } from "../errors";
+import { NameError, NotImplementedError, TypeError } from "../errors";
 import { Class, ObjectClass, RValue, Runtime } from "../runtime";
 import { Float } from "../runtime/float";
 import { Kernel } from "../runtime/kernel";

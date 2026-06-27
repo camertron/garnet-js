@@ -1,6 +1,6 @@
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import Instruction from "../instruction";
-import { Class, Qnil, RValue } from "../runtime";
+import { Class } from "../runtime";
 import { Object } from "../runtime/object";
 import { TypeError } from "../errors";
 import { RubyArray } from "../runtime/array";

@@ -1,5 +1,4 @@
-import { ArgumentError, NameError, NoMethodError, StopIteration } from "../errors";
-import { PauseError } from "../execution_context";
+import { ArgumentError, NameError, TypeError, NoMethodError, StopIteration } from "../errors";
 import { Frame } from "../frame";
 import { ExecutionContext } from "../garnet";
 import { Class, InterpretedCallable, NativeCallable, ObjectClass, Qnil, RValue, Runtime, RValuePointer } from "../runtime";

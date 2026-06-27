@@ -2,6 +2,7 @@ import { Disassembler } from "../disassembler";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import { Class, Object, RValue, RubyArray } from "../garnet";
 import Instruction from "../instruction";
+import { TypeError } from "../errors";
 
 // It coerces the two objects at the top of the stack into Arrays by
 // calling `to_a` if necessary, and makes sure to `dup` the first Array if
