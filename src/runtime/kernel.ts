@@ -548,7 +548,7 @@ export const init = async () => {
             throw new NameError(`autoload must be constant name: ${constant}`);
         }
 
-        self.get_data<Module>().add_autoload(constant, file);
+        ExecutionContext.current.frame!.const_base.get_data<Module>().add_autoload(constant, file);
         return Qnil;
     });
 
