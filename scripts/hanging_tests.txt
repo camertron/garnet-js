@@ -20,6 +20,7 @@ ruby/spec/core/array/to_ary_spec.rb
 ruby/spec/core/array/union_spec.rb
 ruby/spec/core/array/uniq_spec.rb
 ruby/spec/core/array/unshift_spec.rb
+ruby/spec/core/class/allocate_spec.rb
 ruby/spec/core/file/join_spec.rb
 ruby/spec/core/file/printf_spec.rb
 ruby/spec/core/hash/equal_value_spec.rb

@@ -1,7 +1,6 @@
 ruby/spec/core/complex/finite_spec.rb
 ruby/spec/core/complex/infinite_spec.rb
 ruby/spec/core/complex/polar_spec.rb
-ruby/spec/core/class/allocate_spec.rb
 ruby/spec/core/enumerable/sum_spec.rb
 ruby/spec/core/enumerator/each_spec.rb
 ruby/spec/core/exception/backtrace_spec.rb
@@ -64,12 +63,9 @@ ruby/spec/core/io/ungetbyte_spec.rb
 ruby/spec/core/io/ungetc_spec.rb
 ruby/spec/core/kernel/Complex_spec.rb
 ruby/spec/core/kernel/abort_spec.rb
-ruby/spec/core/kernel/backtick_spec.rb
-ruby/spec/core/kernel/autoload_spec.rb
 ruby/spec/core/kernel/dup_spec.rb
 ruby/spec/core/kernel/exit_spec.rb
 ruby/spec/core/kernel/frozen_spec.rb
-ruby/spec/core/kernel/initialize_copy_spec.rb
 ruby/spec/core/kernel/instance_variable_get_spec.rb
 ruby/spec/core/kernel/public_send_spec.rb
 ruby/spec/core/kernel/raise_spec.rb
