@@ -189,6 +189,8 @@ export const init = async () => {
             return await Integer.get(Math.trunc(self.get_data<number>()));
         });
 
+        await klass.alias_method("to_int", "to_i");
+
         klass.define_native_method("to_s", async (self: RValue): Promise<RValue> => {
             const num = self.get_data<number>();
 
