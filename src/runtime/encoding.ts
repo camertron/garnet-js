@@ -66,13 +66,13 @@ export abstract class Encoding {
         }
     }
 
-    static async coerce_bang(obj: RValue): Promise<RValue | undefined> {
+    static async coerce_bang(obj: RValue): Promise<RValue> {
         if (obj.klass === await this.klass()) {
             return obj;
         } else if (obj.klass === await RubyString.klass()) {
             return this.get_or_throw(obj.get_data<string>());
         } else {
-            return undefined;
+            return this.coerce_bang(await Runtime.coerce_to_string(obj));
         }
     }
 

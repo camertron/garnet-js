@@ -14,14 +14,10 @@ ruby/spec/core/file/initialize_spec.rb
 ruby/spec/core/file/stat/ftype_spec.rb
 ruby/spec/core/file/utime_spec.rb
 ruby/spec/core/float/divide_spec.rb
-ruby/spec/core/float/comparison_spec.rb
 ruby/spec/core/float/dup_spec.rb
 ruby/spec/core/float/fdiv_spec.rb
 ruby/spec/core/float/quo_spec.rb
 ruby/spec/core/integer/ceildiv_spec.rb
-ruby/spec/core/integer/coerce_spec.rb
-ruby/spec/core/integer/chr_spec.rb
-ruby/spec/core/integer/comparison_spec.rb
 ruby/spec/core/integer/dup_spec.rb
 ruby/spec/core/integer/exponent_spec.rb
 ruby/spec/core/integer/numerator_spec.rb

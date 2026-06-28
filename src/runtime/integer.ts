@@ -282,7 +282,20 @@ export const init = async () => {
 
         klass.define_native_method("chr", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const data = self.get_data<number>();
-            const encoding_rval = args[0] || Encoding.us_ascii;
+            let [encoding_rval] = await Args.scan("01", args);
+
+            if (encoding_rval) {
+                encoding_rval = await Encoding.coerce_bang(encoding_rval);
+            }
+
+            if (!encoding_rval || encoding_rval === Qnil) {
+                encoding_rval = Encoding.default_internal;
+            }
+
+            if (encoding_rval === Qnil) {
+                encoding_rval = Encoding.us_ascii;
+            }
+
             const encoding = encoding_rval.get_data<Encoding>();
 
             if (encoding.codepoint_valid(data)) {
