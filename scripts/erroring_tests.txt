@@ -76,7 +76,6 @@ ruby/spec/core/module/name_spec.rb
 ruby/spec/core/numeric/dup_spec.rb
 ruby/spec/core/numeric/numerator_spec.rb
 ruby/spec/core/numeric/to_c_spec.rb
-ruby/spec/core/proc/case_compare_spec.rb
 ruby/spec/core/proc/dup_spec.rb
 ruby/spec/core/proc/ruby2_keywords_spec.rb
 ruby/spec/core/process/abort_spec.rb

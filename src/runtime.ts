@@ -1447,12 +1447,14 @@ await (BasicObjectClass.get_data<Class>()).tap(async (klass: Class) => {
         return Qnil;
     });
 
-    klass.define_native_method("==", (self: RValue, args: RValue[]): RValue => {
-        return self.object_id == args[0].object_id ? Qtrue : Qfalse;
+    klass.define_native_method("==", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const [other] = await Args.scan("1", args);
+        return self.object_id == other.object_id ? Qtrue : Qfalse;
     });
 
-    klass.define_native_method("equal?", (self: RValue, args: RValue[]): RValue => {
-        return self.object_id == args[0].object_id ? Qtrue : Qfalse;
+    klass.define_native_method("equal?", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const [other] = await Args.scan("1", args);
+        return self.object_id == other.object_id ? Qtrue : Qfalse;
     });
 
     klass.define_native_method("!", (self: RValue): RValue => {
