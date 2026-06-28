@@ -472,6 +472,24 @@ export const init = async () => {
 
             return RubyString.new(vmfs.extname(path_str));
         });
+        klass.define_native_singleton_method("basename", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+    await Runtime.assert_type(args[0], await RubyString.klass());
+
+    const path_str = args[0].get_data<string>();
+    let basename = vmfs.basename(path_str);
+
+    if (args.length > 1) {
+        await Runtime.assert_type(args[1], await RubyString.klass());
+
+        const suffix = args[1].get_data<string>();
+
+        if (suffix && basename.endsWith(suffix)) {
+            basename = basename.slice(0, -suffix.length);
+        }
+    }
+
+    return RubyString.new(basename);
+});
 
         klass.define_native_singleton_method("read", async (_self: RValue, args: RValue[]): Promise<RValue> => {
             await Runtime.assert_type(args[0], await RubyString.klass());
