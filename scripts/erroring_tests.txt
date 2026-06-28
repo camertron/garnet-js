@@ -2,8 +2,6 @@ ruby/spec/core/complex/finite_spec.rb
 ruby/spec/core/complex/infinite_spec.rb
 ruby/spec/core/complex/polar_spec.rb
 ruby/spec/core/enumerable/sum_spec.rb
-ruby/spec/core/enumerator/each_spec.rb
-ruby/spec/core/exception/backtrace_spec.rb
 ruby/spec/core/exception/detailed_message_spec.rb
 ruby/spec/core/exception/dup_spec.rb
 ruby/spec/core/exception/equal_value_spec.rb

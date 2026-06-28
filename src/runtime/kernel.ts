@@ -247,7 +247,7 @@ export const init = async () => {
                 locations.push(await BacktraceLocation.new(path, isNaN(lineno) ? 0 : lineno, label));
             }
 
-            ruby_error.backtrace = backtrace.get_data<string[]>();
+            ruby_error.backtrace = backtrace.get_data<RubyArray>().elements.map((el) => el.get_data<string>());
             ruby_error.backtrace_rval = backtrace;
             ruby_error.backtrace_locations = locations;
             ruby_error.backtrace_locations_rval = await RubyArray.new(locations);

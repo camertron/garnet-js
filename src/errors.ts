@@ -8,6 +8,7 @@ export const init = async () => {
     const ExceptionClass = await Runtime.define_class("Exception", ObjectClass, async (klass: Class) => {
         klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
             self.data = new UserDefinedException(self.klass, args[0] || Qnil);
+            (self.data as UserDefinedException).rvalue = self;
             return Qnil;
         });
 
@@ -74,6 +75,10 @@ export const init = async () => {
             }
 
             return error.backtrace_rval;
+        });
+
+        klass.define_native_method("dup", async (self: RValue): Promise<RValue> => {
+            return (await self.get_data<IRubyError>().dup()).to_rvalue();
         });
 
         klass.define_native_method("backtrace_locations", (self: RValue): RValue => {
@@ -197,9 +202,20 @@ export abstract class RubyError extends Error {
     }
 
     abstract ruby_class(): Promise<RValue>;
+
+    async dup(): Promise<RubyError> {
+        const Constructor = this.constructor as any;
+        const error = new Constructor(this.message) as this;
+        if (this.backtrace) error.backtrace = [...this.backtrace];
+        error.backtrace_rval = await Object.send(this.backtrace_rval, "dup");
+        if (this.backtrace_locations) error.backtrace_locations = [...this.backtrace_locations];
+        error.backtrace_locations_rval = await Object.send(this.backtrace_locations_rval, "dup");
+        return error;
+    }
 }
 
 export class UserDefinedException {
+    public rvalue: RValue;
     private klass: RValue;
     public message: RValue;
     public backtrace: string[];
@@ -214,6 +230,21 @@ export class UserDefinedException {
 
     async ruby_class(): Promise<RValue> {
         return Promise.resolve(this.klass);
+    }
+
+    async to_rvalue(): Promise<RValue> {
+        this.rvalue ||= new RValue(await this.klass, this);
+        return this.rvalue;
+    }
+
+    async dup(): Promise<UserDefinedException> {
+        const Constructor = this.constructor as any;
+        const error = new Constructor(this.klass, this.message) as this;
+        if (this.backtrace) error.backtrace = [...this.backtrace];
+        error.backtrace_rval = await Object.send(this.backtrace_rval, "dup");
+        if (this.backtrace_locations) error.backtrace_locations = [...this.backtrace_locations];
+        error.backtrace_locations_rval = await Object.send(this.backtrace_locations_rval, "dup");
+        return error;
     }
 }
 
