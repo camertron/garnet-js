@@ -5,7 +5,7 @@ import { Float } from "../runtime/float";
 import { Object as RubyObject } from "../runtime/object";
 import { Numeric } from "../runtime/numeric";
 import { Rational } from "../runtime/rational";
-import { ArgumentError, FloatDomainError, TypeError } from "../errors";
+import { ArgumentError, FloatDomainError, TypeError, ZeroDivisionError } from "../errors";
 import { RubyString } from "../runtime/string";
 import Big from "./big.mjs";
 import { Kernel } from "../runtime/kernel";
@@ -39,10 +39,10 @@ export class BigDecimal {
 
     constructor(value: Big.BigSource, digits?: number) {
         if (typeof value === "object") {
-            this.value = value as Big.Big;
+            this.value = value as Big;
         } else {
             try {
-                this.value = new Big(value);
+                this.value = new BigWrapper(value);
             } catch (e) {
                 if (e instanceof Error && e.message === "[big.js] Invalid number") {
                     throw new ArgumentError(`invalid value for BigDecimal(): "${value}"`);
@@ -57,6 +57,151 @@ export class BigDecimal {
 
     to_f(): number {
         return this.value.toNumber();
+    }
+}
+
+class BigWrapper extends Big {
+    static from(cb: (...args: any) => Big.Big) {
+        const big = cb();
+
+        if (big === BigPositiveInfinity.instance() ||
+            big === BigNegativeInfinity.instance() ||
+            big === BigNaN.instance()) {
+            return big;
+        }
+
+        return new BigWrapper(big);
+    }
+
+    cmp(n: Big.BigSource): Big.Comparison {
+        const other = big_source_to_big(n);
+
+        if (other === BigPositiveInfinity.instance()) {
+            return -1;
+        } else if (other === BigNegativeInfinity.instance()) {
+            return 1;
+        } else if (other === BigNaN.instance()) {
+            return null as unknown as Big.Comparison;
+        } else {
+            return super.cmp(n);
+        }
+    }
+
+    div(n: Big.BigSource): Big.Big {
+        const other = big_source_to_big(n);
+        const sign = this.s / other.s;
+
+        return BigWrapper.from(() => {
+            if (other === BigPositiveInfinity.instance() || other === BigNegativeInfinity.instance()) {
+                return big_source_to_big(`${sign === -1 ? "-" : ""}0.0`);
+            } else if (other === BigNaN.instance()) {
+                return other;
+            } else {
+                return this.handle_division_by_zero(() => {
+                    return super.div(n);
+                });
+            }
+        });
+    }
+
+    private handle_division_by_zero(cb: () => Big.Big): Big.Big {
+        try {
+            return cb();
+        } catch (e) {
+            if (e instanceof Error && e.message === "[big.js] Division by zero") {
+                throw new ZeroDivisionError("divided by 0");
+            }
+
+            throw e;
+        }
+    }
+
+    pow(n: number): Big.Big {
+        // pow can call 1 / x, if x < 0, so we have to handle div by zero here
+        return this.handle_division_by_zero(() => {
+            return super.pow(n);
+        });
+    }
+
+    minus(n: Big.BigSource): Big.Big {
+        const other = big_source_to_big(n);
+
+        return BigWrapper.from(() => {
+            if (other === BigPositiveInfinity.instance()) {
+                return BigNegativeInfinity.instance();
+            } else if (other === BigNegativeInfinity.instance()) {
+                return BigPositiveInfinity.instance();
+            } else if (other === BigNaN.instance()) {
+                return other;
+            } else {
+                return super.minus(n);
+            }
+        });
+    }
+
+    sub = this.minus;
+
+    mod(n: Big.BigSource): Big.Big {
+        const other = big_source_to_big(n);
+
+        return BigWrapper.from(() => {
+            if (other === BigPositiveInfinity.instance()) {
+                // n % Infinity == n
+                return other;
+            } else if (other === BigNegativeInfinity.instance()) {
+                // n % -Infinity == -Infinity
+                return BigNegativeInfinity.instance();
+            } else if (other === BigNaN.instance()) {
+                return other;
+            } else {
+                return super.mod(n);
+            }
+        });
+    }
+
+    plus(n: Big.BigSource): Big.Big {
+        const other = big_source_to_big(n);
+
+        return BigWrapper.from(() => {
+            if (other === BigPositiveInfinity.instance() || other === BigNegativeInfinity.instance()) {
+                return other;
+            } else if (other === BigNaN.instance()) {
+                return other;
+            } else {
+                return super.add(n);
+            }
+        });
+    }
+
+    add = this.plus;
+
+    times(n: Big.BigSource): Big.Big {
+        const other = big_source_to_big(n);
+        const sign = this.s * other.s;
+
+        return BigWrapper.from(() => {
+            if (other === BigPositiveInfinity.instance() || other === BigNegativeInfinity.instance()) {
+                if (sign === 1) {
+                    return BigPositiveInfinity.instance();
+                } else {
+                    return BigNegativeInfinity.instance();
+                }
+            } else if (other === BigNaN.instance()) {
+                return other;
+            } else {
+                return super.mul(n);
+            }
+        });
+    }
+
+    mul = this.times;
+
+    sqrt(): Big.Big {
+        return new BigWrapper(super.sqrt());
+    }
+
+    neg(): Big.Big {
+        return new BigWrapper(super.neg());
     }
 }
 
@@ -94,7 +239,15 @@ const big_source_to_big = (src: Big.BigSource): Big.Big => {
         } else if (src === "NaN") {
             return BigNaN.instance();
         }
-    } else if (typeof src !== "number") {
+    } else if (typeof src === "number") {
+        if (src === Infinity) {
+            return BigPositiveInfinity.instance();
+        } else if (src === Number.NEGATIVE_INFINITY) {
+            return BigNegativeInfinity.instance();
+        } else {
+            return Big(src);
+        }
+    } else {
         return src;
     }
 
@@ -244,7 +397,7 @@ abstract class BigInfinity implements Big.Big {
     abstract valueOf(): string;
 
     div(n: Big.BigSource): Big.Big {
-        const sign = this.s / new Big.Big(n).s;
+        const sign = this.s / big_source_to_big(n).s;
         return sign < 0 ? BigNegativeInfinity.instance() : BigPositiveInfinity.instance();
     }
 

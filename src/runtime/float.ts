@@ -3,7 +3,7 @@ import { RubyString } from "../runtime/string";
 import { Object } from "../runtime/object";
 import { Integer } from "./integer";
 import { Numeric } from "./numeric";
-import { NameError, TypeError } from "../errors";
+import { NameError, NoMethodError, TypeError } from "../errors";
 import { Args } from "./arg-scanner";
 import { Kernel } from "./kernel";
 import { RubyArray } from "./array";
@@ -68,6 +68,14 @@ export const init = async () => {
     if (inited) return;
 
     const float_klass = await Runtime.define_class("Float", await Numeric.klass(), async (klass: Class) => {
+        klass.define_native_singleton_method("new", (): RValue => {
+            throw new NoMethodError("undefined method 'new' for class Float");
+        });
+
+        klass.define_native_singleton_method("allocate", (): RValue => {
+            throw new TypeError("allocator undefined for Float");
+        });
+
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             let str = self.get_data<number>().toString();
 

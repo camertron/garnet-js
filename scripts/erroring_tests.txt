@@ -17,7 +17,6 @@ ruby/spec/core/float/divide_spec.rb
 ruby/spec/core/float/comparison_spec.rb
 ruby/spec/core/float/dup_spec.rb
 ruby/spec/core/float/fdiv_spec.rb
-ruby/spec/core/float/float_spec.rb
 ruby/spec/core/float/quo_spec.rb
 ruby/spec/core/integer/ceildiv_spec.rb
 ruby/spec/core/integer/coerce_spec.rb
@@ -154,17 +153,7 @@ ruby/spec/language/until_spec.rb
 ruby/spec/language/while_spec.rb
 ruby/spec/language/yield_spec.rb
 ruby/spec/library/bigdecimal/BigDecimal_spec.rb
-ruby/spec/library/bigdecimal/divide_spec.rb
 ruby/spec/library/bigdecimal/dup_spec.rb
-ruby/spec/library/bigdecimal/equal_value_spec.rb
-ruby/spec/library/bigdecimal/exponent_spec.rb
-ruby/spec/library/bigdecimal/gt_spec.rb
-ruby/spec/library/bigdecimal/gte_spec.rb
-ruby/spec/library/bigdecimal/lt_spec.rb
-ruby/spec/library/bigdecimal/lte_spec.rb
-ruby/spec/library/bigdecimal/minus_spec.rb
-ruby/spec/library/bigdecimal/mode_spec.rb
-ruby/spec/library/bigdecimal/plus_spec.rb
 ruby/spec/library/datetime/strftime_spec.rb
 ruby/spec/library/erb/new_spec.rb
 ruby/spec/library/etc/getpwuid_spec.rb
