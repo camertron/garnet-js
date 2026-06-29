@@ -97,24 +97,20 @@ export const init = async () => {
     mod.define_native_method("any?", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
         let found = false;
 
-        try {
+        await early_exit_handler(async (exit_early: ExitEarlyFn) => {
             const proc = block ? block.get_data<Proc>() : null;
 
-            await Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, args: RValue[]): Promise<RValue> => {
+            return await Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, args: RValue[]): Promise<RValue> => {
                 const item = proc ? await proc.call(ExecutionContext.current, args) : args[0];
 
                 if (item.is_truthy()) {
                     found = true;
-                    throw "any?";
+                    exit_early(Qnil);
                 }
 
                 return Qnil;
             }));
-        } catch (e) {
-            if (e !== "any?") {
-                throw e;
-            }
-        }
+        });
 
         return found ? Qtrue : Qfalse;
     });
@@ -244,7 +240,7 @@ export const init = async () => {
     mod.define_native_method("each_with_object", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
         if (block) {
             const proc = block.get_data<Proc>();
-            const object = args[0];
+            const [object] = await Args.scan("1", args);
 
             try {
                 await Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, block_args: RValue[]): Promise<RValue> => {
@@ -300,21 +296,17 @@ export const init = async () => {
             return await RubyArray.new([]);
         }
 
-        try {
-            await Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, (_self: RValue, args: RValue[]): RValue => {
+        await early_exit_handler(async (exit_early: ExitEarlyFn) => {
+            return await Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, (_self: RValue, args: RValue[]): RValue => {
                 found.push(args[0]);
 
                 if (found.length === count) {
-                    throw new BreakError(Qnil);
+                    exit_early(Qnil);
                 }
 
                 return Qnil;
             }));
-        } catch (e) {
-            if (!(e instanceof BreakError)) {
-                throw e;
-            }
-        }
+        });
 
         // Only return an array if a length argument was provided.
         // If no length argument, return the first item not wrapped in an array.
@@ -335,10 +327,10 @@ export const init = async () => {
         if (block) {
             const proc = block.get_data<Proc>();
 
-            try {
+            return early_exit_handler(async (exit_early: ExitEarlyFn) => {
                 await Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, each_args: RValue[]): Promise<RValue> => {
                     if ((await proc.call(ExecutionContext.current, each_args)).is_truthy()) {
-                        throw new BreakError(await Integer.get(index));
+                        exit_early(await Integer.get(index));
                     }
 
                     index ++;
@@ -347,23 +339,15 @@ export const init = async () => {
 
                 // no match found
                 return Qnil;
-            } catch (e) {
-                if (e instanceof BreakError) {
-                    // match found, return index
-                    return e.value;
-                } else {
-                    // an error occurred
-                    throw e;
-                }
-            }
+            });
         } else if (args.length > 0) {
             const target = args[0];
 
-            try {
+            return early_exit_handler(async (exit_early: ExitEarlyFn) => {
                 await Object.send(self, "each", [], undefined, await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, each_args: RValue[]): Promise<RValue> => {
                     if (each_args.length > 0) {
                         if ((await Object.send(each_args[0], "==", [target])).is_truthy()) {
-                            throw new BreakError(await Integer.get(index));
+                            exit_early(await Integer.get(index));
                         }
                     }
 
@@ -373,15 +357,7 @@ export const init = async () => {
 
                 // no match found
                 return Qnil;
-            } catch (e) {
-                if (e instanceof BreakError) {
-                    // match found, return index
-                    return e.value;
-                } else {
-                    // an error occurred
-                    throw e;
-                }
-            }
+            });
         } else {
             // @TODO: return an Enumerator
             return Qnil;

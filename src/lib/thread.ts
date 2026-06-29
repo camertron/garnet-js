@@ -6,6 +6,7 @@ import { Proc } from "../runtime/proc";
 import { Object } from "../runtime/object";
 import { Integer } from "../runtime/integer";
 import { Hash } from "../runtime/hash";
+import { Args } from "../runtime/arg-scanner";
 
 let inited = false;
 
@@ -156,11 +157,13 @@ export const init = async () => {
         });
 
         klass.define_native_method("[]", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            return await self.get_data<Thread>().data_store.get(args[0]);
+            const [key] = await Args.scan("1", args);
+            return await self.get_data<Thread>().data_store.get(key);
         });
 
         klass.define_native_method("[]=", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            await self.get_data<Thread>().data_store.set(args[0], args[1]);
+            const [key, value] = await Args.scan("2", args);
+            await self.get_data<Thread>().data_store.set(key, value);
             return args[1];
         });
     });

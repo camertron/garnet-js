@@ -4,6 +4,7 @@ import { Object } from "../runtime/object"
 import { NameError } from "../errors";
 import { ExecutionContext } from "../execution_context";
 import { Enumerable } from "../runtime/enumerable";
+import { Args } from "../runtime/arg-scanner";
 
 let inited = false;
 
@@ -147,8 +148,9 @@ export const init = async () => {
         // @TODO: also include IO::generic_readable and IO::generic_writable
         klass.include(await Enumerable.module());
 
-        klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
-            const str = args.length > 0 ? args[0].get_data<string>() : "";
+        klass.define_native_method("initialize", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [str_rval] = await Args.scan("01", args);
+            const str = str_rval ? (await Runtime.coerce_to_string(str_rval)).get_data<string>() : "";
             self.data = new StringIO(str);
             return Qnil;
         });

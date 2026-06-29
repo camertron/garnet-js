@@ -619,7 +619,7 @@ export const init = async () => {
         }
 
         klass.define_native_method("join", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            const separator = args[0] || ExecutionContext.current.globals["$,"] || Qnil;
+            const separator = args[0] ?? ExecutionContext.current.globals["$,"] ?? Qnil;
             let separator_str;
 
             if (separator.is_truthy()) {
@@ -783,7 +783,7 @@ export const init = async () => {
 
             if (count_rval) {
                 await Runtime.assert_type(count_rval, await Integer.klass());
-                const count = args[0].get_data<number>();
+                const count = count_rval.get_data<number>();
                 return await RubyArray.new(elements.slice(0, count));
             } else {
                 return elements[0] || Qnil;
@@ -987,7 +987,7 @@ export const init = async () => {
 
             if (max_depth_rval) {
                 await Runtime.assert_type(max_depth_rval, await Integer.klass());
-                max_depth = args[0].get_data<number>();
+                max_depth = max_depth_rval.get_data<number>();
             }
 
             const [flattened, modified] = await flatten(self.get_data<RubyArray>().elements, max_depth);
@@ -1041,7 +1041,7 @@ export const init = async () => {
         });
 
         klass.define_native_method("<=>", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            const other = args[0];
+            const [other] = await Args.scan("1", args);
 
             if (!(await Object.send(other, "is_a?", [await RubyArray.klass()])).is_truthy()) {
                 return Qnil;

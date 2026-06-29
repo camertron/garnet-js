@@ -1,5 +1,6 @@
 import { ArgumentError } from "../errors";
 import { Module, Qfalse, Qnil, Qtrue, RValue, Runtime } from "../runtime"
+import { Args } from "./arg-scanner";
 import { Object } from "./object";
 
 export async function spaceship_compare(x: RValue, y: RValue, raise: true): Promise<number>;
@@ -36,31 +37,38 @@ export const init = async () => {
 
     await Runtime.define_module("Comparable", async (mod: Module) => {
         mod.define_native_method("<", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            return await compare(self, args[0], true, result => result < 0);
+            const [other] = await Args.scan("1", args);
+            return await compare(self, other, true, result => result < 0);
         });
 
         mod.define_native_method("<=", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            return await compare(self, args[0], true, result => result <= 0);
+            const [other] = await Args.scan("1", args);
+            return await compare(self, other, true, result => result <= 0);
         });
 
         mod.define_native_method(">", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            return await compare(self, args[0], true, result => result > 0)
+            const [other] = await Args.scan("1", args);
+            return await compare(self, other, true, result => result > 0)
         });
 
         mod.define_native_method(">=", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            return await compare(self, args[0], true, result => result >= 0)
+            const [other] = await Args.scan("1", args);
+            return await compare(self, other, true, result => result >= 0)
         });
 
         mod.define_native_method("==", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            return await compare(self, args[0], false, result => {
+            const [other] = await Args.scan("1", args);
+
+            return await compare(self, other, false, result => {
                 if (!result) return false;
                 return result == 0;
             })
         });
 
         mod.define_native_method("between?", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            const min_comp = await compare(self, args[0], true, result => result < 0);
-            const max_comp = await compare(self, args[1], true, result => result > 0);
+            const [first, last] = await Args.scan("2", args);
+            const min_comp = await compare(self, first, true, result => result < 0);
+            const max_comp = await compare(self, last, true, result => result > 0);
 
             return min_comp.is_truthy() || max_comp.is_truthy() ? Qfalse : Qtrue;
         });

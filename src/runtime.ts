@@ -1,6 +1,6 @@
 import { InstructionSequence } from "./instruction_sequence";
 import { Compiler, LexicalScope } from "./compiler";
-import { LoadError, TypeError, NoMethodError, NotImplementedError, NameError, LocalJumpError } from "./errors";
+import { LoadError, TypeError, NoMethodError, NotImplementedError, NameError } from "./errors";
 import { ExecutionContext } from "./execution_context";
 import { init as array_init } from "./runtime/array";
 import { Integer, init as integer_init } from "./runtime/integer";
@@ -1244,7 +1244,7 @@ export const VMCoreClass = await Runtime.define_class("VMCore", ObjectClass, asy
         return await RubyHash.from_hash(new_hash);
     });
 
-    klass.define_native_method("hash_merge_ptr", async (self: RValue, args: RValue[]): Promise<RValue> => {
+    klass.define_native_method("hash_merge_ptr", async (_self: RValue, args: RValue[]): Promise<RValue> => {
         // @TODO: can we do this without creating a new hash?
         const new_hash = new RubyHash();
 
@@ -1320,8 +1320,9 @@ await NilClass.get_data<Class>().tap(async (klass: Class) => {
         return Qtrue;
     });
 
-    klass.define_native_method("===", (self: RValue, args: RValue[]): RValue => {
-        return self === args[0] ? Qtrue : Qfalse;
+    klass.define_native_method("===", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const [other] = await Args.scan("1", args);
+        return self === other ? Qtrue : Qfalse;
     });
 });
 
@@ -1334,8 +1335,9 @@ await TrueClass.get_data<Class>().tap(async (klass: Class) => {
         return await RubyString.new("true");
     });
 
-    klass.define_native_method("^", (_self: RValue, args: RValue[]): RValue => {
-        return !args[0].is_truthy() ? Qtrue : Qfalse;
+    klass.define_native_method("^", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+        const [other] = await Args.scan("1", args);
+        return !other.is_truthy() ? Qtrue : Qfalse;
     });
 
     klass.define_native_method("!", (_self: RValue): RValue => {
@@ -1350,8 +1352,9 @@ await TrueClass.get_data<Class>().tap(async (klass: Class) => {
         return self.iv_get("@__hash");
     });
 
-    klass.define_native_method("===", (self: RValue, args: RValue[]): RValue => {
-        return self === args[0] ? Qtrue : Qfalse;
+    klass.define_native_method("===", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const [other] = await Args.scan("1", args);
+        return self === other ? Qtrue : Qfalse;
     });
 });
 
@@ -1364,8 +1367,9 @@ await FalseClass.get_data<Class>().tap(async (klass: Class) => {
         return await RubyString.new("false");
     });
 
-    klass.define_native_method("^", (_self: RValue, args: RValue[]): RValue => {
-        return !args[0].is_truthy() ? Qfalse : Qtrue;
+    klass.define_native_method("^", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+        const [other] = await Args.scan("1", args);
+        return !other.is_truthy() ? Qfalse : Qtrue;
     });
 
     klass.define_native_method("!", (_self: RValue): RValue => {
@@ -1380,15 +1384,23 @@ await FalseClass.get_data<Class>().tap(async (klass: Class) => {
         return self.iv_get("@__hash");
     });
 
-    klass.define_native_method("===", (self: RValue, args: RValue[]): RValue => {
-        return self === args[0] ? Qtrue : Qfalse;
+    klass.define_native_method("===", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const [other] = await Args.scan("1", args);
+        return self === other ? Qtrue : Qfalse;
     });
 });
 
 await (ClassClass.get_data<Class>()).tap(async (klass: Class) => {
     // create a new instance of the Class class, i.e. create a new user-defined class
     klass.define_native_singleton_method("new", async (_self: RValue, args: RValue[], _kwargs?: RubyHash, block?: RValue): Promise<RValue> => {
-        const superclass = args[0] || ObjectClass;
+        let [superclass] = await Args.scan("01", args);
+
+        if (superclass && superclass.klass !== ClassClass) {
+            throw new TypeError("superclass must be an instance of Class");
+        }
+
+        superclass ??= ObjectClass;
+
         const new_class = new Class(null, superclass);
         const new_class_rval = new RValue(ClassClass, new_class);
         new_class.rval = new_class_rval;
@@ -1523,13 +1535,14 @@ await (BasicObjectClass.get_data<Class>()).tap(async (klass: Class) => {
         }
     });
 
-    klass.define_native_method("method_missing", (self: RValue, args: RValue[]): RValue => {
+    klass.define_native_method("method_missing", async (self: RValue, args: RValue[]): Promise<RValue> => {
         // this is kinda broken until I can figure out how to inspect objects with cycles; for now,
         // just print out self's type
 
         // const inspect_str = Object.send(self, "inspect").get_data<string>();
         // throw new NoMethodError(`undefined method \`${method_name}' for ${inspect_str}`);
-        const method_name = args[0].get_data<string>();
+        const [method_name_rval] = await Args.scan("10*", args)
+        const method_name = method_name_rval.get_data<string>();
         let inspect_str;
 
         switch (self.klass) {
@@ -1742,13 +1755,14 @@ export const IOClass = await Runtime.define_class("IO", ObjectClass, async (klas
 
     await klass.alias_method("tell", "pos");
 
-    klass.define_native_method("pos=", (self: RValue, args: RValue[]): RValue => {
+    klass.define_native_method("pos=", async (self: RValue, args: RValue[]): Promise<RValue> => {
+        const [new_pos_rval] = await Args.scan("1", args);
         const io = self.get_data<IO>();
 
         if (io.set_pos) {
-            const new_pos = args[0].get_data<number>();
+            const new_pos = new_pos_rval.get_data<number>();
             io.set_pos(new_pos);
-            return args[0];
+            return new_pos_rval;
         }
 
         throw new NotImplementedError("pos= is not implemented for this IO type");

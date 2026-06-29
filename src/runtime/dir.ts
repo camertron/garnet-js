@@ -45,7 +45,8 @@ export const init = async () => {
         });
 
         klass.define_native_singleton_method("glob", async (_self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
-            const pattern_str = (await Runtime.coerce_to_string(args[0])).get_data<string>();
+            const [pattern_str_rval] = await Args.scan("1", args);
+            const pattern_str = (await Runtime.coerce_to_string(pattern_str_rval)).get_data<string>();
             let flags = 0;
             let base_path;
 
@@ -96,8 +97,8 @@ export const init = async () => {
         await klass.get_singleton_class().get_data<Class>().alias_method("[]", "glob");
 
         klass.define_native_singleton_method("exist?", async (_self: RValue, args: RValue[]): Promise<RValue> => {
-            Args.check_arity(args.length, 1, 1);
-            const path = (await Runtime.coerce_to_string(args[0])).get_data<string>();
+            const [path_rval] = await Args.scan("1", args);
+            const path = (await Runtime.coerce_to_string(path_rval)).get_data<string>();
             return vmfs.path_exists(path) && vmfs.is_directory(path) ? Qtrue : Qfalse;
         });
 

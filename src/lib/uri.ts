@@ -2,6 +2,7 @@ import { RubyString } from "../runtime/string";
 import { Object } from "../runtime/object";
 import { Class, Module, ObjectClass, RValue, Runtime } from "../runtime"
 import { NameError } from "../errors";
+import { Args } from "../runtime/arg-scanner";
 
 let inited = false;
 
@@ -42,8 +43,11 @@ export const init = async () => {
     if (inited) return;
 
     const uri_module = await Runtime.define_module("URI", async (mod: Module) => {
-        mod.define_native_singleton_method("parse", (self: RValue, args: RValue[]): RValue => {
-            const url = new URL(args[0].get_data<string>());
+        mod.define_native_singleton_method("parse", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+            let [url_rval] = await Args.scan("1", args);
+            url_rval = await Runtime.coerce_to_string(url_rval);
+
+            const url = new URL(url_rval.get_data<string>());
             const uri = new URI(url);
 
             switch (url.protocol) {
