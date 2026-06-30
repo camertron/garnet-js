@@ -483,6 +483,25 @@ export const init = async () => {
 
             return deleted_element;
         });
+        
+        klass.define_native_method("at", async (self: RValue, args: RValue[]): Promise<RValue> => {
+    const elements = self.get_data<RubyArray>().elements;
+    const [index_arg] = await Args.scan("1", args);
+
+    await Runtime.assert_type(index_arg, await Integer.klass());
+    let index = index_arg.get_data<number>();
+
+    // wraparound
+    if (index < 0) {
+        index = elements.length + index;
+    }
+
+    if (index < 0 || index >= elements.length) {
+        return Qnil;
+    }
+
+    return elements[index];
+});
 
         klass.define_native_method("[]", async (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
             const elements = self.get_data<RubyArray>().elements;
