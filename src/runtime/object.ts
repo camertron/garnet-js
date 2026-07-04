@@ -211,32 +211,6 @@ export const init = async () => {
 
         await klass.alias_method("to_s", "inspect");
 
-        klass.define_native_method("dup", async (self: RValue): Promise<RValue> => {
-            const copy = new RValue(self.klass);
-
-            if (self.ivars) {
-                for (const [key, value] of self.ivars) {
-                    copy.iv_set(key, value);
-                }
-            }
-
-            await Object.send(copy, "initialize_copy", [self]);
-
-            return copy;
-        });
-
-        // default impl that just returns the object
-        klass.define_native_method("initialize_copy", (self: RValue, args: RValue[]): RValue => {
-            const copy = args[0];
-            if (self === copy) return copy;
-
-            if (copy.klass != self.klass) {
-                throw new TypeError("initialize_copy should take same class object")
-            }
-
-            return copy;
-        });
-
         klass.define_native_method("freeze", (self: RValue): RValue => {
             self.freeze();
             return self;
