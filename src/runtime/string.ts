@@ -186,6 +186,10 @@ export const init = async () => {
         klass.include((await RubyObject.find_constant("Comparable"))!);
         await mix_shared_string_methods_into(klass);
 
+        klass.define_native_singleton_method("allocate", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            return await RubyString.new("");
+        });
+
         klass.define_native_method("initialize", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const str = args[0];
 
