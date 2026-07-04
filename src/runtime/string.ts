@@ -357,7 +357,7 @@ export const init = async () => {
                     }
 
                     if (chunk_strs.length > 0 && chunk_strs[chunk_strs.length - 1].length === 0) {
-                        delete chunk_strs[chunk_strs.length - 1];
+                        chunk_strs.pop();
                     }
                 } else if (limit === -1) {
                     // JavaScript's split("") omits Ruby's trailing empty field.
