@@ -921,7 +921,8 @@ export const init = async () => {
 
         klass.define_native_method("<<", async (self: RValue, args: RValue[]): Promise<RValue> => {
             await RubyObject.check_frozen(self);
-            await append_to(self, args[0]);
+            const [str] = await Args.scan("1", args);
+            await append_to(self, str);
             return self;
         });
 
