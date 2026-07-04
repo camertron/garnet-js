@@ -837,14 +837,14 @@ export const init = async () => {
 
         klass.define_native_method("ljust", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const data = self.get_data<string>();
-            await Runtime.assert_type(args[0], await Integer.klass());
-            const size = args[0].get_data<number>();
+            const [size_rval] = await Args.scan("1", args);
+            await Runtime.assert_type(size_rval, await Integer.klass());
+            const size = size_rval.get_data<number>();
 
             let pad_str;
 
             if (args.length > 1) {
-                await Runtime.assert_type(await RubyString.klass(), args[1]);
-                pad_str = args[1].get_data<string>();
+                pad_str = (await Runtime.coerce_to_string(args[1])).get_data<string>();
             } else {
                 pad_str = " ";
             }
