@@ -69,17 +69,20 @@ export default class Defined extends Instruction {
 
                 break;
 
-            case DefinedType.CVAR:
-                let klass = context.frame!.self;
-                if (klass.klass !== ModuleClass) klass = klass.get_data<Class>().get_singleton_class();
+            case DefinedType.CVAR: {
+                // let klass = context.frame!.self;
+                // if (klass.klass !== ModuleClass) klass = klass.get_data<Class>().get_singleton_class();
+                const frame = context.frame!;
+                const self_nesting = frame.nesting[frame.nesting.length - 1];
 
-                if (await klass.cvar_exists(this.name)) {
+                if (await self_nesting.cvar_exists(this.name)) {
                     result = this.message;
                 }
 
                 break;
+            }
 
-            case DefinedType.CONST:
+            case DefinedType.CONST: {
                 const frame = context.frame!;
                 const self_nesting = frame.nesting[frame.nesting.length - 1];
 
@@ -88,6 +91,7 @@ export default class Defined extends Instruction {
                 }
 
                 break;
+            }
 
             case DefinedType.METHOD:
                 throw new NotImplementedError("defined METHOD");
