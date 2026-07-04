@@ -18,6 +18,12 @@ export default class SetConstant extends Instruction {
 
         parent.get_data<Module>().constants[this.name] = value;
 
+        // If the constant is a Module (or Class), and doesn't already have a
+        // name, then set its name
+        if (value.data instanceof Module && !value.get_data<Module>().name) {
+            value.get_data<Module>().name = this.name;
+        }
+
         return null;
     }
 
