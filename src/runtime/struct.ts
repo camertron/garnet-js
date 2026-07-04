@@ -3,6 +3,7 @@ import { Class, ClassClass, ObjectClass, Qnil, RValue, Runtime } from "../runtim
 import { Object } from "../runtime/object";
 import { RubyString } from "../runtime/string";
 import { Symbol } from "../runtime/symbol";
+import { Args } from "./arg-scanner";
 
 let inited = false;
 
@@ -89,6 +90,21 @@ export const init = async () => {
 
             return new_class_rval;
         });
+
+        struct_class.define_native_method("initialize_copy", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const [other] = await Args.scan("1", args);
+            const self_context = self.get_context<StructContext>();
+            const other_context = other.get_context<StructContext>();
+
+            self_context.fields = new Map();
+
+            for (const [key, value] of other_context.fields!.entries()) {
+                self_context.fields!.set(key, value);
+            }
+
+            return self;
+        });
+
     });
 
     inited = true;
