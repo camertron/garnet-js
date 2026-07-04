@@ -1,4 +1,5 @@
 import { ArgumentError, EncodingConverterNotFoundError, IndexError, NameError, NotImplementedError, RangeError as RubyRangeError, RuntimeError, TypeError } from "../errors";
+import { Class, Qnil, RValue, Runtime, Qtrue, Qfalse, ObjectClass, KernelModule } from "../runtime";
 import { hash_string, is_alpha_num, strlen } from "../util/string_utils";
 import { Integer } from "./integer";
 import { MatchData, Regexp } from "./regexp";
@@ -586,9 +587,26 @@ export const init = async () => {
                 return await Enumerator.for_method(self, "sub", args);
             }
 
+            const [pattern_rval, maybe_replacements] = await Args.scan("11", args);
+
             const str = self.get_data<string>();
-            const pattern = args[0].get_data<Regexp | string>();
-            const replacements = args[1];
+            let pattern: Regexp | string;
+
+            if (await Kernel.is_a(pattern_rval, await Regexp.klass())) {
+                pattern = pattern_rval.get_data<Regexp>();
+            } else {
+                pattern = (await Runtime.coerce_to_string(pattern_rval)).get_data<string>();
+            }
+
+            let replacements: RValue | undefined = undefined;
+
+            if (maybe_replacements) {
+                if (await Kernel.is_a(maybe_replacements, await Hash.klass())) {
+                    replacements = maybe_replacements;
+                } else {
+                    replacements = await Runtime.coerce_to_string(maybe_replacements);
+                }
+            }
 
             return RubyString.new(await gsub(str, pattern, replacements, 1));
         });
