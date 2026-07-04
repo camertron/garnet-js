@@ -1,5 +1,4 @@
-import { ArgumentError, EncodingConverterNotFoundError, IndexError, NameError, NotImplementedError, RangeError, RuntimeError, TypeError } from "../errors";
-import { Class, Qnil, RValue, Runtime, Qtrue, Qfalse, ObjectClass } from "../runtime";
+import { ArgumentError, EncodingConverterNotFoundError, IndexError, NameError, NotImplementedError, RangeError as RubyRangeError, RuntimeError, TypeError } from "../errors";
 import { hash_string, is_alpha_num, strlen } from "../util/string_utils";
 import { Integer } from "./integer";
 import { MatchData, Regexp } from "./regexp";
@@ -10,7 +9,6 @@ import { Encoding } from "./encoding";
 import { CharSelectors } from "./char-selector";
 import { Hash } from "./hash";
 import { RubyArray } from "../runtime/array";
-import { Numeric } from "./numeric";
 import { Float } from "./float";
 import { mix_shared_string_methods_into } from "./string-shared";
 import { left_pad, sprintf } from "./printf";
@@ -238,11 +236,35 @@ export const init = async () => {
         });
 
         klass.define_native_method("*", async (self: RValue, args: RValue[]): Promise<RValue> => {
-            const multiplier = args[0];
-            await Runtime.assert_type(multiplier, await Numeric.klass());  // @TODO: handle floats (yes, you can multiply strings by floats, oh ruby)
-            const str = await RubyString.new(self.get_data<string>().repeat(multiplier.get_data<number>()));
-            RubyString.copy_context(self, str);
-            return str;
+            if (self.get_data<string>().length === 0) {
+                return await RubyString.new("");
+            }
+
+            const [multiplier] = await Args.scan("1", args);
+            const multiplier_int = await Runtime.coerce_to_int(multiplier);
+            const multiplier_num = multiplier_int.get_data<number>();
+
+            if (multiplier_num < 0) {
+                throw new ArgumentError("negative argument");
+            } if (multiplier_num >= (2 ** 63) - 1) {
+                throw new ArgumentError("argument too big");
+            }
+
+            let new_str;
+
+            try {
+                new_str = self.get_data<string>().repeat(multiplier_num);
+            } catch (e) {
+                if (e instanceof RangeError && e.message === "Invalid string length") {
+                    throw new RubyRangeError("bignum too big to convert into 'long'");
+                }
+
+                throw e;
+            }
+
+            const new_str_rval = await RubyString.new(new_str);
+            RubyString.copy_context(self, new_str_rval);
+            return new_str_rval;
         });
 
         klass.define_native_method("split", async (self: RValue, args: RValue[]): Promise<RValue> => {
