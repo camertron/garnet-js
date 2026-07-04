@@ -1234,8 +1234,10 @@ export const init = async () => {
         klass.define_native_method("count", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const data = self.get_data<string>();
             const [first_pattern, rest_patterns] = await Args.scan("1*", args);
+            const first_pattern_str = await Runtime.coerce_to_string(first_pattern);
+            const rest_pattern_strs = await Runtime.coerce_all_to_string(rest_patterns);
             const selectors = CharSelectors.from(
-                first_pattern.get_data<string>(), ...rest_patterns.map(p => p.get_data<string>())
+                first_pattern_str.get_data<string>(), ...rest_pattern_strs.map(p => p.get_data<string>())
             );
 
             return Integer.get(selectors.count(data));
