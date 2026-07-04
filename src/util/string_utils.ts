@@ -61,8 +61,6 @@ export function *each_code_point(input: string) {
 
         yield code_point;
     }
-
-    return length;
 }
 
 export const is_alpha_num = (code: number): boolean => {
