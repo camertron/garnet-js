@@ -118,6 +118,10 @@ export const init = async () => {
             return await Regexp.new(pattern.get_data<string>(), ONIG_OPTION_NONE);
         });
 
+        klass.define_native_singleton_method("allocate", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            return await Regexp.new("");
+        });
+
         klass.define_native_method("initialize", async (self: RValue, args: RValue[]): Promise<RValue> => {
             // @TODO: handle flags/options
             const pattern = await Runtime.coerce_to_string(args[0]);
