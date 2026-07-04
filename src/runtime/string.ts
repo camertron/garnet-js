@@ -901,7 +901,7 @@ export const init = async () => {
                 const num = val.get_data<number>();
 
                 if (!encoding.codepoint_valid(num)) {
-                    throw new RangeError(`${num} out of char range`);
+                    throw new RubyRangeError(`${num} out of char range`);
                 }
 
                 if (num >= 128 && num <= 255 && encoding.name === "US-ASCII") {
@@ -1152,8 +1152,8 @@ export const init = async () => {
 
         klass.define_native_method("tr", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const [selector_rval, replacements_rval] = await Args.scan("2", args);
-            const selector_str = selector_rval.get_data<string>();
-            const replacements = replacements_rval.get_data<string>();
+            const selector_str = (await Runtime.coerce_to_string(selector_rval)).get_data<string>();
+            const replacements = (await Runtime.coerce_to_string(replacements_rval)).get_data<string>();
             const result = await tr(self.get_data<string>(), selector_str, replacements);
 
             return RubyString.new(result);
