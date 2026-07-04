@@ -105,6 +105,27 @@ export const init = async () => {
             return self;
         });
 
+        struct_class.define_native_method("inspect", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const parts = ["#<struct"];
+
+            if (self.klass.get_data<Class>().name) {
+                parts.push(self.klass.get_data<Class>().name!);
+            }
+
+            const field_inspect_strings: string[] = [];
+            const context = self.get_context<StructContext>();
+
+            for (const [key, value] of context.fields!.entries()) {
+                const value_inspect_str = await Object.send(value, "inspect");
+                field_inspect_strings.push(`${key}=${value_inspect_str.get_data<string>()}`);
+            }
+
+            if (field_inspect_strings.length > 0) {
+                parts.push(field_inspect_strings.join(", "));
+            }
+
+            return await RubyString.new(`${parts.join(" ")}>`);
+        });
     });
 
     inited = true;
