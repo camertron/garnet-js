@@ -93,7 +93,7 @@ export const init = async () => {
 
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const name = (await self.get_data<IRubyError>().ruby_class()).get_data<Class>().name;
-            const message = (await Object.send(self, "to_s")).get_data<string>();
+            const message = (await Object.send(await Object.send(self, "message"), "inspect")).get_data<string>();
 
             if (message.length > 0) {
                 return RubyString.new(`#<${name}: ${message}>`);
