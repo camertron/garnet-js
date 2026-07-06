@@ -55,6 +55,10 @@ export const init = async () => {
         klass.include((await Object.find_constant("Comparable"))!);
         await mix_shared_string_methods_into(klass);
 
+        klass.define_native_singleton_method("allocate", (_self: RValue): RValue => {
+            throw new TypeError("allocator undefined for Symbol");
+        });
+
         klass.define_native_method("inspect", async (self: RValue): Promise<RValue> => {
             const str = self.get_data<string>();
             return await RubyString.new(Symbol.inspect(str));
