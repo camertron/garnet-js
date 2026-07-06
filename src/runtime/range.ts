@@ -32,6 +32,10 @@ export class Range {
         this.end = end;
         this.exclude_end = exclude_end;
     }
+
+    dup(): Range {
+        return new Range(this.begin, this.end, this.exclude_end);
+    }
 }
 
 let inited = false;
@@ -81,6 +85,10 @@ export const init = async () => {
         });
 
         await klass.alias_method("to_s", "inspect");
+
+        klass.define_native_method("dup", (self: RValue): RValue => {
+            return new RValue(klass.rval, self.get_data<Range>().dup());
+        });
     });
 
     inited = true;
