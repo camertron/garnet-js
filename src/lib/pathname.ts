@@ -4,6 +4,7 @@ import { Object } from "../runtime/object";
 import { Args } from "../runtime/arg-scanner";
 import { vmfs } from "../vmfs";
 import { RubyArray } from "../runtime/array";
+import { ArgumentError } from "../errors";
 
 export class Pathname {
     private static klass_: RValue;
@@ -64,7 +65,7 @@ export const init = async () => {
             }
 
             if (path_str.includes('\0')) {
-                throw new Error("pathname contains null byte");
+                throw new ArgumentError("pathname contains null byte");
             }
 
             return Pathname.subclass_new(self, path_str);
