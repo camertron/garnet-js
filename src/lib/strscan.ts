@@ -86,6 +86,13 @@ export class StringScanner {
     eos(): boolean {
         return this.charpos >= this.str.length;
     }
+
+    dup(): StringScanner {
+        const new_scanner = new StringScanner(this.str, this.encoding, this.fixed_anchor);
+        new_scanner.bytepos = this.bytepos;
+        new_scanner.charpos = this.charpos;
+        return new_scanner;
+    }
 }
 
 export const init = async () => {
@@ -137,6 +144,10 @@ export const init = async () => {
 
         klass.define_native_method("eos?", async (self: RValue): Promise<RValue> => {
             return self.get_data<StringScanner>().eos() ? Qtrue : Qfalse;
+        });
+
+        klass.define_native_method("dup", (self: RValue): RValue => {
+            return new RValue(klass.rval, self.get_data<StringScanner>().dup());
         });
     });
 
