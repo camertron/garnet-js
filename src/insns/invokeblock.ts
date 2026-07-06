@@ -1,6 +1,6 @@
 import { BlockCallData, CallDataFlag } from "../call_data";
 import { Disassembler } from "../disassembler";
-import { LocalJumpError } from "../errors";
+import { LocalJumpError, SyntaxError } from "../errors";
 import { ExecutionContext, ExecutionResult } from "../execution_context";
 import { extract_kwargs_from_forwarded_args } from "../util/kwargs_utils";
 import Instruction from "../instruction";
@@ -19,6 +19,11 @@ export default class InvokeBlock extends Instruction {
 
     async call(context: ExecutionContext): Promise<ExecutionResult> {
         const frame_yield = context.frame_yield()!;
+
+        if (!frame_yield) {
+            throw new SyntaxError("Invalid yield");
+        }
+
         const block = frame_yield.block;
 
         let kwargs: Hash | undefined = undefined;
