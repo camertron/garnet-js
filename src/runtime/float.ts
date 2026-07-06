@@ -94,6 +94,10 @@ export const init = async () => {
             return await RubyString.new(str);
         });
 
+        klass.define_native_method("dup", async (self: RValue): Promise<RValue> => {
+            return await Float.new(self.get_data<number>());
+        });
+
         klass.define_native_method("/", async (self: RValue, args: RValue[]): Promise<RValue> => {
             await Runtime.assert_type(args[0], await Numeric.klass());
             return await Float.new(self.get_data<number>() / args[0].get_data<number>());
