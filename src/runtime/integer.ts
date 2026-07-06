@@ -80,6 +80,10 @@ export const init = async () => {
             return await Integer.get(obj_id_hash(self.object_id));
         });
 
+        klass.define_native_method("dup", async (self: RValue): Promise<RValue> => {
+            return await Float.new(self.get_data<number>());
+        });
+
         // Normally multiplication of two ints/floats is handled by the opt_mult instruction. This
         // definition is here for the sake of completeness.
         klass.define_native_method("*", async (self: RValue, args: RValue[]): Promise<RValue> => {
