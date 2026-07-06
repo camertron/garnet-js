@@ -44,6 +44,7 @@ export abstract class Proc {
     abstract call(context: ExecutionContext, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: BlockCallData, owner?: Module): Promise<RValue>;
     abstract with_binding(new_binding: Binding): Proc;
     abstract get arity(): number;
+    abstract dup(): Proc;
 }
 
 export class NativeProc extends Proc {
@@ -70,6 +71,10 @@ export class NativeProc extends Proc {
     // I think MRI requires you to supply an arity when you define the proc/method 😱
     get arity(): number {
         return 0;
+    }
+
+    dup(): NativeProc {
+        return new NativeProc(this.callable, this.binding,this.calling_convention);
     }
 }
 
@@ -122,6 +127,10 @@ export class InterpretedProc extends Proc {
     // calculating the actual arity is much more complicated.
     get arity(): number {
         return this.iseq.argument_options.lead_num || 0;
+    }
+
+    dup(): InterpretedProc {
+        return new InterpretedProc(this.iseq, this.binding, this.calling_convention);
     }
 }
 
@@ -194,6 +203,10 @@ export const init = async () => {
             } else {
                 return Qnil;
             }
+        });
+
+        klass.define_native_method("dup", (self: RValue): RValue => {
+            return new RValue(klass.rval, self.get_data<Proc>().dup());
         });
     });
 
