@@ -27,10 +27,13 @@ ruby/spec/core/hash/equal_value_spec.rb
 ruby/spec/core/hash/hash_spec.rb
 ruby/spec/core/hash/inspect_spec.rb
 ruby/spec/core/kernel/eval_spec.rb
+ruby/spec/core/kernel/sleep_spec.rb
 ruby/spec/core/kernel/sprintf_spec.rb
 ruby/spec/core/mutex/sleep_spec.rb
+ruby/spec/core/process/exit_spec.rb
 ruby/spec/core/string/element_set_spec.rb
 ruby/spec/core/string/modulo_spec.rb
+ruby/spec/core/string/slice_spec.rb
 ruby/spec/core/symbol/element_reference_spec.rb
 ruby/spec/core/symbol/slice_spec.rb
 ruby/spec/core/thread/backtrace/location/lineno_spec.rb
