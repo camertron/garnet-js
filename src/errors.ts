@@ -32,10 +32,16 @@ export const init = async () => {
         klass.define_native_method("full_message", async (self: RValue): Promise<RValue> => {
             const error = self.get_data<IRubyError>();
             const message = error.message instanceof RValue ? error.message.get_data<string>() : error.message;
-            const lines = [`${error.backtrace[0]}: ${message} (${self.klass.get_data<Class>().name})`];
+            const lines: string[] = [];
 
-            for (let i = 1; i < error.backtrace.length; i ++) {
-                lines.push(`    ${error.backtrace[i]}`);
+            if (error.backtrace) {
+                lines.push(`${error.backtrace[0]}: ${message} (${self.klass.get_data<Class>().name})`);
+
+                for (let i = 1; i < error.backtrace.length; i ++) {
+                    lines.push(`    ${error.backtrace[i]}`);
+                }
+            } else {
+                lines.push(`${message} (${self.klass.get_data<Class>().name})`);
             }
 
             return await RubyString.new(lines.join("\n"));
