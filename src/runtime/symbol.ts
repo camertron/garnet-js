@@ -5,8 +5,9 @@ import { Integer } from "./integer";
 import { Object } from "./object";
 import { Proc } from "./proc";
 import { RubyString } from "../runtime/string";
-import { NameError } from "../errors";
+import { NameError, TypeError } from "../errors";
 import { mix_shared_string_methods_into } from "./string-shared";
+import { Args } from "./arg-scanner";
 
 export class Symbol {
     private static to_proc_table: Map<string, RValue> = new Map();
@@ -18,7 +19,8 @@ export class Symbol {
             this.to_proc_table.set(
                 sym,
                 await Proc.from_native_fn(ExecutionContext.current, async (_self: RValue, args: RValue[]): Promise<RValue> => {
-                    return await Object.send(args[0], sym);
+                    const [receiver] = await Args.scan("1", args);
+                    return await Object.send(receiver, sym);
                 })
             );
         }
