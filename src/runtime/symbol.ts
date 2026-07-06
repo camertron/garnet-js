@@ -64,6 +64,10 @@ export const init = async () => {
             return await Integer.new(hash_string(self.get_data<string>()));
         });
 
+        klass.define_native_method("dup", async (self: RValue): Promise<RValue> => {
+            return await Runtime.intern(self.get_data<string>())
+        });
+
         klass.define_native_method("==", async (self: RValue, args: RValue[]): Promise<RValue> => {
             if (args[0].klass !== await Symbol.klass()) return Qfalse;
             return args[0].get_data<string>() === self.get_data<string>() ? Qtrue : Qfalse;
