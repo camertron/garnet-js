@@ -683,7 +683,8 @@ export const init = async () => {
     });
 
     mod.define_native_method("public_send", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData): Promise<RValue> => {
-        const method_name = (await Runtime.coerce_to_string(args[0])).get_data<string>();
+        const [method_name_rval] = await Args.scan("1", args);
+        const method_name = (await Runtime.coerce_to_string(method_name_rval)).get_data<string>();
         const method = await Object.find_method_under(self, method_name);
 
         if (!method) {
@@ -740,11 +741,11 @@ export const init = async () => {
     }
 
     mod.define_native_method("sleep", async (_self: RValue, args: RValue[]): Promise<RValue> => {
-        if (args[0].klass !== await Integer.klass() && args[0].klass !== await Float.klass()) {
+        if (args[0] && args[0].klass !== await Integer.klass() && args[0].klass !== await Float.klass()) {
             throw new ArgumentError(`can't convert ${args[0].klass.get_data<Class>().name} into time interval`);
         }
 
-        const interval_secs = args[0].get_data<number>();
+        const interval_secs = args[0]?.get_data<number>() || Infinity;
         msleep(interval_secs * 1000);
 
         return args[0];
@@ -974,7 +975,7 @@ export const init = async () => {
     });
 
     mod.define_native_method("send", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue, call_data?: MethodCallData) => {
-        const method_name = args[0];
+        const [method_name, rest_args] = await Args.scan("10*", args);
 
         if (method_name.klass === await RubyString.klass() || method_name.klass === await Symbol.klass()) {
             if (call_data) {
@@ -985,9 +986,9 @@ export const init = async () => {
                     call_data.kw_arg
                 );
 
-                return Object.send(self, new_call_data, args.slice(1), kwargs, block);
+                return Object.send(self, new_call_data, rest_args, kwargs, block);
             } else {
-                return Object.send(self, method_name.get_data<string>(), args.slice(1), kwargs, block);
+                return Object.send(self, method_name.get_data<string>(), rest_args, kwargs, block);
             }
         } else {
             throw new TypeError(
