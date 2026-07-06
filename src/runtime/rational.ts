@@ -249,6 +249,11 @@ export const init = async () => {
             return await RubyString.new(`(${rational.negative ? "-" : ""}${rational.n}/${rational.d})`);
         });
 
+        klass.define_native_method("dup", async (self: RValue): Promise<RValue> => {
+            const us = self.get_data<Rational>();
+            return await Rational.new(us.n, us.d);
+        });
+
         klass.define_native_method("<=>", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const rational = self.get_data<Rational>();
             let n: number, other_n: number;
