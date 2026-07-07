@@ -719,7 +719,7 @@ export class Compiler extends Visitor {
         });
 
         this.iseq.push(block_end_label);
-        this.iseq.catch_table.catch_break(this.iseq, block_begin_label, block_end_label, block_end_label, 0);
+        this.iseq.catch_table.catch_break(null, block_begin_label, block_end_label, block_end_label, 0);
 
         return block_iseq;
     }

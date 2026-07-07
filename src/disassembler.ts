@@ -101,7 +101,7 @@ export class Disassembler {
     local(index: number, explicit: number | null = null, implicit: number | null = null): string {
         let current = this.current_iseq;
 
-        for (let i = 0; i < (explicit || implicit || 0); i ++) {
+        for (let i = 0; i < (explicit ?? implicit ?? 0); i ++) {
             current = current!.parent_iseq;
         }
 
