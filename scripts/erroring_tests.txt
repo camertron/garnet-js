@@ -2,9 +2,7 @@ ruby/spec/core/complex/finite_spec.rb
 ruby/spec/core/complex/infinite_spec.rb
 ruby/spec/core/complex/polar_spec.rb
 ruby/spec/core/enumerable/sum_spec.rb
-ruby/spec/core/file/ftype_spec.rb
 ruby/spec/core/file/initialize_spec.rb
-ruby/spec/core/file/stat/ftype_spec.rb
 ruby/spec/core/file/utime_spec.rb
 ruby/spec/core/float/divide_spec.rb
 ruby/spec/core/float/fdiv_spec.rb
@@ -51,7 +49,6 @@ ruby/spec/core/kernel/Complex_spec.rb
 ruby/spec/core/kernel/abort_spec.rb
 ruby/spec/core/kernel/exit_spec.rb
 ruby/spec/core/kernel/frozen_spec.rb
-ruby/spec/core/kernel/instance_variable_get_spec.rb
 ruby/spec/core/kernel/raise_spec.rb
 ruby/spec/core/kernel/srand_spec.rb
 ruby/spec/core/kernel/printf_spec.rb
