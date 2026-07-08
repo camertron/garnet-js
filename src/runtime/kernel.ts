@@ -397,11 +397,6 @@ export const init = async () => {
         return await Object.send((await Object.find_constant("Rational"))!, "new", args);
     });
 
-    mod.define_native_method("instance_variable_get", async (self: RValue, args: RValue[]): Promise<RValue> => {
-        const key = (await Object.send(args[0], "to_s")).get_data<string>()
-        return self.iv_get(key);
-    });
-
     mod.define_native_method("lambda", (self: RValue, args: RValue[], _kwargs?: Hash, block?: RValue): RValue => {
         if (!block) {
             throw new ArgumentError("tried to create a Proc object without a block");
@@ -438,14 +433,9 @@ export const init = async () => {
     });
 
     mod.define_native_method("instance_variable_get", async (self: RValue, args: RValue[]): Promise<RValue> => {
-        const first_arg = args[0] || Qnil;
-
-        if (first_arg.klass === await RubyString.klass() || first_arg.klass === await Symbol.klass()) {
-            const ivar_name = first_arg.get_data<string>();
-            return self.iv_get(ivar_name);
-        } else {
-            throw new TypeError(`${(await Object.send(args[1], "inspect")).get_data<string>()} is not a symbol nor a string`)
-        }
+        const [first_arg] = await Args.scan("1", args);
+        const first_arg_str = (await Runtime.coerce_to_string(first_arg)).get_data<string>();
+        return self.iv_get(first_arg_str);
     });
 
     mod.define_native_method("remove_instance_variable", async (self: RValue, args: RValue[]): Promise<RValue> => {
