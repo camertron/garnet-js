@@ -26,7 +26,7 @@
     "build": "./scripts/build.sh",
     "build:release": "./scripts/build.sh --release",
     "clean-build": "npm run clean && npm run build",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest --no-cache",
+    "test": "env NODE_OPTIONS=\"--experimental-vm-modules\" ./node_modules/.bin/jest --no-cache",
     "typecheck": "tsc"
   },
   "dependencies": {
