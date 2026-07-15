@@ -771,6 +771,8 @@ export const init = async () => {
             return self;
         });
 
+        await klass.alias_method("append", "push");
+
         klass.define_native_method("size", async (self: RValue): Promise<RValue> => {
             return await Integer.get(self.get_data<RubyArray>().elements.length);
         });
