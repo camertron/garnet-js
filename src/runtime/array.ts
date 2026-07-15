@@ -771,6 +771,8 @@ export const init = async () => {
             return self;
         });
 
+        await klass.alias_method("append", "push");
+
         klass.define_native_method("size", async (self: RValue): Promise<RValue> => {
             return await Integer.get(self.get_data<RubyArray>().elements.length);
         });
@@ -1013,6 +1015,10 @@ export const init = async () => {
         klass.define_native_method("==", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const array = self.get_data<RubyArray>().elements;
             const [other_array_rval] = await Args.scan("1", args);
+
+            if (self.object_id === other_array_rval.object_id) {
+                return Qtrue;
+            }
 
             if (!(await Object.respond_to(other_array_rval, "size"))) {
                 return Qfalse;
