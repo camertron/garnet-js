@@ -36,7 +36,7 @@
     "@camertron/garnet-js": "./",
     "@garnet-js/encoding-euc-jp": "file:./packages/encoding-euc-jp",
     "@garnet-js/encoding-shift-jis": "file:./packages/encoding-shift-jis",
-    "@ruby/prism": "^1.7.0",
+    "@ruby/prism": "1.7.0",
     "@types/jest": "^29.5.8",
     "@types/node": "^25.9.3",
     "benchmarkify": "^3.0.0",
