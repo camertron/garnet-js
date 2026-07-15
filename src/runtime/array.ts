@@ -1016,6 +1016,10 @@ export const init = async () => {
             const array = self.get_data<RubyArray>().elements;
             const [other_array_rval] = await Args.scan("1", args);
 
+            if (self.object_id === other_array_rval.object_id) {
+                return Qtrue;
+            }
+
             if (!(await Object.respond_to(other_array_rval, "size"))) {
                 return Qfalse;
             }
