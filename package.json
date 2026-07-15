@@ -37,7 +37,7 @@
     "@garnet-js/encoding-euc-jp": "file:./packages/encoding-euc-jp",
     "@garnet-js/encoding-shift-jis": "file:./packages/encoding-shift-jis",
     "@jest/globals": "^29.5.14",
-    "@ruby/prism": "1.7.0",
+    "@ruby/prism": "1.9.0",
     "@types/jest": "^29.5.14",
     "@types/node": "^25.9.3",
     "benchmarkify": "^3.0.0",
