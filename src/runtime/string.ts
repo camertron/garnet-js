@@ -1455,6 +1455,31 @@ export const init = async () => {
             return await RubyArray.new(bytes);
         });
 
+        klass.define_native_method("each_byte", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
+            const data = self.get_data<string>();
+            const encoding = await RubyString.get_encoding(self);
+
+            const raw_bytes = Array.from(encoding.string_to_bytes(data));
+            
+            if (block) {
+                for (const byte of raw_bytes) {
+                    const int_byte = await Integer.get(byte);
+
+                    await RubyObject.send(block, "call", [int_byte]);
+                }
+
+                return self;
+            } else {
+                return await Enumerator.for_native_generator(async function* () {
+                    for (const byte of raw_bytes) {
+                        const int_byte = await Integer.get(byte);
+
+                        yield int_byte;
+                    }
+                });
+            }
+        });
+
         klass.define_native_method("each_line", async (self: RValue, args: RValue[], kwargs?: Hash, block?: RValue): Promise<RValue> => {
             const data = self.get_data<string>();
             let separator: string;
