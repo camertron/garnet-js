@@ -877,6 +877,24 @@ export const init = async () => {
         return await sprintf(args[0], args.slice(1));
     });
 
+    mod.define_native_method("p", async (_self: RValue, args: RValue[]): Promise<RValue> => {
+        if (args.length === 0) {
+            return Qnil;
+        }
+
+        const stdout = ExecutionContext.current.globals["$stdout"];
+        for (const arg of args) {
+            const inspect_str = (await Object.send(arg, "inspect")).get_data<string>();
+            await Object.send(stdout, "write", [await RubyString.new(inspect_str + "\n")]);
+        }
+
+        if (args.length === 1) {
+            return args[0];
+        }
+
+        return await RubyArray.new(args);
+    }, Visibility.private);
+
     mod.define_native_method("warn", async (self: RValue, args: RValue[], kwargs?: Hash): Promise<RValue> => {
         let uplevel = 0;
         const uplevel_rval = await Args.get_kwarg("uplevel", kwargs);
