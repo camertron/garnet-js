@@ -3,6 +3,7 @@ ruby/spec/core/complex/infinite_spec.rb
 ruby/spec/core/complex/polar_spec.rb
 ruby/spec/core/enumerable/sum_spec.rb
 ruby/spec/core/file/initialize_spec.rb
+ruby/spec/core/file/read_spec.rb
 ruby/spec/core/file/utime_spec.rb
 ruby/spec/core/float/divide_spec.rb
 ruby/spec/core/float/fdiv_spec.rb

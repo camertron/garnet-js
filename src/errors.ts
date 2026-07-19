@@ -173,6 +173,16 @@ export const init = async () => {
     const ErrnoENOTDIRClass = await Runtime.define_class_under(ErrnoModule, "ENOTDIR", SystemCallErrorClass);
     const ErrnoEINVALClass = await Runtime.define_class_under(ErrnoModule, "EINVAL", SystemCallErrorClass);
     const ErrnoEACCESClass = await Runtime.define_class_under(ErrnoModule, "EACCES", SystemCallErrorClass);
+    const ErrnoEEXISTClass = await Runtime.define_class_under(ErrnoModule, "EEXIST", SystemCallErrorClass);
+    const ErrnoENOTEMPTYClass = await Runtime.define_class_under(ErrnoModule, "ENOTEMPTY", SystemCallErrorClass);
+    const ErrnoEAFNOSUPPORTClass = await Runtime.define_class_under(ErrnoModule, "EAFNOSUPPORT", SystemCallErrorClass);
+    const ErrnoESRCHClass = await Runtime.define_class_under(ErrnoModule, "ESRCH", SystemCallErrorClass);
+    const ErrnoEPIPEClass = await Runtime.define_class_under(ErrnoModule, "EPIPE", SystemCallErrorClass);
+    const ErrnoEAGAINClass = await Runtime.define_class_under(ErrnoModule, "EAGAIN", SystemCallErrorClass);
+    const ErrnoENOTSUPClass = await Runtime.define_class_under(ErrnoModule, "ENOTSUP", SystemCallErrorClass);
+    const ErrnoEMFILEClass = await Runtime.define_class_under(ErrnoModule, "EMFILE", SystemCallErrorClass);
+    const ErrnoEISDIRClass = await Runtime.define_class_under(ErrnoModule, "EISDIR", SystemCallErrorClass);
+    const ErrnoECHILDClass = await Runtime.define_class_under(ErrnoModule, "ECHILD", SystemCallErrorClass);
 
     const SystemExitClass = await Runtime.define_class("SystemExit", ExceptionClass, async (klass: Class) => {
         klass.define_native_method("initialize", (self: RValue, args: RValue[]): RValue => {
