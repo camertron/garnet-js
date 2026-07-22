@@ -2666,6 +2666,7 @@ export class Compiler extends Visitor {
         if (!this.used) this.iseq.pop();
     }
 
+    // attack here!!
     override visitNextNode(node: NextNode) {
         if (node.arguments_) {
             if (node.arguments_.arguments_.length == 1) {
