@@ -89,8 +89,11 @@ Run the Jest tests by executing:
 
 ```bash
 npm run test
+```
 
-# or in docker like so:
+Or, in docker like so:
+
+```bash
 exe/dev npm run test
 ```
 
@@ -100,8 +103,11 @@ Currently, paths to test files must be provided (i.e. running the whole test sui
 
 ```bash
 exe/mspec-run ruby/spec/core/array/clear_spec.rb
+```
 
-# or in docker like so:
+Or, in docker like so:
+
+```bash
 exe/dev mspec-run ruby/spec/core/array/clear_spec.rb
 ```
 
