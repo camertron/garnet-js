@@ -10,3 +10,5 @@ src/gems/
 
 log/
 tmp/
+
+/.idea/
