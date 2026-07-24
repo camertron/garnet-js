@@ -1,4 +1,7 @@
-import { ArgumentError, EncodingConverterNotFoundError, IndexError, NameError, NotImplementedError, RangeError as RubyRangeError, RuntimeError, TypeError } from "../errors";
+import {
+    ArgumentError, EncodingConverterNotFoundError,
+    FrozenError, IndexError, NameError, NotImplementedError, RangeError as RubyRangeError, RuntimeError, TypeError
+} from "../errors";
 import { Class, Qnil, RValue, Runtime, Qtrue, Qfalse, ObjectClass, KernelModule } from "../runtime";
 import { hash_string, is_alpha_num, strlen } from "../util/string_utils";
 import { Integer } from "./integer";
@@ -938,6 +941,36 @@ export const init = async () => {
                 } else {
                     await append_to(self, arg);
                 }
+            }
+
+            return self;
+        });
+
+        klass.define_native_method("insert", async (self: RValue, args: RValue[]): Promise<RValue> => {
+            const self_data = self.get_data<string>();
+            // raises unless two (required) positional args are given
+            let [index_rval, other_rval] = await Args.scan("2", args);
+            other_rval = await Runtime.coerce_to_string(other);
+            const other = other_rval.get_data<string>();
+
+            index_rval = await Runtime.coerce_to_int(index_rval)
+            let index = index_rval.get_data<number>();
+            if (index < 0 ) index = self_data.length + 1 + index;
+
+            if (index > self_data.length || index < 0) {
+                throw new IndexError(`index ${index} out of string`);
+            }
+
+            await RubyObject.check_frozen(self);
+
+            if (index == 0) {
+                self.data = other_data + self_data;
+            } else if (index === self_data.length) {
+                await append_to(self, other);
+            } else {
+                const left = self_data.substring(0, index);
+                const right = self_data.substring(index);
+                self.data = left + other_data + right;
             }
 
             return self;
