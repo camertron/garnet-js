@@ -962,7 +962,7 @@ export const init = async () => {
 
             if (index == 0) {
                 self.data = other_data + self_data;
-            } else if (index == self_data.length) {
+            } else if (index === self_data.length) {
                 await append_to(self, other);
             } else {
                 const left = self_data.substring(0, index);
