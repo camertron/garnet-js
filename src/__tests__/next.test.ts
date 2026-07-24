@@ -55,6 +55,7 @@ describe("next", () => {
         const doubled = result_array[0].get_data<RubyArray>().elements;
 
         expect(doubled.length).toEqual(3);
+
         expect(doubled[0].data).toEqual(2);
         expect(doubled[1].data).toEqual(4);
         expect(doubled[2].data).toEqual(6);
@@ -62,8 +63,11 @@ describe("next", () => {
         const ensure_called_for = result_array[1].get_data<RubyArray>().elements;
 
         expect(ensure_called_for.length).toEqual(3);
+
         expect(ensure_called_for[0].data).toEqual(1);
         expect(ensure_called_for[1].data).toEqual(2);
         expect(ensure_called_for[2].data).toEqual(3);
     });
+
+    // TODO: add tests for while/until/for using next
 });

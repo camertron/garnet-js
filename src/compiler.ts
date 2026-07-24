@@ -2698,7 +2698,10 @@ export class Compiler extends Visitor {
 
             // throw if inside a block iseq
             if (iseq.type === "block") {
-                this.iseq.throw(ThrowType.NEXT);
+                // this.iseq.throw(ThrowType.NEXT);
+                // TODO: we need a totally different operation that jumps for while/until/for
+                // TODO: we should probably to fix the ensure bug in next.test.ts first
+                this.iseq.leave();
                 return;
             }
         }
