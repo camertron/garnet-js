@@ -948,10 +948,13 @@ export const init = async () => {
 
         klass.define_native_method("insert", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const self_data = self.get_data<string>();
-            const other = await Runtime.coerce_to_string(args[1]);
-            const other_data = other.get_data<string>();
+            // raises unless two (required) positional args are given
+            let [index_rval, other_rval] = await Args.scan("2", args);
+            other_rval = await Runtime.coerce_to_string(other);
+            const other = other_rval.get_data<string>();
 
-            let index = (await Runtime.coerce_to_int(args[0])).get_data<number>();
+            index_rval = await Runtime.coerce_to_int(index_rval)
+            let index = index_rval.get_data<number>();
             if (index < 0 ) index = self_data.length + 1 + index;
 
             if (index > self_data.length || index < 0) {
