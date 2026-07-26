@@ -9,13 +9,13 @@ export class Argf {
         return this.klass_;
     }
 
-    public argf: RValue[];
+    public argf: RValue;
 
-    static async new(argv: RValue[]): Promise<RValue> {
+    static async new(argv: RValue): Promise<RValue> {
         return new RValue(await Argf.klass(), new Argf(argv));
     }
 
-    constructor(argf: RValue[]) {
+    constructor(argf: RValue) {
         this.argf = argf;
     }
 }
@@ -26,6 +26,9 @@ export const init = async () => {
     if (inited) return;
 
     await Runtime.define_class("ARGF.class", ObjectClass, async (klass: Class) => {
+        klass.define_native_method("argv", async (self: RValue): Promise<RValue> => {
+            return self.get_data<Argf>().argf
+        });
     });
 
     inited = true;
