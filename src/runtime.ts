@@ -1,6 +1,6 @@
 import { InstructionSequence } from "./instruction_sequence";
 import { Compiler, LexicalScope } from "./compiler";
-import { LoadError, TypeError, NoMethodError, NotImplementedError, NameError } from "./errors";
+import { IOError, LoadError, NameError, NoMethodError, NotImplementedError, TypeError } from "./errors";
 import { ExecutionContext } from "./execution_context";
 import { init as array_init } from "./runtime/array";
 import { Integer, init as integer_init } from "./runtime/integer";
@@ -1666,6 +1666,24 @@ export class NodeIO implements IO {
     }
 }
 
+export class StdinIO implements IO {
+    static new() {
+        return new RValue(IOClass, new StdinIO());
+    }
+
+    write(_val: string): void {
+        throw new IOError("not opened for writing");
+    }
+
+    puts(_val: string): void {
+        throw new IOError("not opened for writing");
+    }
+
+    is_tty(): boolean {
+        return false;
+    }
+}
+
 export const IOClass = await Runtime.define_class("IO", ObjectClass, async (klass: Class) => {
     klass.define_native_method("puts", async (self: RValue, args: RValue[], _kwargs?: RubyHash, _block?: RValue, _call_data?: MethodCallData): Promise<RValue> => {
         const io = self.get_data<IO>();
@@ -1865,6 +1883,7 @@ export const IOClass = await Runtime.define_class("IO", ObjectClass, async (klas
 });
 
 export const STDOUT = ObjectClass.get_data<Class>().constants["STDOUT"] = is_node ? NodeIO.new(process.stdout) : BrowserIO.new(console.log);
+export const STDIN = ObjectClass.get_data<Class>().constants["STDIN"] = StdinIO.new();
 export const STDERR = ObjectClass.get_data<Class>().constants["STDERR"] = is_node ? NodeIO.new(process.stderr) : BrowserIO.new(console.error);
 
 export const init = async () => {
