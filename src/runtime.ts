@@ -1591,6 +1591,7 @@ export interface IO {
     write(val: string): void;
     is_tty(): boolean;
     close?(): void;
+    is_closed?(): boolean;
     flush?(): void;
     pos?(): number;
     set_pos?(pos: number): void;
@@ -1741,6 +1742,16 @@ export const IOClass = await Runtime.define_class("IO", ObjectClass, async (klas
         }
 
         return Qnil;
+    });
+
+    klass.define_native_method("closed?", (self: RValue): RValue => {
+        const io = self.get_data<IO>();
+
+        if (io.is_closed) {
+            return io.is_closed() ? Qtrue : Qfalse;
+        }
+
+        return Qfalse;
     });
 
     klass.define_native_method("pos", async (self: RValue): Promise<RValue> => {

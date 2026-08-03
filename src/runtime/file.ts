@@ -94,6 +94,10 @@ export class RubyFile implements IO {
         }
     }
 
+    is_closed(): boolean {
+        return this.descriptor === null;
+    }
+
     pos(): number {
         if (!this.descriptor) {
             throw new IOError("closed stream");
