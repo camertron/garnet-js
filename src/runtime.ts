@@ -38,7 +38,7 @@ import { init as regexp_init} from "./runtime/regexp";
 import { init as encoding_init } from "./runtime/encoding";
 import { init as struct_init } from "./runtime/struct";
 import { init as rational_init } from "./runtime/rational";
-import { init as enumerator_init } from "./runtime/enumerator";
+import { Enumerator, init as enumerator_init } from "./runtime/enumerator";
 import { init as method_init } from "./runtime/method";
 import { init as fiber_init } from "./runtime/fiber";
 import { init as net_http_init } from "./lib/net/http";
@@ -1596,6 +1596,7 @@ export interface IO {
     pos?(): number;
     set_pos?(pos: number): void;
     seek?(offset: number, whence: number): number;
+    read_byte?(): Uint8Array | null;
     rewind?(): void;
     eof?(): boolean;
     read?(length?: number): string | null;
@@ -1795,6 +1796,33 @@ export const IOClass = await Runtime.define_class("IO", ObjectClass, async (klas
         }
 
         throw new NotImplementedError("pos= is not implemented for this IO type");
+    });
+
+    klass.define_native_method("each_byte", async (self: RValue, _args: RValue[], _kwargs?: RubyHash, block?: RValue): Promise<RValue> => {
+        const io = self.get_data<IO>();
+        if (!io.read_byte) throw new IOError("not opened for reading");
+        const read_byte = io.read_byte.bind(io);
+
+        if (block) {
+            while (true) {
+                const byte = read_byte();
+                if (!byte) break;
+
+                const int_byte = await Integer.get(byte[0]);
+                await Object.send(block, "call", [int_byte]);
+            }
+            return self;
+        } else {
+            return await Enumerator.for_native_generator(async function* () {
+                while (true) {
+                    const byte = read_byte();
+                    if (!byte) break;
+
+                    const int_byte = await Integer.get(byte[0]);
+                    yield int_byte;
+                }
+            });
+        }
     });
 
     klass.define_native_method("seek", async (self: RValue, args: RValue[]): Promise<RValue> => {
