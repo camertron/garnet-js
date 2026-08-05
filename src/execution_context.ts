@@ -37,6 +37,7 @@ export enum ThrowType {
     NONE = 0x0,
     RETURN = 0x1,
     BREAK = 0x2,
+    // eliminate this with leave instead...
     NEXT = 0x3,
     RETRY = 0x4,
     REDO = 0x5,

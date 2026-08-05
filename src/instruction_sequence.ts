@@ -77,6 +77,8 @@ export class CatchTable {
         );
     }
 
+    // Let's attempt to eliminate this since the catch table seems like overkill
+    // next just terminates/evaluates the current block. No need to unwind the stack.
     catch_next(begin_label: Label, end_label: Label, cont_label: Label, restore_sp: number) {
         this.entries.push(
             new CatchNext(
@@ -139,6 +141,7 @@ export class CatchTableStack {
         this.elements.pop();
     }
 
+    // eliminate this
     find_catch_entry<T extends CatchEntry>(...args: Parameters<typeof CatchTable.prototype.find_catch_entry<T>>): ReturnType<typeof CatchTable.prototype.find_catch_entry<T>> {
         if (this.current) {
             return this.current.find_catch_entry(...args);
@@ -176,6 +179,7 @@ export class CatchTableStack {
     }
 }
 
+// eliminate this
 export class CatchEntry {
     public iseq: InstructionSequence | null;
     public begin_label: Label;
@@ -198,6 +202,7 @@ export class CatchBreak extends CatchEntry {
 export class CatchEnsure extends CatchEntry {
 }
 
+// eliminate this
 export class CatchNext extends CatchEntry {
 }
 
