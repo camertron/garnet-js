@@ -3,6 +3,7 @@ import { Frame } from "../frame";
 import { ExecutionContext } from "../garnet";
 import { Class, InterpretedCallable, NativeCallable, ObjectClass, Qnil, RValue, Runtime, RValuePointer } from "../runtime";
 import { Args } from "./arg-scanner";
+import { Integer } from "./integer";
 import { RubyArray } from "./array";
 import { Enumerable } from "./enumerable";
 import { Hash } from "./hash";
@@ -153,6 +154,7 @@ class YielderController {
 
 export abstract class Enumerator {
     protected static klass_: RValue;
+    public size: number | null = null;
 
     static async klass(): Promise<RValue> {
         if (!this.klass_) {
@@ -176,8 +178,10 @@ export abstract class Enumerator {
         return await this.new(new MethodRefEnumerator(receiver, method_name, args, kwargs));
     }
 
-    static async for_native_generator(gen_func: () => NativeGeneratorType): Promise<RValue> {
-        return await this.new(new NativeCallableEnumerator(gen_func));
+    static async for_native_generator(gen_func: () => NativeGeneratorType, size?: number): Promise<RValue> {
+        const enumerator = new NativeCallableEnumerator(gen_func);
+        enumerator.size = size ?? null;
+        return await this.new(enumerator);
     }
 
     static async for_proc(proc: InterpretedProc): Promise<RValue> {
@@ -428,6 +432,11 @@ export const init = async () => {
 
         klass.define_native_method("next", async (self: RValue): Promise<RValue> => {
             return await self.get_data<Enumerator>().next();
+        });
+
+        klass.define_native_method("size", async (self: RValue): Promise<RValue> => {
+            const size = self.get_data<Enumerator>().size;
+            return size === null ? Qnil : await Integer.get(size);
         });
 
         klass.define_native_method("each", async (self: RValue, _args: RValue[], _kwargs?: Hash, block?: RValue): Promise<RValue> => {
