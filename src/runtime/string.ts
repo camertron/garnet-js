@@ -1515,7 +1515,7 @@ export const init = async () => {
 
                         yield int_byte;
                     }
-                });
+                }, raw_bytes.length);
             }
         });
 

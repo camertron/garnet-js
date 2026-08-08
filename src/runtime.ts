@@ -1,6 +1,6 @@
 import { InstructionSequence } from "./instruction_sequence";
 import { Compiler, LexicalScope } from "./compiler";
-import { LoadError, TypeError, NoMethodError, NotImplementedError, NameError } from "./errors";
+import { IOError, LoadError, NameError, NoMethodError, NotImplementedError, TypeError } from "./errors";
 import { ExecutionContext } from "./execution_context";
 import { init as array_init } from "./runtime/array";
 import { Integer, init as integer_init } from "./runtime/integer";
@@ -38,7 +38,7 @@ import { init as regexp_init} from "./runtime/regexp";
 import { init as encoding_init } from "./runtime/encoding";
 import { init as struct_init } from "./runtime/struct";
 import { init as rational_init } from "./runtime/rational";
-import { init as enumerator_init } from "./runtime/enumerator";
+import { Enumerator, init as enumerator_init } from "./runtime/enumerator";
 import { init as method_init } from "./runtime/method";
 import { init as fiber_init } from "./runtime/fiber";
 import { init as net_http_init } from "./lib/net/http";
@@ -1591,10 +1591,12 @@ export interface IO {
     write(val: string): void;
     is_tty(): boolean;
     close?(): void;
+    is_closed?(): boolean;
     flush?(): void;
     pos?(): number;
     set_pos?(pos: number): void;
     seek?(offset: number, whence: number): number;
+    read_byte?(): Uint8Array | null;
     rewind?(): void;
     eof?(): boolean;
     read?(length?: number): string | null;
@@ -1662,6 +1664,24 @@ export class NodeIO implements IO {
     flush(): void {
         // Node.js streams don't have a synchronous flush, but we can use cork/uncork
         // or just rely on the fact that write() is synchronous for TTYs
+    }
+}
+
+export class StdinIO implements IO {
+    static new() {
+        return new RValue(IOClass, new StdinIO());
+    }
+
+    write(_val: string): void {
+        throw new IOError("not opened for writing");
+    }
+
+    puts(_val: string): void {
+        throw new IOError("not opened for writing");
+    }
+
+    is_tty(): boolean {
+        return false;
     }
 }
 
@@ -1743,6 +1763,16 @@ export const IOClass = await Runtime.define_class("IO", ObjectClass, async (klas
         return Qnil;
     });
 
+    klass.define_native_method("closed?", (self: RValue): RValue => {
+        const io = self.get_data<IO>();
+
+        if (io.is_closed) {
+            return io.is_closed() ? Qtrue : Qfalse;
+        }
+
+        return Qfalse;
+    });
+
     klass.define_native_method("pos", async (self: RValue): Promise<RValue> => {
         const io = self.get_data<IO>();
 
@@ -1766,6 +1796,33 @@ export const IOClass = await Runtime.define_class("IO", ObjectClass, async (klas
         }
 
         throw new NotImplementedError("pos= is not implemented for this IO type");
+    });
+
+    klass.define_native_method("each_byte", async (self: RValue, _args: RValue[], _kwargs?: RubyHash, block?: RValue): Promise<RValue> => {
+        const io = self.get_data<IO>();
+        if (!io.read_byte) throw new IOError("not opened for reading");
+        const read_byte = io.read_byte.bind(io);
+
+        if (block) {
+            while (true) {
+                const byte = read_byte();
+                if (!byte) break;
+
+                const int_byte = await Integer.get(byte[0]);
+                await Object.send(block, "call", [int_byte]);
+            }
+            return self;
+        } else {
+            return await Enumerator.for_native_generator(async function* () {
+                while (true) {
+                    const byte = read_byte();
+                    if (!byte) break;
+
+                    const int_byte = await Integer.get(byte[0]);
+                    yield int_byte;
+                }
+            });
+        }
     });
 
     klass.define_native_method("seek", async (self: RValue, args: RValue[]): Promise<RValue> => {
@@ -1854,6 +1911,7 @@ export const IOClass = await Runtime.define_class("IO", ObjectClass, async (klas
 });
 
 export const STDOUT = ObjectClass.get_data<Class>().constants["STDOUT"] = is_node ? NodeIO.new(process.stdout) : BrowserIO.new(console.log);
+export const STDIN = ObjectClass.get_data<Class>().constants["STDIN"] = StdinIO.new();
 export const STDERR = ObjectClass.get_data<Class>().constants["STDERR"] = is_node ? NodeIO.new(process.stderr) : BrowserIO.new(console.error);
 
 export const init = async () => {

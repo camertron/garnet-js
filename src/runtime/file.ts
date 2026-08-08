@@ -47,6 +47,7 @@ export class RubyFile implements IO {
     private static BUFFER_SIZE = 8 * 1024;
 
     public descriptor: IFileHandle | null
+    public path: string;
     public opts: Hash | undefined;
     public buffer_offset = 0;
     public buffer_len = 0;
@@ -55,6 +56,7 @@ export class RubyFile implements IO {
 
     constructor(path: string, mode: string, perm: number, opts?: Hash) {
         this.descriptor = vmfs.open(path, mode, perm);
+        this.path = path;
         this.opts = opts; // not doing anything with this yet
         this.buffer_offset = -1;
         this.buffer_len = -1;
@@ -92,6 +94,10 @@ export class RubyFile implements IO {
             this.descriptor.close();
             this.descriptor = null;
         }
+    }
+
+    is_closed(): boolean {
+        return this.descriptor === null;
     }
 
     pos(): number {
@@ -515,6 +521,10 @@ export const init = async () => {
             }
 
             return return_value;
+        });
+
+        klass.define_native_method("path", async (self: RValue): Promise<RValue> => {
+            return await RubyString.new(self.get_data<RubyFile>().path);
         });
 
         // close and gets methods are now inherited from IOClass

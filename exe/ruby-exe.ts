@@ -101,9 +101,7 @@ for (const arg of script_argv) {
     argv_rval.get_data<RubyArray>().elements.push(await RubyString.new(arg));
 }
 
-Garnet.ObjectClass.get_data<Garnet.Class>().constants["ARGF"] = await Argf.new(
-    argv_rval.get_data<RubyArray>().elements
-);
+Garnet.ObjectClass.get_data<Garnet.Class>().constants["ARGF"] = await Argf.new(argv_rval);
 
 let absolute_code_path;
 
