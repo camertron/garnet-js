@@ -1,5 +1,6 @@
 import { Args } from "./arg-scanner";
 import { Class, IO, ObjectClass, Qnil, RValue, Runtime, STDIN } from "../runtime";
+import { Enumerable } from "./enumerable";
 import { Enumerator } from "./enumerator";
 import { Hash } from "./hash";
 import { Integer } from "./integer";
@@ -73,6 +74,8 @@ export const init = async () => {
     if (inited) return;
 
     await Runtime.define_class("ARGF.class", ObjectClass, async (klass: Class) => {
+        klass.include(await Enumerable.module());
+
         klass.define_native_method("initialize", async (self: RValue, args: RValue[]): Promise<RValue> => {
             const [file_names] = await Args.scan("*", args);
             self.data = new Argf(await RubyArray.new(file_names));
